@@ -1,0 +1,83 @@
+#version 450
+
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_ARB_shading_language_420pack : enable
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_nonuniform_qualifier : require
+
+#include "common.h"
+
+#define DISPLAY_MOUSE_POINTER
+
+float CalculateShadow(in vec4 fragPosViewSpace, bool applyPCF)
+{
+    // converting from view space to work space
+    vec4 fragPosWorldSpace = g_Info.invCamView * fragPosViewSpace;
+
+    // converting from world space to light space
+    vec4 fragPosLightSpace = g_Info.sunLightViewProj * fragPosWorldSpace;
+
+    // converting from light space to projection
+    vec3 projCoord = fragPosLightSpace.xyz/fragPosLightSpace.w;
+
+    // projected to NDC
+    projCoord.xy = projCoord.xy * 0.5 + 0.5;
+    //projCoord.y = 1.0 - projCoord.y;
+
+    // sampling Shadow Map at projected position
+    if(applyPCF == true)
+    {
+        float shadowFactor = 0.0f;
+        for(int dx = -1; dx < 2; dx++)
+        {
+            for(int dy = -1; dy < 2; dy++)
+            {
+                vec2 uv = projCoord.xy + (vec2(dx, dy)/g_Info.renderResolution);
+                float sampledDepth = texture(sampler2D(g_LightDepthImage, g_LinearSampler), uv).r;
+                shadowFactor = shadowFactor + ((projCoord.z > sampledDepth) ? g_shadowFactor : 1.0f);
+            }
+        }
+
+        return (shadowFactor / 9.0f);
+    }
+    else
+    {
+        float sampledDepth = texture(sampler2D(g_LightDepthImage, g_LinearSampler), projCoord.xy).r;
+        return (projCoord.z > sampledDepth) ? g_shadowFactor : 1.0f;
+    }
+}
+
+layout (local_size_x = 8, local_size_y = 8) in;
+void main()
+{
+    ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
+    // these resources are in view space
+    vec4 fragPos        = imageLoad(g_PositionImage, xy).xyzw;
+    vec3 normal         = imageLoad(g_NormalImage, xy).xyz;
+    vec3 albedo         = imageLoad(g_AlbedoImage, xy).xyz;
+    float ssaoFactor    = imageLoad(g_SSAOBlurImage, xy).x;
+    vec3 sunLightDir    = (g_Info.camView * g_Info.sunLightDirWorld).xyz;
+    
+    // applying ambient factor
+    float lighting      = g_ambientCoeff; //ssaoFactor * (g_ambientCoeff + (g_diffuseCoeff * NdotL));
+
+    // calculating lambertian diffuse
+    vec3 lightDir       = normalize(sunLightDir);
+    float NdotL         = max(dot(normal, lightDir), 0.0);
+    // applying diffue factor
+    lighting = (lighting + (g_diffuseCoeff * NdotL));
+    
+    if(NdotL > 0.0f)
+    {  
+        // calulating and applying shadows
+        float shadow = CalculateShadow(fragPos, true);
+        lighting = shadow * lighting;     
+    }
+
+    // applying SSAO factor
+    lighting = lighting * ssaoFactor;
+
+    vec4 outFragColor   = vec4(lighting * albedo.xyz, 0.0);
+
+    imageStore(g_DeferredLighting, xy, outFragColor);
+}

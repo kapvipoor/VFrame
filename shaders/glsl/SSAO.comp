@@ -1,0 +1,47 @@
+#version 450
+
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_ARB_shading_language_420pack : enable
+#extension GL_GOOGLE_include_directive : enable
+
+#include "common.h"
+
+#define SSAO_BIAS 0.025
+
+layout (local_size_x = 8, local_size_y = 8) in;
+void main()
+{
+    ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
+    vec2 uv = XY2UV(xy, g_Info.renderResolution);
+    
+    vec3 gFragPos   = imageLoad(g_PositionImage, xy).xyz;
+    vec3 gNormal    = imageLoad(g_NormalImage, xy).xyz;
+    vec3 randomVec  = texture(sampler2D(g_ReadOnlyTexures[TEXTURE_READ_ID_SSAO_NOISE], g_LinearSampler), g_Info.ssaoNoiseScale * uv).xyz;
+    randomVec       = vec3(randomVec.xy * 2.0f - 1.0f, 0.0f);
+
+    vec3 tangent    = normalize(randomVec - gNormal * dot(randomVec, gNormal));
+    vec3 bitangent  = cross(gNormal, tangent);
+    mat3 tbn        = mat3(tangent, bitangent, gNormal);
+
+    float occulusion = 0.0;
+    for(int i = 0; i < g_Info.ssaoKernelSize; i++)
+    {
+        vec3 ssaoSample = tbn * g_SSAOStorage.kernel[i].xyz;
+        ssaoSample      = gFragPos + ssaoSample * g_Info.ssaoRadius;  
+
+        vec4 offset = g_Info.camProj * vec4(ssaoSample, 1.0);       // view space to clip-space
+        offset.xyz  = offset.xyz/offset.w;                          //ndc (-1, 1)
+        offset      = (offset * 0.5) + 0.5;                         //(0,1) range
+        offset.xy   = UV2XY(vec2(offset.x, 1.0f - offset.y), g_Info.renderResolution).xy;
+
+        float gDepth = imageLoad(g_PositionImage, ivec2(offset.xy)).z;
+
+        float rangeCheck = smoothstep(0.0, 1.0, g_Info.ssaoRadius / abs(gFragPos.z - gDepth));
+        
+        occulusion = occulusion + (((gDepth >= (ssaoSample.z + SSAO_BIAS)) ? 1.0 : 0.0) * rangeCheck);
+    }
+
+    occulusion = 1.0 - (occulusion / g_Info.ssaoKernelSize);
+
+    imageStore(g_SSAOImage, xy, vec4(occulusion, 0.0, 0.0, 0.0));
+}

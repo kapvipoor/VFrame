@@ -1,0 +1,318 @@
+#pragma once
+
+// 0 disable vulkan debug
+// 1 enable vulkan debug
+#define VULKAN_DEBUG 1
+
+#if VULKAN_DEBUG == 1
+// 1 show vulkan validations errors
+// 2 also show vulkan warnings 
+// 3 show all vulkan messages
+#define VULKAN_SHOW_MESSAGES 2
+#define VULKAN_DEBUG_MARKERS 1
+#endif
+
+#define VK_USE_PLATFORM_WIN32_KHR
+
+#define FRAME_BUFFER_COUNT 2
+
+#include <assert.h>
+#include <iostream>
+#include <vector>
+#include <vulkan/vulkan.h>
+
+// fwd dclr
+#if	VULKAN_DEBUG == 1
+VKAPI_ATTR VkBool32	VKAPI_CALL
+VulkanDebugCallback(
+	VkDebugReportFlagsEXT		p_msgFlags,
+	VkDebugReportObjectTypeEXT	p_ObjType,
+	uint64_t					p_SrcObj,
+	size_t						p_location,
+	int32_t						p_MesgCode,
+	const char* p_layerPrefix,
+	const char* p_Message,
+	void* pUserData);
+#endif
+char* BinaryLoader(const std::string pPath, size_t& pDataSize);
+
+class CVulkanCore
+{
+public:
+	CVulkanCore(const char* p_applicaitonName, int p_renderWidth, int p_renderHeight);
+	~CVulkanCore();
+
+	void BeginDebugMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg);
+	void EndDebugMarker(VkCommandBuffer p_vkCmdBuff);
+	void InsertMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg);
+
+protected:
+	uint32_t m_renderWidth;
+	uint32_t m_renderHeight;
+
+	const char* m_applicationName;
+	VkInstance m_vkInstance;
+	VkDevice m_vkDevice;
+	VkPhysicalDevice m_vkPhysicalDevice;
+	uint32_t m_QFIndex;
+	VkQueue m_vkQueue[FRAME_BUFFER_COUNT];
+	VkSurfaceKHR m_vkSurface;
+	VkSwapchainKHR m_vkSwapchain;
+	VkImage m_swapchainImageList[FRAME_BUFFER_COUNT];
+	VkImageView m_swapchainImageViewList[FRAME_BUFFER_COUNT];
+
+	VkPhysicalDeviceMemoryProperties m_vkPhysicalDeviceMemProp{};
+#if VULKAN_DEBUG_MARKERS == 1
+	PFN_vkDebugMarkerSetObjectTagEXT    m_fpVkDebugMarkerSetObjectTag = NULL;
+	PFN_vkDebugMarkerSetObjectNameEXT   m_fpVkDebugMarkerSetObjectName = NULL;
+	PFN_vkCmdDebugMarkerBeginEXT        m_fpVkCmdDebugMarkerBegin = NULL;
+	PFN_vkCmdDebugMarkerEndEXT          m_fpVkCmdDebugMarkerEnd = NULL;
+	PFN_vkCmdDebugMarkerInsertEXT       m_fpVkCmdDebugMarkerInsert = NULL;
+#endif
+#if VULKAN_DEBUG == 1
+	//PFN_vkSetDebugUtilsObjectNameEXT    m_fpVkSetDebugUtilsObjectName = NULL;
+	VkDebugReportCallbackCreateInfoEXT	m_debugCallbackCreateInfo{};
+	PFN_vkCreateDebugReportCallbackEXT	m_fpVkCreateDebugReportCallbackEXT = NULL;
+	PFN_vkDestroyDebugReportCallbackEXT m_fpVkDestroyDebugReportCallbackEXT = NULL;
+	VkDebugReportCallbackEXT			m_vkDebugReportCallback;
+#endif
+
+protected:
+	struct VkInitData
+	{
+		HINSTANCE winInstance;
+		HWND winHandle;
+		VkQueueFlagBits queueType;
+		VkImageUsageFlags swapChaineImageUsage;
+		VkFormat swapchainImageFormat;
+	};
+
+	struct Renderpass
+	{
+		Renderpass() : depthAttached(false) {}
+		std::vector<VkAttachmentDescription> attachemntDescList;
+		std::vector<VkAttachmentReference> colorAttachmentRefList;
+		VkAttachmentReference depthAttachemntRef;
+		VkRenderPass renderpass;
+		uint32_t framebufferWidth;
+		uint32_t framebufferHeight;
+
+		void AttachColor(VkFormat p_format,
+			VkAttachmentLoadOp p_loadOp, VkAttachmentStoreOp p_stOp,
+			VkImageLayout p_iniLayout, VkImageLayout p_finLayout,
+			VkImageLayout p_refLayout)
+		{
+			VkAttachmentDescription attachDesc{};
+			attachDesc.format = p_format;
+			attachDesc.loadOp = p_loadOp;
+			attachDesc.storeOp = p_stOp;
+			attachDesc.initialLayout = p_iniLayout;
+			attachDesc.finalLayout = p_finLayout;
+			attachDesc.samples = VK_SAMPLE_COUNT_1_BIT;
+
+			VkAttachmentReference ref{};
+			ref.attachment = (uint32_t)attachemntDescList.size();
+			ref.layout = p_refLayout;
+
+			colorAttachmentRefList.push_back(ref);
+			attachemntDescList.push_back(attachDesc);
+		}
+
+		void AttachDepth(VkFormat p_format,
+			VkAttachmentLoadOp p_loadOp, VkAttachmentStoreOp p_stOp,
+			VkImageLayout p_iniLayout, VkImageLayout p_finLayout,
+			VkImageLayout p_refLayout)
+		{
+			if (depthAttached == true)
+			{
+				// depth already attached
+				std::cout << "Warning: Depth already attached" << std::endl;
+				assert(!depthAttached);
+			}
+
+			VkAttachmentDescription attachDesc{};
+			attachDesc.format = p_format;
+			attachDesc.loadOp = p_loadOp;
+			attachDesc.storeOp = p_stOp;
+			attachDesc.initialLayout = p_iniLayout;
+			attachDesc.finalLayout = p_finLayout;
+			attachDesc.samples = VK_SAMPLE_COUNT_1_BIT;
+			attachDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+
+			VkAttachmentReference ref{};
+			ref.attachment = (uint32_t)attachemntDescList.size();
+			ref.layout = p_refLayout;
+
+			depthAttachemntRef.attachment = ref.attachment;
+			depthAttachemntRef.layout = ref.layout;
+			depthAttached = true;
+
+			attachemntDescList.push_back(attachDesc);
+		}
+
+		bool isDepthAttached() { return depthAttached; }
+
+	private:
+		bool depthAttached;
+	};
+
+	struct Pipeline
+	{
+		std::string shaderpath_vertex;
+		std::string shaderpath_fragment;
+		std::string shaderpath_compute;
+		VkVertexInputBindingDescription vertexInBinding;
+		std::vector<VkVertexInputAttributeDescription> vertexAttributeDesc;
+		bool enableDepthTest;
+		bool enableDepthWrite;
+		VkCullModeFlags cullMode;
+		VkCompareOp depthCmpOp;
+		Renderpass renderpassData;
+		VkPipelineLayout pipeLayout;
+		VkPipeline pipeline;
+
+		Pipeline() : 
+			cullMode(VK_CULL_MODE_BACK_BIT)
+		,	depthCmpOp(VK_COMPARE_OP_LESS_OR_EQUAL) {}
+	};
+
+	struct Buffer
+	{
+		VkDescriptorBufferInfo descInfo;
+		VkDeviceMemory devMem;
+	};
+
+	struct Image
+	{
+		VkDescriptorImageInfo descInfo;
+		VkImage image;
+		VkDeviceMemory devMem;
+
+		VkImageViewType viewType;
+
+		VkFormat format;
+		uint32_t width;
+		uint32_t height;
+
+		uint32_t layerCount;
+		uint32_t bufOffset;			// assuming the buffer offset for each layer is going to be same
+
+		Image() :
+			layerCount(1)
+			, bufOffset(0) {}
+	};
+
+	struct Sampler
+	{
+		VkDescriptorImageInfo descInfo;
+		VkFilter filter;
+		float maxAnisotropy;
+	};
+
+	static VkImageCreateInfo ImageCreateInfo()
+	{
+		VkImageCreateInfo p_createInfo{};
+		p_createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		p_createInfo.imageType = VK_IMAGE_TYPE_2D;
+		p_createInfo.extent.depth = 1;
+		p_createInfo.mipLevels = 1;
+		p_createInfo.arrayLayers = 1;
+		p_createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+		p_createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		p_createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		p_createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		p_createInfo.flags = 0;
+
+		return p_createInfo;
+	}
+
+	void cleanUp();
+	bool initialize(const VkInitData& p_initData);
+	
+	bool CreateInstance(const char* p_applicaitonName);
+	bool CreateDevice(VkQueueFlagBits p_queueType);
+	bool CreateSurface(HINSTANCE p_hnstns, HWND p_Hwnd);
+	bool CreateSwapChain(VkFormat p_format, VkImageUsageFlags p_imageUsage);
+	bool CreateSwapChainImages(VkFormat p_format);
+	bool CreateFramebuffer(VkRenderPass p_renderPass, VkFramebuffer& p_frameBuffer, VkImageView* p_imageViewList, uint32_t p_fbCount, uint32_t p_width, uint32_t p_height);
+
+	bool AcquireNextSwapChain(VkSemaphore p_semaphore, uint32_t& p_swapChainID);
+
+	bool LoadShader(const char* p_shaderpath, VkShaderModule& p_shader);
+		
+	bool CreateDescriptorPool(VkDescriptorPoolSize* p_dpSizeList, uint32_t p_dpSizeCount, VkDescriptorPool& p_vkdescriptorPool);
+	void DestroyDescriptorPool(VkDescriptorPool p_descPool);
+
+	bool AllocateDescriptorSets(VkDescriptorPool p_dPool, VkDescriptorSetLayout* p_dslList, uint32_t p_dslCount, VkDescriptorSet* p_vkDescriptorSet, void* p_next = VK_NULL_HANDLE);
+	bool CreateDescriptorSetLayout(VkDescriptorSetLayoutBinding* p_dsLayoutList, uint32_t p_dsLayoutCount, VkDescriptorSetLayout& p_vkdsLayout, void* p_next = VK_NULL_HANDLE);
+	void DestroyDescriptorSetLayout(VkDescriptorSetLayout p_descLayput);
+
+	bool CreatePipelineLayout(VkPushConstantRange* p_pushConstants, uint32_t p_pcCount,
+		VkDescriptorSetLayout* p_descLayouts, uint32_t p_dlCount, VkPipelineLayout& p_vkPipelineLayout);
+	void DestroyPipelineLayout(VkPipelineLayout p_pipeLayout);
+	
+	bool CreateRenderpass(Renderpass& p_rpData);
+	void BeginRenderpass(VkFramebuffer p_frameBfr, const Renderpass& p_renderpass, VkCommandBuffer& p_cmdBfr);
+	void EndRenderPass(VkCommandBuffer& p_cmdBfr);
+	void DestroyRenderpass(VkRenderPass p_renderpass);
+	
+	bool CreateGraphicsPipeline(Pipeline& pData);
+	bool CreateComputePipeline(Pipeline& );
+	void DestroyPipeline(VkPipeline p_pipeline);
+		
+	bool CreateCommandPool(uint32_t p_qfIndex, VkCommandPool& p_cmdPool);
+	void DestroyCommandPool(VkCommandPool p_cmdPool);
+	
+	bool CreateCommandBuffers(VkCommandPool p_cmdPool, VkCommandBuffer* p_cmdBuffers, uint32_t p_cbCount);
+	bool BeginCommandBuffer(VkCommandBuffer& p_cmdBfr, const char* p_debugMarker);
+	void SetViewport(VkCommandBuffer p_cmdbfr, float p_minD, float p_maxD, float p_width, float p_height);
+	void SetScissors(VkCommandBuffer p_cmdBfr, uint32_t p_offX, uint32_t p_offY, uint32_t p_width, uint32_t p_height);
+	bool EndCommandBuffer(VkCommandBuffer& p_cmdBfr);
+	bool SubmitCommandbuffer(VkQueue p_queue, VkSubmitInfo* p_subInfoList, uint32_t p_subInfoCount, VkFence p_fence = VK_NULL_HANDLE);
+	bool ResetCommandBuffer(VkCommandBuffer p_cmdBfr);
+	
+	bool WaitToFinish(VkQueue p_queue);
+	bool CreateSemaphor(VkSemaphore& p_semaphore);
+	void DestroySemaphore(VkSemaphore p_semaphore);
+	bool CreateFence(VkFenceCreateFlags p_flags, VkFence& p_fence);
+	bool WaitFence(VkFence& p_fence);
+	bool ResetFence(VkFence& p_fence);
+	void DestroyFence(VkFence p_fence);
+
+	void IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr);
+	void IssueImageLayoutBarrier(VkImageLayout p_old, VkImageLayout p_new, uint32_t layerCount, VkImage& p_image, VkCommandBuffer p_cmdBfr);
+	void IssueBufferBarrier(VkAccessFlags p_srcAcc, VkAccessFlags p_dstAcc, VkPipelineStageFlags p_srcStg, VkPipelineStageFlags p_dstStg, VkBuffer& p_buffer, VkCommandBuffer p_cmdBfr);
+
+	bool IsFormatSupported(VkFormat p_format, VkFormatFeatureFlags p_featureflag);
+	uint32_t FindMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties& p_physicalDeviceMemProp,
+		const VkMemoryRequirements* p_memoryReq, const VkMemoryPropertyFlags p_requiredMemPropFlags);
+	
+	bool CreateImage(VkImageCreateInfo p_imageCreateInfo, VkImage& p_image);
+	bool AllocateImageMemory(VkImage p_image, VkMemoryPropertyFlags p_memFlags, VkDeviceMemory& p_devMem);
+	bool BindImageMemory(VkImage& p_image, VkDeviceMemory& p_devMem);
+	bool CreateImagView(VkImageUsageFlags p_usage, VkImage p_image, VkFormat p_format, VkImageViewType p_viewType, VkImageView& p_imgView);
+	void DestroyImage(VkImage p_image);
+
+	bool CreateSampler(Sampler& p_sampler);
+	void DestroySampler(VkSampler p_sampler);
+
+	bool CreateBuffer(VkBufferCreateInfo p_bufferCreateInfo, VkBuffer& p_buffer);
+	bool AllocateBufferMemory(VkBuffer p_buffer, VkMemoryPropertyFlags p_memFlags, VkDeviceMemory& p_devMem);
+	bool BindBufferMemory(VkBuffer& p_buffer, VkDeviceMemory& p_devMem);
+	void DestroyBuffer(VkBuffer p_buffer);
+
+	bool DownloadDataFromBuffer(uint8_t* p_data, Buffer p_buffer);
+	bool UploadDataToBuffer(uint8_t* p_data, Buffer p_buffer);
+	bool UploadStagingToBuffer(Buffer& p_staging, VkMemoryPropertyFlagBits p_memProp, Buffer& p_dest, VkCommandBuffer & p_cmdBfr);
+	void UploadStagingToImage(Buffer& p_staging, VkImageLayout p_finLayout, Image& p_dest, VkCommandBuffer& p_cmdBfr);
+	
+	bool ListAvailableInstanceLayers(std::vector<const char*> reqList);
+	bool ListAvailableInstanceExtensions(std::vector<const char*> reqList);
+		
+#if	VULKAN_DEBUG == 1
+	void InitVulkanDebug();
+	void DestroyVulkanDebug();
+#endif
+	
+	void InitDebugMarkers();
+};
