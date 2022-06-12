@@ -8,20 +8,14 @@ External Tools/Packages Used
 
 Feature Integrated
 1.	Vulkan Bindless - Descriptor Indexing
-	- 
-	- Challanges Faced:
-
-	- Algorithm Limitations:
- 
-	- Bugs:
+	- Challanges Faced: - 
+	- Algorithm Limitations: - 
+	- Bugs: - 
  
 2.	Forward Rendering
-	- Challanges Faced:
-		- 
-	- Algorithm Limitations:
-		- 
-	- Bugs:
-		- 
+	- Challanges Faced: -
+	- Algorithm Limitations: -
+	- Bugs: - 
 3.	Deferred Rendering
 	- Challanges Faced:
 		- 
