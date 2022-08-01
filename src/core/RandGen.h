@@ -1,5 +1,5 @@
 #pragma once
-#include "../external/NiceMath.h"
+#include "external/NiceMath.h"
 
 inline float frand(int* seed)
 {

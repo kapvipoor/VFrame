@@ -6,7 +6,7 @@
 
 layout(binding = 1, rgba8) uniform writeonly image2D resultImage;
 
-#include "common.h"
+#include "Common.h"
 
 #define RAY_SAMPLES_PER_PIXEL 15
 #define RAY_BOUNCE 20

@@ -20,12 +20,6 @@ const float g_ambientCoeff = 0.25;
 const float g_diffuseCoeff = 0.75;
 const float g_shadowFactor = 0.2;
 
-layout(push_constant) uniform MeshID
-{
-	uint mesh_id;
-	uint material_id;
-}g_pushConstant;
-
 layout(set = 0, binding = 0) uniform GlobalBuffer
 {
 	float	elapsedTime;
@@ -68,32 +62,6 @@ layout(set = 0, binding = 9) 								buffer		SSAOKernel
 layout(set = 0, binding = 10)			uniform				texture2D	g_LightDepthImage; 
 layout(set = 0, binding = 11, rgba16f)	uniform 		 	image2D		g_DeferredLighting;
 layout(set = 0, binding = 12) 			uniform				texture2D	g_ReadOnlyTexures[];
-
-struct MeshData
-{
-	mat4  model;				// model matrix for this vertex buffer
-	mat4  trans_inv_model;
-};
-layout(set = 1, binding = 0) uniform Mesh
-{
-	MeshData data[1];
-} g_meshUniform;
-
-layout(set = 1, binding = 1) uniform samplerCube g_skyboxSampler;
-
-struct Material
-{
-	uint color_id;
-	uint normal_id;
-};
-layout(set = 1, binding = 2) buffer Material_Storage
-{
-	Material data[1];			// list of all material
-} g_materials;
-
-layout(set = 1, binding = 3) uniform texture2D g_textures[];
-
-
 
 struct Ray
 {

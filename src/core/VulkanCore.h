@@ -39,68 +39,36 @@ char* BinaryLoader(const std::string pPath, size_t& pDataSize);
 class CVulkanCore
 {
 public:
-	CVulkanCore(const char* p_applicaitonName, int p_renderWidth, int p_renderHeight);
-	~CVulkanCore();
-
-	void BeginDebugMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg);
-	void EndDebugMarker(VkCommandBuffer p_vkCmdBuff);
-	void InsertMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg);
-
-protected:
-	uint32_t m_renderWidth;
-	uint32_t m_renderHeight;
-
-	const char* m_applicationName;
-	VkInstance m_vkInstance;
-	VkDevice m_vkDevice;
-	VkPhysicalDevice m_vkPhysicalDevice;
-	uint32_t m_QFIndex;
-	VkQueue m_vkQueue[FRAME_BUFFER_COUNT];
-	VkSurfaceKHR m_vkSurface;
-	VkSwapchainKHR m_vkSwapchain;
-	VkImage m_swapchainImageList[FRAME_BUFFER_COUNT];
-	VkImageView m_swapchainImageViewList[FRAME_BUFFER_COUNT];
-
-	VkPhysicalDeviceMemoryProperties m_vkPhysicalDeviceMemProp{};
-#if VULKAN_DEBUG_MARKERS == 1
-	PFN_vkDebugMarkerSetObjectTagEXT    m_fpVkDebugMarkerSetObjectTag = NULL;
-	PFN_vkDebugMarkerSetObjectNameEXT   m_fpVkDebugMarkerSetObjectName = NULL;
-	PFN_vkCmdDebugMarkerBeginEXT        m_fpVkCmdDebugMarkerBegin = NULL;
-	PFN_vkCmdDebugMarkerEndEXT          m_fpVkCmdDebugMarkerEnd = NULL;
-	PFN_vkCmdDebugMarkerInsertEXT       m_fpVkCmdDebugMarkerInsert = NULL;
-#endif
-#if VULKAN_DEBUG == 1
-	//PFN_vkSetDebugUtilsObjectNameEXT    m_fpVkSetDebugUtilsObjectName = NULL;
-	VkDebugReportCallbackCreateInfoEXT	m_debugCallbackCreateInfo{};
-	PFN_vkCreateDebugReportCallbackEXT	m_fpVkCreateDebugReportCallbackEXT = NULL;
-	PFN_vkDestroyDebugReportCallbackEXT m_fpVkDestroyDebugReportCallbackEXT = NULL;
-	VkDebugReportCallbackEXT			m_vkDebugReportCallback;
-#endif
-
-protected:
-	struct VkInitData
+		struct InitData
 	{
-		HINSTANCE winInstance;
-		HWND winHandle;
-		VkQueueFlagBits queueType;
-		VkImageUsageFlags swapChaineImageUsage;
-		VkFormat swapchainImageFormat;
+		HINSTANCE											winInstance;
+		HWND												winHandle;
+		VkQueueFlagBits										queueType;
+		VkImageUsageFlags									swapChaineImageUsage;
+		VkFormat											swapchainImageFormat;
+	};
+
+	struct VertexBinding
+	{
+		VkVertexInputBindingDescription						bindingDescription;
+		std::vector<VkVertexInputAttributeDescription>		attributeDescription;
 	};
 
 	struct Renderpass
 	{
-		Renderpass() : depthAttached(false) {}
-		std::vector<VkAttachmentDescription> attachemntDescList;
-		std::vector<VkAttachmentReference> colorAttachmentRefList;
-		VkAttachmentReference depthAttachemntRef;
-		VkRenderPass renderpass;
-		uint32_t framebufferWidth;
-		uint32_t framebufferHeight;
+		std::vector<VkAttachmentDescription>				attachemntDescList;
+		std::vector<VkAttachmentReference>					colorAttachmentRefList;
+		VkAttachmentReference								depthAttachemntRef;
+		VkRenderPass										renderpass;
+		uint32_t											framebufferWidth;
+		uint32_t											framebufferHeight;
 
-		void AttachColor(VkFormat p_format,
-			VkAttachmentLoadOp p_loadOp, VkAttachmentStoreOp p_stOp,
-			VkImageLayout p_iniLayout, VkImageLayout p_finLayout,
-			VkImageLayout p_refLayout)
+		std::vector<VkClearColorValue>						colorClearValue;
+		VkClearDepthStencilValue							depthStencilClearValue;
+
+		Renderpass() : depthAttached(false) {}
+		
+		void AttachColor(VkFormat p_format,	VkAttachmentLoadOp p_loadOp, VkAttachmentStoreOp p_stOp, VkImageLayout p_iniLayout, VkImageLayout p_finLayout, VkImageLayout p_refLayout)
 		{
 			VkAttachmentDescription attachDesc{};
 			attachDesc.format = p_format;
@@ -116,12 +84,11 @@ protected:
 
 			colorAttachmentRefList.push_back(ref);
 			attachemntDescList.push_back(attachDesc);
-		}
 
-		void AttachDepth(VkFormat p_format,
-			VkAttachmentLoadOp p_loadOp, VkAttachmentStoreOp p_stOp,
-			VkImageLayout p_iniLayout, VkImageLayout p_finLayout,
-			VkImageLayout p_refLayout)
+			colorClearValue.push_back(VkClearColorValue{ 1.0f, 1.0f, 1.0f, 1.0f });
+		}
+		
+		void AttachDepth(VkFormat p_format, VkAttachmentLoadOp p_loadOp, VkAttachmentStoreOp p_stOp, VkImageLayout p_iniLayout, VkImageLayout p_finLayout, VkImageLayout p_refLayout)
 		{
 			if (depthAttached == true)
 			{
@@ -147,6 +114,8 @@ protected:
 			depthAttachemntRef.layout = ref.layout;
 			depthAttached = true;
 
+			depthStencilClearValue = VkClearDepthStencilValue{ 1.0f, 0 };
+
 			attachemntDescList.push_back(attachDesc);
 		}
 
@@ -156,46 +125,56 @@ protected:
 		bool depthAttached;
 	};
 
+	struct ShaderPaths
+	{
+		std::string											shaderpath_vertex;
+		std::string											shaderpath_fragment;
+		std::string											shaderpath_compute;
+	};
+
 	struct Pipeline
 	{
-		std::string shaderpath_vertex;
-		std::string shaderpath_fragment;
-		std::string shaderpath_compute;
-		VkVertexInputBindingDescription vertexInBinding;
-		std::vector<VkVertexInputAttributeDescription> vertexAttributeDesc;
-		bool enableDepthTest;
-		bool enableDepthWrite;
-		VkCullModeFlags cullMode;
-		VkCompareOp depthCmpOp;
-		Renderpass renderpassData;
-		VkPipelineLayout pipeLayout;
-		VkPipeline pipeline;
+		VkShaderModule										vertexShader;
+		VkShaderModule										fragmentShader;
+		VkShaderModule										computeShader;
+		VkVertexInputBindingDescription						vertexInBinding;
+		std::vector<VkVertexInputAttributeDescription>		vertexAttributeDesc;
+		bool												enableDepthTest;
+		bool												enableDepthWrite;
+		VkCullModeFlags										cullMode;
+		VkCompareOp											depthCmpOp;
+		bool												enableBlending;
+		Renderpass											renderpassData;
+		VkPipelineLayout									pipeLayout;
+		VkPipeline											pipeline;
 
-		Pipeline() : 
+		Pipeline() :
 			cullMode(VK_CULL_MODE_BACK_BIT)
-		,	depthCmpOp(VK_COMPARE_OP_LESS_OR_EQUAL) {}
+			, depthCmpOp(VK_COMPARE_OP_LESS_OR_EQUAL)
+			, enableBlending(false) {}
 	};
 
 	struct Buffer
 	{
-		VkDescriptorBufferInfo descInfo;
-		VkDeviceMemory devMem;
+		VkDescriptorBufferInfo								descInfo;
+		VkDeviceMemory										devMem;
+		VkMemoryAllocateFlags								memPropFlags;
 	};
 
 	struct Image
 	{
-		VkDescriptorImageInfo descInfo;
-		VkImage image;
-		VkDeviceMemory devMem;
+		VkDescriptorImageInfo								descInfo;
+		VkImage												image;
+		VkDeviceMemory										devMem;
 
-		VkImageViewType viewType;
+		VkImageViewType										viewType;
 
-		VkFormat format;
-		uint32_t width;
-		uint32_t height;
+		VkFormat											format;
+		uint32_t											width;
+		uint32_t											height;
 
-		uint32_t layerCount;
-		uint32_t bufOffset;			// assuming the buffer offset for each layer is going to be same
+		uint32_t											layerCount;
+		uint32_t											bufOffset;			// assuming the buffer offset for each layer is going to be same
 
 		Image() :
 			layerCount(1)
@@ -204,30 +183,86 @@ protected:
 
 	struct Sampler
 	{
-		VkDescriptorImageInfo descInfo;
-		VkFilter filter;
-		float maxAnisotropy;
+		VkDescriptorImageInfo								descInfo;
+		VkFilter											filter;
+		float												maxAnisotropy;
 	};
 
 	static VkImageCreateInfo ImageCreateInfo()
 	{
 		VkImageCreateInfo p_createInfo{};
-		p_createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		p_createInfo.imageType = VK_IMAGE_TYPE_2D;
-		p_createInfo.extent.depth = 1;
-		p_createInfo.mipLevels = 1;
-		p_createInfo.arrayLayers = 1;
-		p_createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-		p_createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		p_createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		p_createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-		p_createInfo.flags = 0;
+		p_createInfo.sType									= VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		p_createInfo.imageType								= VK_IMAGE_TYPE_2D;
+		p_createInfo.extent.depth							= 1;
+		p_createInfo.mipLevels								= 1;
+		p_createInfo.arrayLayers							= 1;
+		p_createInfo.tiling									= VK_IMAGE_TILING_OPTIMAL;
+		p_createInfo.initialLayout							= VK_IMAGE_LAYOUT_UNDEFINED;
+		p_createInfo.sharingMode							= VK_SHARING_MODE_EXCLUSIVE;
+		p_createInfo.samples								= VK_SAMPLE_COUNT_1_BIT;
+		p_createInfo.flags									= 0;
 
 		return p_createInfo;
 	}
 
+	typedef std::vector<VkFramebuffer>						FrameBuffer;
+	typedef	VkQueue											Queue;
+	typedef VkCommandPool									CommandPool;
+	typedef VkCommandBuffer									CommandBuffer;
+	typedef std::vector<Buffer>								BufferList;
+	typedef std::vector<Image>								ImageList;
+	typedef std::vector<Sampler>							SamplerList;
+	typedef VkImageLayout									ImageLayout;
+	typedef VkSwapchainKHR									SwapChain;
+
+	CVulkanCore(const char* p_applicaitonName, int p_renderWidth, int p_renderHeight);
+	~CVulkanCore();
+
+	void BeginDebugMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg);
+	void EndDebugMarker(VkCommandBuffer p_vkCmdBuff);
+	void InsertMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg);
+
+	VkQueue GetQueue(uint32_t p_scIdx)						{ return m_vkQueue[p_scIdx]; }
+	uint32_t GetQueueFamiliyIndex() const					{ return m_QFIndex; }
+	VkImageView GetSCImageView(uint32_t p_scIdx)			{ return m_swapchainImageViewList[p_scIdx]; }
+	uint32_t GetRenderWidth()								{ return m_renderWidth; }
+	uint32_t GetRenderHeight()								{ return m_renderHeight; }
+	VkSwapchainKHR GetSwapChain()							{ return m_vkSwapchain; }
+
+protected:
+	uint32_t												m_renderWidth;
+	uint32_t												m_renderHeight;
+
+	const char*												m_applicationName;
+	VkInstance												m_vkInstance;
+	VkDevice												m_vkDevice;
+	VkPhysicalDevice										m_vkPhysicalDevice;
+	uint32_t												m_QFIndex;
+	VkQueue													m_vkQueue[FRAME_BUFFER_COUNT];
+	VkSurfaceKHR											m_vkSurface;
+	VkSwapchainKHR											m_vkSwapchain;
+	VkImage													m_swapchainImageList[FRAME_BUFFER_COUNT];
+	VkImageView												m_swapchainImageViewList[FRAME_BUFFER_COUNT];
+
+	VkPhysicalDeviceMemoryProperties m_vkPhysicalDeviceMemProp{};
+#if VULKAN_DEBUG_MARKERS == 1
+	PFN_vkDebugMarkerSetObjectTagEXT						m_fpVkDebugMarkerSetObjectTag = NULL;
+	PFN_vkDebugMarkerSetObjectNameEXT						m_fpVkDebugMarkerSetObjectName = NULL;
+	PFN_vkCmdDebugMarkerBeginEXT							m_fpVkCmdDebugMarkerBegin = NULL;
+	PFN_vkCmdDebugMarkerEndEXT								m_fpVkCmdDebugMarkerEnd = NULL;
+	PFN_vkCmdDebugMarkerInsertEXT							m_fpVkCmdDebugMarkerInsert = NULL;
+#endif
+#if VULKAN_DEBUG == 1
+	//PFN_vkSetDebugUtilsObjectNameEXT						m_fpVkSetDebugUtilsObjectName = NULL;
+	VkDebugReportCallbackCreateInfoEXT						m_debugCallbackCreateInfo{};
+	PFN_vkCreateDebugReportCallbackEXT						m_fpVkCreateDebugReportCallbackEXT = NULL;
+	PFN_vkDestroyDebugReportCallbackEXT						m_fpVkDestroyDebugReportCallbackEXT = NULL;
+	VkDebugReportCallbackEXT								m_vkDebugReportCallback;
+#endif
+
+public:
 	void cleanUp();
-	bool initialize(const VkInitData& p_initData);
+	bool initialize(const InitData& p_initData);
 	
 	bool CreateInstance(const char* p_applicaitonName);
 	bool CreateDevice(VkQueueFlagBits p_queueType);
@@ -235,6 +270,7 @@ protected:
 	bool CreateSwapChain(VkFormat p_format, VkImageUsageFlags p_imageUsage);
 	bool CreateSwapChainImages(VkFormat p_format);
 	bool CreateFramebuffer(VkRenderPass p_renderPass, VkFramebuffer& p_frameBuffer, VkImageView* p_imageViewList, uint32_t p_fbCount, uint32_t p_width, uint32_t p_height);
+	void DestroyFramebuffer(VkFramebuffer p_framebuffer);
 
 	bool AcquireNextSwapChain(VkSemaphore p_semaphore, uint32_t& p_swapChainID);
 
@@ -252,13 +288,14 @@ protected:
 	void DestroyPipelineLayout(VkPipelineLayout p_pipeLayout);
 	
 	bool CreateRenderpass(Renderpass& p_rpData);
+	void SetClearColorValue(Renderpass& p_renderpass, uint32_t p_attachmentIndex, const VkClearColorValue& p_colorClearValue);
 	void BeginRenderpass(VkFramebuffer p_frameBfr, const Renderpass& p_renderpass, VkCommandBuffer& p_cmdBfr);
 	void EndRenderPass(VkCommandBuffer& p_cmdBfr);
 	void DestroyRenderpass(VkRenderPass p_renderpass);
 	
-	bool CreateGraphicsPipeline(Pipeline& pData);
-	bool CreateComputePipeline(Pipeline& );
-	void DestroyPipeline(VkPipeline p_pipeline);
+	bool CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipeline& pData);
+	bool CreateComputePipeline(const ShaderPaths& p_shaderPaths, Pipeline& );
+	void DestroyPipeline(Pipeline& p_pipeline);
 		
 	bool CreateCommandPool(uint32_t p_qfIndex, VkCommandPool& p_cmdPool);
 	void DestroyCommandPool(VkCommandPool p_cmdPool);
@@ -291,6 +328,7 @@ protected:
 	bool AllocateImageMemory(VkImage p_image, VkMemoryPropertyFlags p_memFlags, VkDeviceMemory& p_devMem);
 	bool BindImageMemory(VkImage& p_image, VkDeviceMemory& p_devMem);
 	bool CreateImagView(VkImageUsageFlags p_usage, VkImage p_image, VkFormat p_format, VkImageViewType p_viewType, VkImageView& p_imgView);
+	void DestroyImageView(VkImageView p_imageView);
 	void DestroyImage(VkImage p_image);
 
 	bool CreateSampler(Sampler& p_sampler);
@@ -299,12 +337,17 @@ protected:
 	bool CreateBuffer(VkBufferCreateInfo p_bufferCreateInfo, VkBuffer& p_buffer);
 	bool AllocateBufferMemory(VkBuffer p_buffer, VkMemoryPropertyFlags p_memFlags, VkDeviceMemory& p_devMem);
 	bool BindBufferMemory(VkBuffer& p_buffer, VkDeviceMemory& p_devMem);
-	void DestroyBuffer(VkBuffer p_buffer);
+	void FreeDeviceMemory(VkDeviceMemory& p_devMem);
+	void DestroyBuffer(VkBuffer& p_buffer);
 
-	bool DownloadDataFromBuffer(uint8_t* p_data, Buffer p_buffer);
-	bool UploadDataToBuffer(uint8_t* p_data, Buffer p_buffer);
-	bool UploadStagingToBuffer(Buffer& p_staging, VkMemoryPropertyFlagBits p_memProp, Buffer& p_dest, VkCommandBuffer & p_cmdBfr);
-	void UploadStagingToImage(Buffer& p_staging, VkImageLayout p_finLayout, Image& p_dest, VkCommandBuffer& p_cmdBfr);
+	bool MapMemory(Buffer p_buffer, bool p_flushMemRanges, void** p_data, std::vector<VkMappedMemoryRange>* p_memRanges);
+	bool FlushMemoryRanges(std::vector<VkMappedMemoryRange>* p_memRanges);
+	void UnMapMemory(Buffer p_buffer);
+
+	bool ReadFromBuffer(void* p_data, Buffer p_buffer);
+	bool WriteToBuffer(void* p_data, Buffer p_buffer, bool p_bFlush = false);
+	bool UploadFromHostToDevice(Buffer& p_staging, Buffer& p_dest, VkCommandBuffer & p_cmdBfr);
+	void UploadFromHostToDevice(Buffer& p_staging, VkImageLayout p_finLayout, Image& p_dest, VkCommandBuffer& p_cmdBfr);
 	
 	bool ListAvailableInstanceLayers(std::vector<const char*> reqList);
 	bool ListAvailableInstanceExtensions(std::vector<const char*> reqList);

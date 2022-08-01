@@ -5,7 +5,8 @@
 #extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_nonuniform_qualifier : require
 
-#include "common.h"
+#include "Common.h"
+#include "MeshCommon.h"
 
 layout (location = 0) in vec4 inPosition;
 layout (location = 1) in vec2 inUV;

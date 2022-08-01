@@ -1,4 +1,4 @@
-#include "Scene.h"
+#include "AssetLoader.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "external/tiny_obj_loader.h"
@@ -100,7 +100,7 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 
 		nm::float4x4 translation = (node.translation.size() == 3) ? nm::translation(nm::float3((float)node.translation[0], (float)node.translation[1], (float)node.translation[2])) : nm::translation(nm::float3(1.0f));
 		nm::float4x4 scale = (node.scale.size() == 3) ? nm::scale(nm::float4((float)node.scale[0], (float)node.scale[1], (float)node.scale[2], 1.0f)) : nm::scale(nm::float4(1.0f));
-		nm::float4x4 transform = nm::float4x4().identity(); // translation* scale;
+		nm::float4x4 transform = translation * scale;
 
 		if (node.mesh > -1)
 		{
@@ -154,6 +154,7 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 						vert.normal = nm::float3(normalsBuffer ? nm::float3(normalsBuffer[(v * 3) + 0], normalsBuffer[(v * 3) + 1], normalsBuffer[(v * 3) + 2]) : nm::float3(0.0f));
 						vert.uv = texCoordsBuffer ? nm::float2(texCoordsBuffer[(v * 2) + 0], texCoordsBuffer[(v * 2) + 1]) : nm::float2(0.0f);
 						vert.tangent = tangentsBuffer ? nm::float4(tangentsBuffer[(v * 4) + 0], tangentsBuffer[(v * 4) + 1], tangentsBuffer[(v * 4) + 2], tangentsBuffer[(v * 4) + 3]) : nm::float4(0.0);
+						//vert.color = nm::float3(1.0, 1.0, 1.0);
 						objMesh.vertexList.push_back(vert);
 					}
 				}
@@ -194,7 +195,7 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 					}
 				}
 
-				SubMesh submesh{};
+				Submesh submesh{};
 				submesh.firstIndex = firstIndex;
 				submesh.indexCount = indexCount;
 				submesh.materialId = material_offset + glTFPrimitive.material;
@@ -318,10 +319,10 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 					vertex.uv[1] = 1.0f - vertex.uv[1];
 				}
 
-				//vertex.color = nm::float3{
-				//	attrib.colors[3 * index.vertex_index + 0],
-				//	attrib.colors[3 * index.vertex_index + 1],
-				//	attrib.colors[3 * index.vertex_index + 2]
+				//vertex.color = nm::float3{1.0f, 1.0f, 1.0f
+					/*attrib.colors[3 * index.vertex_index + 0],
+					attrib.colors[3 * index.vertex_index + 1],
+					attrib.colors[3 * index.vertex_index + 2]*/
 				//};
 
 				if (uniqueVertices.count(vertex) == 0)

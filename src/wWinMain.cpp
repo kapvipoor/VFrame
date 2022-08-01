@@ -9,7 +9,7 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
     FILE* stdin_console = freopen("CONIN$", "r", stdin);
     FILE* stdout_console = freopen("CONOUT$", "w", stdout);
     FILE* stderr_console = freopen("CONOUT$", "w", stderr);
-
+    
     unsigned int val = 1;
     bool exitState = true;
     switch (val)
@@ -21,16 +21,16 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
             
             if (!winCore->initialize())
                 exit(EXIT_FAILURE);
-
+    
             exitState = rasterRender.run(hInstance);
         }
         break;
     default:
         return 0;
     }
-
+    
     if (!exitState)
         MessageBox(NULL, L"Error(s) found!", L"Error(s) found!", 0);
-
+    
     return EXIT_SUCCESS;
 }

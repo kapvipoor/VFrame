@@ -77,7 +77,7 @@ void CVulkanCore::cleanUp()
 	vkDestroyInstance(m_vkInstance, nullptr);
 }
 
-bool CVulkanCore::initialize(const VkInitData& p_initData)
+bool CVulkanCore::initialize(const InitData& p_initData)
 {
 	if (!CreateInstance(m_applicationName))
 		return false;
@@ -449,6 +449,11 @@ bool CVulkanCore::CreateFramebuffer(VkRenderPass p_renderPass, VkFramebuffer& p_
 	return true;
 }
 
+void CVulkanCore::DestroyFramebuffer(VkFramebuffer p_framebuffer)
+{
+	vkDestroyFramebuffer(m_vkDevice, p_framebuffer, nullptr);
+}
+
 bool CVulkanCore::AcquireNextSwapChain(VkSemaphore p_semaphore, uint32_t& p_swapChainID)
 {
 	VkResult res = vkAcquireNextImageKHR(m_vkDevice, m_vkSwapchain, UINT64_MAX, p_semaphore, VK_NULL_HANDLE, &p_swapChainID);
@@ -599,7 +604,8 @@ bool CVulkanCore::CreateRenderpass(Renderpass& p_rpData)
 	subpassDesc.pInputAttachments = nullptr;
 	subpassDesc.colorAttachmentCount = (uint32_t)p_rpData.colorAttachmentRefList.size();
 	subpassDesc.pColorAttachments = p_rpData.colorAttachmentRefList.data();
-	subpassDesc.pDepthStencilAttachment = &p_rpData.depthAttachemntRef;
+	if(p_rpData.isDepthAttached() == true)
+		subpassDesc.pDepthStencilAttachment = &p_rpData.depthAttachemntRef;
 
 	VkSubpassDependency subpassDependency{};
 	subpassDependency.srcSubpass = 0;
@@ -629,21 +635,25 @@ bool CVulkanCore::CreateRenderpass(Renderpass& p_rpData)
 	return true;
 }
 
+void CVulkanCore::SetClearColorValue(Renderpass& p_renderpass, uint32_t p_attachmentIndex, const VkClearColorValue& p_colorClearValue)
+{
+	p_renderpass.colorClearValue[p_attachmentIndex] = p_colorClearValue;
+}
+
 void CVulkanCore::BeginRenderpass(VkFramebuffer p_frameBfr, const Renderpass& p_renderpass, VkCommandBuffer& p_cmdBfr)
 {
 	std::vector<VkClearValue> clear;
-	for (unsigned int i =0; i < p_renderpass.colorAttachmentRefList.size(); i++)
+	for (auto colorClear : p_renderpass.colorClearValue)
 	{
 		VkClearValue cval{};
-		cval.color = { 1.0f, 1.0f, 1.0f, 1.0f };
+		cval.color = colorClear;
 		clear.push_back(cval);
 	}
 
 	if (p_renderpass.depthAttachemntRef.attachment >= 0)
 	{
 		VkClearValue cval{};
-		cval.depthStencil.depth = 1;
-		cval.depthStencil.stencil = 0;
+		cval.depthStencil = p_renderpass.depthStencilClearValue;
 		clear.push_back(cval);
 	}
 
@@ -691,16 +701,16 @@ void CVulkanCore::SetScissors(VkCommandBuffer p_cmdBfr, uint32_t p_offX, uint32_
 	vkCmdSetScissor(p_cmdBfr, 0, 1, &l_vkScissor);
 }
 
-bool CVulkanCore::CreateGraphicsPipeline(Pipeline& pData)
+bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipeline& pData)
 {
-	VkShaderModule vertexShader;
-	if (pData.shaderpath_vertex == "" || !LoadShader(pData.shaderpath_vertex.c_str(), vertexShader))
+	pData.vertexShader = VK_NULL_HANDLE;
+	if (p_shaderPaths.shaderpath_vertex == "" || !LoadShader(p_shaderPaths.shaderpath_vertex.c_str(), pData.vertexShader))
 		return false;
 
-	VkShaderModule fragmentShader = VK_NULL_HANDLE;
-	if (pData.shaderpath_fragment != "")
+	pData.fragmentShader = VK_NULL_HANDLE;
+	if (p_shaderPaths.shaderpath_fragment != "")
 	{
-		if (!LoadShader(pData.shaderpath_fragment.c_str(), fragmentShader))
+		if (!LoadShader(p_shaderPaths.shaderpath_fragment.c_str(), pData.fragmentShader))
 			return false;
 	}
 
@@ -715,16 +725,16 @@ bool CVulkanCore::CreateGraphicsPipeline(Pipeline& pData)
 	VkPipelineShaderStageCreateInfo shaderCreateInfo{};
 	shaderCreateInfo.sType						= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	shaderCreateInfo.stage						= VK_SHADER_STAGE_VERTEX_BIT;
-	shaderCreateInfo.module						= vertexShader;
+	shaderCreateInfo.module						= pData.vertexShader;
 	shaderCreateInfo.pName						= "main";
 	shaderStageCreateInfo.push_back(shaderCreateInfo);
 
-	if (fragmentShader != VK_NULL_HANDLE)
+	if (pData.fragmentShader != VK_NULL_HANDLE)
 	{
 		VkPipelineShaderStageCreateInfo shaderCreateInfo{};
 		shaderCreateInfo.sType					= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 		shaderCreateInfo.stage					= VK_SHADER_STAGE_FRAGMENT_BIT;
-		shaderCreateInfo.module					= fragmentShader;
+		shaderCreateInfo.module					= pData.fragmentShader;
 		shaderCreateInfo.pName					= "main";
 		shaderStageCreateInfo.push_back(shaderCreateInfo);
 	}
@@ -778,9 +788,9 @@ bool CVulkanCore::CreateGraphicsPipeline(Pipeline& pData)
 
 	Renderpass rpData = pData.renderpassData;
 	VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
+	depthStencilInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	if (rpData.isDepthAttached() == true)
 	{
-		depthStencilInfo.sType					= VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 		depthStencilInfo.flags					= 0;
 		depthStencilInfo.depthTestEnable		= pData.enableDepthTest; //VK_TRUE;
 		depthStencilInfo.depthWriteEnable		= pData.enableDepthWrite; //VK_TRUE;
@@ -798,10 +808,24 @@ bool CVulkanCore::CreateGraphicsPipeline(Pipeline& pData)
 	VkPipelineColorBlendStateCreateInfo colorBlendCreateInfo{};
 	if (colorAttachCount > 0) // color attachment are in use
 	{
-		for (unsigned int i =0; i < colorAttachCount; i++)
+		for (unsigned int i = 0; i < colorAttachCount; i++)
 		{
-			colorBlendState[i].blendEnable		= VK_FALSE;
-			colorBlendState[i].colorWriteMask	= 0xf;
+			if (pData.enableBlending == true)
+			{
+				colorBlendState[i].blendEnable			= VK_TRUE;
+				colorBlendState[i].srcColorBlendFactor	= VK_BLEND_FACTOR_SRC_ALPHA;
+				colorBlendState[i].dstColorBlendFactor	= VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+				colorBlendState[i].colorBlendOp			= VK_BLEND_OP_ADD;
+				colorBlendState[i].srcAlphaBlendFactor	= VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+				colorBlendState[i].dstAlphaBlendFactor	= VK_BLEND_FACTOR_ZERO;
+				colorBlendState[i].alphaBlendOp			= VK_BLEND_OP_ADD;
+				colorBlendState[i].colorWriteMask		= VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+			}
+			else
+			{
+				colorBlendState[i].blendEnable			= VK_FALSE;
+				colorBlendState[i].colorWriteMask		= 0xf;
+			}
 		}
 
 		colorBlendCreateInfo.sType				= VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -841,18 +865,18 @@ bool CVulkanCore::CreateGraphicsPipeline(Pipeline& pData)
 	return true;
 }
 
-bool CVulkanCore::CreateComputePipeline(Pipeline& p_pData)
+bool CVulkanCore::CreateComputePipeline(const ShaderPaths& p_shaderPaths, Pipeline& p_pData)
 {
 	// load shader and get shader module
-	VkShaderModule shader;
-	if (!LoadShader(p_pData.shaderpath_compute.c_str(), shader))
+	p_pData.computeShader = VK_NULL_HANDLE;
+	if (!LoadShader(p_shaderPaths.shaderpath_compute.c_str(), p_pData.computeShader))
 		return false;
 
 	VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo{};
 	pipelineShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	pipelineShaderStageCreateInfo.flags = 0;
 	pipelineShaderStageCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	pipelineShaderStageCreateInfo.module = shader;
+	pipelineShaderStageCreateInfo.module = p_pData.computeShader;
 	pipelineShaderStageCreateInfo.pName = "main";
 	pipelineShaderStageCreateInfo.pSpecializationInfo = nullptr;
 
@@ -861,7 +885,6 @@ bool CVulkanCore::CreateComputePipeline(Pipeline& p_pData)
 	computePipelineInfo.layout = p_pData.pipeLayout;
 	computePipelineInfo.stage = pipelineShaderStageCreateInfo;
 	VkResult res = vkCreateComputePipelines(m_vkDevice, VK_NULL_HANDLE, 1, &computePipelineInfo, nullptr, &p_pData.pipeline);
-	vkDestroyShaderModule(m_vkDevice, shader, nullptr);
 	if (res != VK_SUCCESS)
 	{
 		std::cerr << "vkCreateComputePipelines failed: " << res << std::endl;
@@ -871,9 +894,20 @@ bool CVulkanCore::CreateComputePipeline(Pipeline& p_pData)
 	return true;
 }
 
-void CVulkanCore::DestroyPipeline(VkPipeline p_pipeline)
+void CVulkanCore::DestroyPipeline(Pipeline& p_pipeline)
 {
-	vkDestroyPipeline(m_vkDevice, p_pipeline, nullptr);
+	if (p_pipeline.vertexShader != VK_NULL_HANDLE)
+		vkDestroyShaderModule(m_vkDevice, p_pipeline.vertexShader, nullptr);
+
+	if (p_pipeline.fragmentShader != VK_NULL_HANDLE)
+		vkDestroyShaderModule(m_vkDevice, p_pipeline.fragmentShader, nullptr);
+
+	if (p_pipeline.computeShader != VK_NULL_HANDLE)
+		vkDestroyShaderModule(m_vkDevice, p_pipeline.computeShader, nullptr);
+	
+	DestroyPipelineLayout(p_pipeline.pipeLayout);
+
+	vkDestroyPipeline(m_vkDevice, p_pipeline.pipeline, nullptr);
 }
 
 bool CVulkanCore::CreateSemaphor(VkSemaphore& p_semaphore)
@@ -1201,6 +1235,11 @@ bool CVulkanCore::CreateImagView(VkImageUsageFlags p_usage, VkImage p_image, VkF
 	return true;
 }
 
+void CVulkanCore::DestroyImageView(VkImageView p_imageView)
+{
+	vkDestroyImageView(m_vkDevice, p_imageView, nullptr);
+}
+
 void CVulkanCore::DestroyImage(VkImage p_image)
 {
 	vkDestroyImage(m_vkDevice, p_image, nullptr);
@@ -1233,8 +1272,8 @@ bool CVulkanCore::CreateSampler(Sampler& p_sampler)
 	// mip mapping
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	samplerInfo.mipLodBias = 0.0f;
-	samplerInfo.minLod = 0.0f;
-	samplerInfo.maxLod = 1.0f;
+	samplerInfo.minLod = -1000.0f;
+	samplerInfo.maxLod = 1000.0f;
 
 	VkResult res = vkCreateSampler(m_vkDevice, &samplerInfo, nullptr, &p_sampler.descInfo.sampler);
 	if (res != VK_SUCCESS)
@@ -1296,29 +1335,84 @@ bool CVulkanCore::BindBufferMemory(VkBuffer& p_buffer, VkDeviceMemory& p_devMem)
 	return true;
 }
 
-void CVulkanCore::DestroyBuffer(VkBuffer p_buffer)
+void CVulkanCore::FreeDeviceMemory(VkDeviceMemory& p_devMem)
 {
-	vkDestroyBuffer(m_vkDevice, p_buffer, nullptr);
+	vkFreeMemory(m_vkDevice, p_devMem, nullptr);
+	p_devMem = VK_NULL_HANDLE;
 }
 
-bool CVulkanCore::UploadDataToBuffer(uint8_t* p_data, Buffer p_buffer)
+void CVulkanCore::DestroyBuffer(VkBuffer &p_buffer)
 {
-	uint8_t* data;
-	VkResult res = vkMapMemory(m_vkDevice, p_buffer.devMem, p_buffer.descInfo.offset, p_buffer.descInfo.range, 0, (void**)(&data));
+	vkDestroyBuffer(m_vkDevice, p_buffer, nullptr);
+	p_buffer = VK_NULL_HANDLE;
+
+}
+
+bool CVulkanCore::MapMemory(Buffer p_buffer, bool p_flushMemRanges, void** p_data, std::vector<VkMappedMemoryRange>* p_memRanges)
+{
+	VkResult res = vkMapMemory(m_vkDevice, p_buffer.devMem, p_buffer.descInfo.offset, p_buffer.descInfo.range, 0, p_data);
 	if (res != VK_SUCCESS)
 	{
 		std::cerr << "vkMapMemory failed " << res << std::endl;
 		return false;
 	}
 
-	memcpy(data, p_data, (size_t)p_buffer.descInfo.range);
-
-	vkUnmapMemory(m_vkDevice, p_buffer.devMem);
+	if (p_flushMemRanges == true && p_memRanges!= nullptr)
+	{
+		VkMappedMemoryRange range{};
+		range.sType	= VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+		range.memory = p_buffer.devMem;
+		range.size	= VK_WHOLE_SIZE;
+		p_memRanges->push_back(range);
+	}
 
 	return true;
 }
 
-bool CVulkanCore::DownloadDataFromBuffer(uint8_t* p_data, Buffer p_buffer)
+bool CVulkanCore::FlushMemoryRanges(std::vector<VkMappedMemoryRange>* p_memRanges)
+{
+	if (p_memRanges == nullptr)
+	{
+		std::cout << "FlushMemoryRanges failed becasue p_memRanges is nullptr " << std::endl;
+		return false;
+	}
+
+	VkResult res = vkFlushMappedMemoryRanges(m_vkDevice, (uint32_t)p_memRanges->size(), p_memRanges->data());
+	if (res != VK_SUCCESS)
+	{
+		std::cerr << "vkFlushMappedMemoryRanges failed " << res << std::endl;
+		return false;
+	}
+
+	return true;
+}
+
+void CVulkanCore::UnMapMemory(Buffer p_buffer)
+{
+	vkUnmapMemory(m_vkDevice, p_buffer.devMem);
+}
+
+bool CVulkanCore::WriteToBuffer(void* p_data, Buffer p_buffer, bool p_bFlush)
+{
+	uint8_t* data = nullptr;
+	std::vector<VkMappedMemoryRange> ranges;
+	if (!MapMemory(p_buffer, p_bFlush, (void**)&data, &ranges))
+		return false;
+
+	memcpy(data, p_data, (size_t)p_buffer.descInfo.range);
+
+	if (p_bFlush == true)
+	{
+		if (!FlushMemoryRanges(&ranges))
+			return false;
+	}
+
+	UnMapMemory(p_buffer);
+
+	return true;
+}
+
+bool CVulkanCore::ReadFromBuffer(void* p_data, Buffer p_buffer)
 {
 	// Make device writes visible to the host
 	void* mapped;
@@ -1350,10 +1444,10 @@ bool CVulkanCore::DownloadDataFromBuffer(uint8_t* p_data, Buffer p_buffer)
 	return true;
 }
 
-bool CVulkanCore::UploadStagingToBuffer(Buffer& p_staging, VkMemoryPropertyFlagBits p_memProp, Buffer& p_dest, VkCommandBuffer& p_cmdBfr)
+bool CVulkanCore::UploadFromHostToDevice(Buffer& p_staging, Buffer& p_dest, VkCommandBuffer& p_cmdBfr)
 {
 	// check flag; if flag set to allocated data on GPU memory
-	if (!p_memProp == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+	if (!p_dest.memPropFlags == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 	{
 		std::cerr << "UploadStagingToBuffer failed: bad memory property flag" << std::endl;
 		return false;
@@ -1361,13 +1455,13 @@ bool CVulkanCore::UploadStagingToBuffer(Buffer& p_staging, VkMemoryPropertyFlagB
 	VkBufferCopy cpyRgn = {};
 	cpyRgn.size = p_staging.descInfo.range;
 
-	InsertMarker(p_cmdBfr, "Vertex Upload");
+	InsertMarker(p_cmdBfr, "Upload From Host To Device");
 	vkCmdCopyBuffer(p_cmdBfr, p_staging.descInfo.buffer, p_dest.descInfo.buffer, 1, &cpyRgn);
 	
 	return true;
 }
 
-void CVulkanCore::UploadStagingToImage(Buffer& p_staging, VkImageLayout p_finLayout, Image& p_dest, VkCommandBuffer& p_cmdBfr)
+void CVulkanCore::UploadFromHostToDevice(Buffer& p_staging, VkImageLayout p_finLayout, Image& p_dest, VkCommandBuffer& p_cmdBfr)
 {
 	std::vector<VkBufferImageCopy> bcInfoList;
 

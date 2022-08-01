@@ -5,7 +5,8 @@
 #extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_nonuniform_qualifier : require
 
-#include "common.h"
+#include "Common.h"
+#include "MeshCommon.h"
 
 #define DISPLAY_MOUSE_POINTER
 

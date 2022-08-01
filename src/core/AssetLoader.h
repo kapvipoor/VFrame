@@ -46,7 +46,7 @@ namespace std
 	};
 }
 
-struct SubMesh
+struct Submesh
 {
 	uint32_t firstIndex;
 	uint32_t indexCount;
@@ -58,7 +58,7 @@ struct MeshRaw
 	nm::float4x4 transform;
 	std::vector<Vertex> vertexList;
 	std::vector<uint32_t> indicesList;
-	std::vector<SubMesh> submeshes;
+	std::vector<Submesh> submeshes;
 };
 
 struct SceneRaw
