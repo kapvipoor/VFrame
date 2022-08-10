@@ -101,7 +101,7 @@ bool CForwardPass::Render(RenderData* p_renderData)
 
 		for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
 		{
-			const CRenderableMesh::SubMesh* submesh				= mesh->GetSubmesh(j);
+			const Submesh* submesh				= mesh->GetSubmesh(j);
 
 			CScene::MeshPushConst pc{ mesh->GetMeshId(), submesh->materialId};
 

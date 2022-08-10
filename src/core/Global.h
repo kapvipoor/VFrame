@@ -10,3 +10,6 @@
 
 extern std::string g_EnginePath;
 extern std::string g_AssetPath;
+
+bool GetFileExtention(const std::string fileName, std::string& pExtentionn);
+bool GetFileName(const std::string fileName, std::string& pExtentionn);

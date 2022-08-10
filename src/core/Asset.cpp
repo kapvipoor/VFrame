@@ -1,6 +1,9 @@
 #include "Asset.h"
-#include "external/imgui/imgui.h"
+#include "SceneGraph.h"
 #include "RandGen.h"
+
+#include "external/imgui/imgui.h"
+#include "external/imguizmo/ImGuizmo.h"
 
 std::vector<CUIParticipant*> CUIParticipantManager::m_uiParticipants;
 
@@ -268,7 +271,9 @@ void CTextures::DestroyTextures(CVulkanRHI* p_rhi)
 }
 
 CRenderableUI::CRenderableUI()
-	:CRenderable(FRAME_BUFFER_COUNT)
+	: CRenderable(FRAME_BUFFER_COUNT)
+	, CSelectionListener()
+	, m_showImguiDemo(false)
 {
 	m_participantManager = new CUIParticipantManager();
 }
@@ -336,8 +341,9 @@ void CRenderableUI::Destroy(CVulkanRHI* p_rhi)
 	DestroyTextures(p_rhi);
 }
 
-bool CRenderableUI::Update(const LoadedUniformData& p_loadedUpdate, CFixedBuffers::PrimaryUniformData& p_primUniData)
+bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUniformData& p_loadedUpdate, CFixedBuffers::PrimaryUniformData& p_primUniData)
 {
+	m_primUniforms							= p_primUniData;
 	ImGuiIO& imguiIO						= ImGui::GetIO();
 	imguiIO.DisplaySize						= ImVec2(p_loadedUpdate.screenRes[0], p_loadedUpdate.screenRes[1]);
 	imguiIO.DeltaTime						= p_loadedUpdate.timeElapsed;
@@ -346,16 +352,10 @@ bool CRenderableUI::Update(const LoadedUniformData& p_loadedUpdate, CFixedBuffer
 	imguiIO.MouseDown[1]					= p_loadedUpdate.isRightMouseDown;
 
 	ImGui::NewFrame();
+	ImGuizmo::BeginFrame();
 
-	bool showDemo = false;
-	if (showDemo)
-	{
-		ImGui::ShowDemoWindow(&showDemo);
-	}
-	else
-	{
-		ShowUI(p_primUniData);
-	}
+	ShowUI();
+	ShowGuizmo(p_rhi);
 
 	return true;
 }
@@ -393,23 +393,45 @@ bool CRenderableUI::CreateUIDescriptors(CVulkanRHI* p_rhi)
 	return true;
 }
 
-bool CRenderableUI::ShowUI(CFixedBuffers::PrimaryUniformData& )
+bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
+{
+	if(m_selectedEntity)
+	{
+		ImGuizmo::SetOrthographic(true);
+		ImGuizmo::SetRect(0.0f, 0.0f, (float)p_rhi->GetScreenWidth(), (float)p_rhi->GetScreenHeight());
+
+		nm::float4x4 invPrimCamView = m_primUniforms.cameraView;
+		nm::float4x4 primCamProj = m_primUniforms.cameraProj;
+		nm::float4x4 entityTransform = m_selectedEntity->GetTransform();
+
+		if (ImGuizmo::Manipulate(&invPrimCamView.column[0][0], &primCamProj.column[0][0], ImGuizmo::OPERATION::TRANSLATE, ImGuizmo::LOCAL, &entityTransform.column[0][0]))
+		{
+			m_selectedEntity->SetTransform(entityTransform);
+		}
+	}
+
+	return true;
+}
+
+bool CRenderableUI::ShowUI()
 {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
 	ImGui::SetNextWindowPos(ImVec2(10, 10));
 	ImGui::SetNextWindowSize(ImVec2(0, 0), ImGuiCond_::ImGuiCond_FirstUseEver);
 	ImGui::Begin("VFrame Interface", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+	
+	ImGui::TableNextColumn(); ImGui::Checkbox("Show imGui Demo", &m_showImguiDemo);
+	if(m_showImguiDemo)
+	{
+		bool showDemo = true;
+		ImGui::ShowDemoWindow(&showDemo);
+	}
+	
 	ImGui::TextUnformatted("VFrame Settings");
-	//ImGui::TextUnformatted(deviceProperties.deviceName);
-	//ImGui::Text("%.2f ms/frame (%.1d fps)", (1000.0f / lastFPS), lastFPS);
-
 	ImGui::PushItemWidth(110.0f * 1.0f);
-
-	// Here
 	m_participantManager->Show();
-
 	ImGui::PopItemWidth();
-
+	
 	ImGui::End();
 	ImGui::PopStyleVar();
 
@@ -480,23 +502,31 @@ bool CRenderableUI::PrepareDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx)
 	return true;
 }
 
-CRenderableMesh::CRenderableMesh(uint32_t p_meshId, nm::float4x4 p_modelMat)
-	: m_mesh_id(p_meshId)
+CRenderableMesh::CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::float4x4 p_modelMat)
+	: CEntity(p_name)
+	, m_mesh_id(p_meshId)
 	, m_modelMatrix(p_modelMat)
 {
 }
 
-void CRenderableMesh::PopulateSubmeshes(const std::vector<Submesh>& p_rawSubMeshes)
-{
-	std::vector<CRenderableMesh::SubMesh> meshList;
-	for (const auto& rawSubmesh : p_rawSubMeshes)
-	{
-		CRenderableMesh::SubMesh submesh{ rawSubmesh.firstIndex, rawSubmesh.indexCount, rawSubmesh.materialId };
-		meshList.push_back(submesh);
-	}
+//void CRenderableMesh::PopulateSubmeshes(const std::vector<Submesh>& p_rawSubMeshes)
+//{
+//	std::vector<CRenderableMesh::SubMesh> meshList;
+//	for (const auto& rawSubmesh : p_rawSubMeshes)
+//	{
+//		CRenderableMesh::SubMesh submesh{ rawSubmesh.firstIndex, rawSubmesh.indexCount, rawSubmesh.materialId };
+//		meshList.push_back(submesh);
+//	}
+//
+//	m_submeshes.resize(p_rawSubMeshes.size());
+//	std::copy(meshList.begin(), meshList.end(), m_submeshes.begin());
+//}
 
-	m_submeshes.resize(p_rawSubMeshes.size());
-	std::copy(meshList.begin(), meshList.end(), m_submeshes.begin());
+CScene::CScene(CSceneGraph* p_sceneGraph)
+	: m_sceneGraph(p_sceneGraph)
+	, m_debug(new CRenderableDebug())
+
+{
 }
 
 bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, const CVulkanRHI::CommandPool& p_cmdPool)
@@ -561,8 +591,10 @@ void CScene::Destroy(CVulkanRHI* p_rhi)
 
 	for (auto& mesh : m_meshes)
 	{
-		mesh.DestroyRenderable(p_rhi);
+		mesh->DestroyRenderable(p_rhi);
+		delete mesh;
 	}
+	m_meshes.clear();
 
 	p_rhi->FreeMemoryDestroyBuffer(m_material_storage);
 	p_rhi->FreeMemoryDestroyBuffer(m_meshInfo_uniform);
@@ -573,33 +605,59 @@ void CScene::Show()
 	int32_t sceneIndex = 0;
 	if(Header("Scene Settings"))
 	{
-		ComboBox("Scenes", &sceneIndex, m_scenePaths);
+		ImGui::Indent();
+		ComboBox("Load: ", &sceneIndex, m_scenePaths);
+		ImGui::Unindent();
+
+		if (ImGui::TreeNode("Scene Graph"))
+		{
+			CSceneGraph::EntityList* entities = CSceneGraph::GetEntities();
+			for (int i = 0; i < entities->size(); i++)
+			{
+				CEntity* entity = (*entities)[i];
+				char buf[32];
+				sprintf(buf, entity->GetName());
+				if (ImGui::Selectable(buf, m_selectedEntity == entity))
+				{
+					m_sceneGraph->SetCurSelectEntityId(i);
+				}
+
+				if (m_selectedEntity == entity)
+				{
+					float matrixTranslation[3], matrixRotation[3], matrixScale[3];
+					ImGuizmo::DecomposeMatrixToComponents(&(*entities)[i]->GetTransform().column[0][0], matrixTranslation, matrixRotation, matrixScale);
+					
+					ImGui::Indent();
+
+					ImGui::Text("Translation "); ImGui::SameLine(150); ImGui::InputFloat4("", matrixTranslation);
+					ImGui::Text("Rotation "); ImGui::SameLine(150); ImGui::InputFloat4("", matrixRotation);
+					ImGui::Text("Scale "); ImGui::SameLine(150); ImGui::InputFloat4("", matrixScale);
+					ImGui::Unindent();
+				}
+			}
+
+			ImGui::TreePop();
+		}
 	}
 }
 
 bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUniformData& p_loadedUpdate)
 {
+	std::vector<float> perMeshUniformData;
 	for (auto& mesh : m_meshes)
 	{
-		mesh.m_modelMatrix					= nm::float4x4().identity();
-		mesh.m_viewNormalTransform			= nm::transpose(nm::inverse(p_loadedUpdate.viewMatrix * mesh.m_modelMatrix));
+		mesh->m_modelMatrix					= mesh->GetTransform();
+		mesh->m_viewNormalTransform			= nm::transpose(nm::inverse(p_loadedUpdate.viewMatrix * mesh->m_modelMatrix));
+
+		const float* modelMat = &mesh->m_modelMatrix.column[0][0];
+		const float* trn_inv_model = &nm::transpose(nm::inverse(mesh->m_modelMatrix)).column[0][0];
+
+		std::copy(&modelMat[0], &modelMat[16], std::back_inserter(perMeshUniformData));					// model matrix for this mesh
+		std::copy(&trn_inv_model[0], &trn_inv_model[16], std::back_inserter(perMeshUniformData));		// Tranpose(inverse(model)) for transforming normal to world space
 	}
 
-	{
-		std::vector<float> perMeshUniformData;
-		for (const auto& mesh : m_meshes)
-		{
-			const float* modelMat			= &mesh.m_modelMatrix.column[0][0];
-			const float* trn_inv_model		= &nm::transpose(nm::inverse(mesh.m_modelMatrix)).column[0][0];
-
-			std::copy(&modelMat[0], &modelMat[16], std::back_inserter(perMeshUniformData));				// model matrix for this mesh
-			std::copy(&trn_inv_model[0], &trn_inv_model[16], std::back_inserter(perMeshUniformData));		// Tranpose(inverse(model)) for transforming normal to world space
-		}
-
-		uint8_t* data = (uint8_t*)(perMeshUniformData.data());
-
-		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, m_meshInfo_uniform));
-	}
+	uint8_t* data = (uint8_t*)(perMeshUniformData.data());
+	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, m_meshInfo_uniform));
 
 	return true;
 }
@@ -658,8 +716,8 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 		RETURN_FALSE_IF_FALSE(LoadObj(skybox_obj_path.c_str(), sceneraw, loadData));
 
 		MeshRaw meshraw					= sceneraw.meshList[0];
-		CRenderableMesh mesh(MeshType::mt_Skybox, nm::float4x4::identity());
-		RETURN_FALSE_IF_FALSE(mesh.CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr));
+		CRenderableMesh* mesh = new CRenderableMesh("Skybox", MeshType::mt_Skybox, nm::float4x4::identity());
+		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr));
 		m_meshes.push_back(mesh);
 	}
 
@@ -674,11 +732,11 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");
 	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");
 	m_scenePaths.push_back(g_AssetPath + "/Sponza/glTF/Sponza.gltf");
-	m_scenePaths.push_back(g_AssetPath + "DamagedHelmet/glTF/DamagedHelmet.gltf");
-	m_scenePaths.push_back(g_AssetPath + "cube/cube.obj");
+	m_scenePaths.push_back(g_AssetPath + "/DamagedHelmet/glTF/DamagedHelmet.gltf");
+	m_scenePaths.push_back(g_AssetPath + "/cube/cube.obj");
 
 	std::vector<std::string> paths;
-	paths.push_back(m_scenePaths[5]);
+	paths.push_back(m_scenePaths[4]);
 
 	std::vector<bool> flipYList{ false, false, false };
 
@@ -694,9 +752,14 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 	
 	for (auto& meshraw : sceneraw.meshList)
 	{
-		CRenderableMesh mesh((uint32_t)m_meshes.size(), meshraw.transform);
-		mesh.PopulateSubmeshes(meshraw.submeshes);
-		RETURN_FALSE_IF_FALSE(mesh.CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr));
+		CRenderableMesh* mesh = new CRenderableMesh(sceneraw.name, (uint32_t)m_meshes.size(), meshraw.transform);
+		mesh->m_submeshes = meshraw.submeshes;
+		for(auto& subMesh : mesh->m_submeshes)
+		{ 
+			m_debug->ComputeBBox(subMesh.bbox);
+		}
+		
+		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr));
 		m_meshes.push_back(mesh);
 	}
 	
@@ -928,7 +991,8 @@ bool CReadOnlyBuffers::CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::Buff
 	return true;
 }
 
-CLoadableAssets::CLoadableAssets()
+CLoadableAssets::CLoadableAssets(CSceneGraph* p_sceneGraph)
+	:m_scene(p_sceneGraph)
 {
 	
 }
@@ -962,7 +1026,7 @@ void CLoadableAssets::Destroy(CVulkanRHI* p_rhi)
 bool CLoadableAssets::Update(CVulkanRHI* p_rhi, const LoadedUniformData& p_uniData, CFixedBuffers::PrimaryUniformData& p_primUniData)
 {
 	RETURN_FALSE_IF_FALSE(m_scene.Update(p_rhi, p_uniData));
-	RETURN_FALSE_IF_FALSE(m_ui.Update(p_uniData, p_primUniData));
+	RETURN_FALSE_IF_FALSE(m_ui.Update(p_rhi, p_uniData, p_primUniData));
 
 	return true;
 }
@@ -1047,8 +1111,9 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 
 void CFixedBuffers::Show()
 {
-	if (Header("Unfiorms"))
+	if (Header("Uniforms"))
 	{
+		ImGui::Indent();
 		if (ImGui::TreeNode("General"))
 		{
 			Text("Time Elapsed: %f", m_primaryUniformData.elapsedTime);
@@ -1071,6 +1136,7 @@ void CFixedBuffers::Show()
 		{
 			ImGui::TreePop();
 		}		
+		ImGui::Unindent();
 	}
 }
 
@@ -1369,4 +1435,16 @@ void CUIParticipantManager::Show()
 		participant->Show();
 		ImGui::Separator();
 	}
+}
+
+void CRenderableDebug::ComputeBBox(BBox& p_bbox)
+{
+	p_bbox.bBox[0] = nm::float4{p_bbox.bbMin[0], p_bbox.bbMin[1], p_bbox.bbMin[2], 1.0f};
+	p_bbox.bBox[1] = nm::float4{p_bbox.bbMax[0], p_bbox.bbMin[1], p_bbox.bbMin[2], 1.0f};
+	p_bbox.bBox[2] = nm::float4{p_bbox.bbMax[0], p_bbox.bbMax[1], p_bbox.bbMin[2], 1.0f};
+	p_bbox.bBox[3] = nm::float4{p_bbox.bbMin[0], p_bbox.bbMax[1], p_bbox.bbMin[2], 1.0f};
+	p_bbox.bBox[4] = nm::float4{p_bbox.bbMin[0], p_bbox.bbMin[1], p_bbox.bbMax[2], 1.0f};
+	p_bbox.bBox[5] = nm::float4{p_bbox.bbMax[0], p_bbox.bbMin[1], p_bbox.bbMax[2], 1.0f};
+	p_bbox.bBox[6] = nm::float4{p_bbox.bbMax[0], p_bbox.bbMax[1], p_bbox.bbMax[2], 1.0f};
+	p_bbox.bBox[7] = nm::float4{p_bbox.bbMin[0], p_bbox.bbMax[1], p_bbox.bbMax[2], 1.0f};
 }

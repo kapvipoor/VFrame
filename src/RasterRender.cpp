@@ -10,42 +10,15 @@ nm::float4 g_sunPosition = nm::float4(0.0f, 1.0f, 0.0f, 0.0f);// -93.83f);
 
 CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_height_, int window_scale)
 		:CWinCore(name, screen_width_, screen_height_, window_scale)
-		//, CVulkanCore(name, screen_width_, screen_height_)
 		, m_pickObject(false)
-		, m_primaryCamera(
-			  45.0f, (float)screen_width_ / screen_height_
-			, (g_sunDistanceFromOrigin* g_sunPosition).xyz()	// lookFrom
-			, nm::float3{ 0.0f, 0.0f, 0.0f }					// lookAt
-			, nm::float3{ 0.0f, 1.0f,  0.0f }					// up
-			, 0.1f												// aperture
-			, 10.0f												// focus distance
-			, 0.0f												// yaw
-			, 1.5708f)											// pitch
-		
-		, m_sunLightCamera(
-			  g_sunDistanceFromOrigin * g_sunPosition			// lookFrom
-			, g_sunPosition.xyz()								// lookAt
-			, nm::float3{ 0.0f, 1.0f, 0.0f }					// up
-			, nm::float4{ -g_sunDistanceFromOrigin, g_sunDistanceFromOrigin, -g_sunDistanceFromOrigin, g_sunDistanceFromOrigin }		// lrbt
-			, -g_sunDistanceFromOrigin											// near
-			, 250												// far
-			, 0.0f/*1.579f*/									// yaw
-			, 1.5708f/*4.71239f*//*0.714f*/)									// pitch
 
-		//, m_sunLightCamera(
-		//	  45.0f, (float)screen_width_ / screen_height_
-		//	, (g_sunDistanceFromOrigin * g_sunPosition).xyz()
-		//	, nm::float3{ 0.0f, 0.0f, 0.0f }					// lookAt			- does not matter for Light Camera
-		//	, nm::float3{ 0.0f, 0.0f,  1.0f }					// up				- does not matter for Light Camera
-		//	, 0.1f												// aperture			- does not matter for Light Camera
-		//	, 10.0f												// focus distance	- does not matter for Light Camwera
-		//	, 0.0f												// yaw
-		//	, 1.5708f)											// pitch
 {			
 	m_rhi					= new CVulkanRHI(name, screen_width_, screen_height_);
 
+	m_sceneGraph			= new CSceneGraph();
+
 	m_fixedAssets			= new CFixedAssets();
-	m_loadableAssets		= new CLoadableAssets();
+	m_loadableAssets		= new CLoadableAssets(m_sceneGraph);
 	m_primaryDescriptors	= new CPrimaryDescriptors();
 
 	m_staticShadowPass		= new CStaticShadowPrepass(m_rhi);
@@ -56,10 +29,18 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_ssaoComputePass		= new CSSAOComputePass(m_rhi);;
 	m_ssaoBlurPass			= new CSSAOBlurPass(m_rhi);
 	m_uiPass				= new CUIPass(m_rhi);
+
+	m_primaryCamera			= new CPerspectiveCamera("Primary Camera");
+	m_sunLightCamera		= new COrthoCamera("Sunlight Camera");
 }
 
 CRasterRender::~CRasterRender() 
 {
+	delete m_sunLightCamera;
+	delete m_primaryCamera;
+
+	delete m_sceneGraph;
+
 	delete m_uiPass;
 	delete m_ssaoBlurPass;
 	delete m_ssaoComputePass;
@@ -152,6 +133,8 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 		RETURN_FALSE_IF_FALSE(m_rhi->SubmitCommandbuffer(cmdQueue, &submitInfo, 1, m_vkFenceCmdBfrFree[0]));
 	}
 
+	RETURN_FALSE_IF_FALSE(InitCamera());
+
 	return true;
 }
 
@@ -168,17 +151,17 @@ bool CRasterRender::on_update(float delta)
 	{
 		CFixedBuffers::PrimaryUniformData uniformData = m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
 		uniformData.elapsedTime						= delta;
-		uniformData.cameraInvView					= nm::inverse(m_primaryCamera.GetView());
-		uniformData.cameraLookFrom					= m_primaryCamera.GetLookFrom();
-		uniformData.cameraProj						= m_primaryCamera.GetProjection();
-		uniformData.cameraView						= m_primaryCamera.GetView();
-		uniformData.cameraViewProj					= m_primaryCamera.GetViewProj();
+		uniformData.cameraInvView					= nm::inverse(m_primaryCamera->GetView());
+		uniformData.cameraLookFrom					= m_primaryCamera->GetLookFrom();
+		uniformData.cameraProj						= m_primaryCamera->GetProjection();
+		uniformData.cameraView						= m_primaryCamera->GetView();
+		uniformData.cameraViewProj					= m_primaryCamera->GetViewProj();
 		uniformData.mousePos						= nm::float2((float)mousepos_x, (float)mousepos_y);
 		uniformData.renderRes						= nm::float2((float)m_rhi->GetRenderWidth(), (float)m_rhi->GetRenderHeight());
-		uniformData.skyboxModelView					= m_primaryCamera.GetView();
-		uniformData.sunDirViewSpace					= (m_primaryCamera.GetView() * nm::float4(m_sunLightCamera.GetLookAt(), 1.0f)).xyz();
-		uniformData.sunDirWorldSpace				= m_sunLightCamera.GetLookAt();
-		uniformData.sunViewProj						= m_sunLightCamera.GetViewProj();
+		uniformData.skyboxModelView					= m_primaryCamera->GetView();
+		uniformData.sunDirViewSpace					= (m_primaryCamera->GetView() * nm::float4(m_sunLightCamera->GetLookAt(), 1.0f)).xyz();
+		uniformData.sunDirWorldSpace				= m_sunLightCamera->GetLookAt();
+		uniformData.sunViewProj						= m_sunLightCamera->GetViewProj();
 		uniformData.unassigined_0					= 0;
 		uniformData.unassigined_1					= 0;
 
@@ -194,7 +177,7 @@ bool CRasterRender::on_update(float delta)
 		loadedUniData.screenRes						= nm::float2((float)s_Window.screenWidth, (float)s_Window.screenHeight);
 		loadedUniData.swapchainIndex				= m_swapchainIndex;
 		loadedUniData.timeElapsed					= delta;
-		loadedUniData.viewMatrix					= m_primaryCamera.GetView();
+		loadedUniData.viewMatrix					= m_primaryCamera->GetView();
 
 		RETURN_FALSE_IF_FALSE(m_loadableAssets->Update(m_rhi, loadedUniData, m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData()));
 	}
@@ -276,9 +259,9 @@ bool CRasterRender::on_update(float delta)
 
 	if (m_pickObject)
 	{
-		uint32_t meshID = -1;
+		int meshID = -1;
 		RETURN_FALSE_IF_FALSE(m_rhi->ReadFromBuffer((uint8_t*)&meshID, m_fixedAssets->GetFixedBuffers()->GetBuffer(CFixedBuffers::fb_ObjectPickerRead)));
-
+		m_loadableAssets->GetScene()->SetSelectedRenderableMesh(meshID);
 		std::cout << "Picked Mesh: " << (meshID - 1) << std::endl;
 	}
 
@@ -304,6 +287,34 @@ void CRasterRender::on_present()
 	{
 		std::cerr << "vkQueueSubmit failed " << res << std::endl;
 	}
+}
+
+bool CRasterRender::InitCamera()
+{
+	CPerspectiveCamera::PerpspectiveInitdData persIntData{};
+	persIntData.fov							= 45.0f;
+	persIntData.aspect						= (float)CWinCore::s_Window.screenWidth / CWinCore::s_Window.screenHeight;
+	persIntData.lookFrom					= (g_sunDistanceFromOrigin * g_sunPosition);
+	persIntData.lookAt						= nm::float3{ 0.0f, 0.0f, 0.0f };
+	persIntData.up							= nm::float3{ 0.0f, 1.0f,  0.0f };
+	persIntData.aperture					= 0.1f;							
+	persIntData.focusDistance				= 10.0f;							
+	persIntData.yaw							= 0.0f;									
+	persIntData.pitch						= 1.5708f;							
+	RETURN_FALSE_IF_FALSE( m_primaryCamera->Init(&persIntData));
+
+	COrthoCamera::OrthInitdData orthoInit{};
+	orthoInit.lookFrom						= g_sunDistanceFromOrigin * g_sunPosition;	
+	orthoInit.lookAt						= g_sunPosition.xyz();							
+	orthoInit.up							= nm::float3{ 0.0f, 1.0f, 0.0f };
+	orthoInit.lrbt							= nm::float4{ -g_sunDistanceFromOrigin, g_sunDistanceFromOrigin, -g_sunDistanceFromOrigin, g_sunDistanceFromOrigin };
+	orthoInit.nearPlane						= -g_sunDistanceFromOrigin;
+	orthoInit.farPlane						= 250;
+	orthoInit.yaw							= 0.0f/*1.579f*/;
+	orthoInit.pitch							= 1.5708f/*4.71239f*//*0.714f*/;
+	RETURN_FALSE_IF_FALSE(m_sunLightCamera->Init(&orthoInit));
+
+	return true;
 }
 
 bool CRasterRender::CreateSyncPremitives()
@@ -414,7 +425,7 @@ bool CRasterRender::CreatePasses()
 
 void CRasterRender::UpdateCamera(float p_delta)
 {
-	CCamera::CamData cdata{};
+	CCamera::UpdateData cdata{};
 	cdata.moveCamera						= m_keys[MIDDLE_MOUSE_BUTTON].down;
 	cdata.timeDelta							= p_delta;
 	cdata.mouseDelta[0]						= mouse_delta[0];
@@ -426,11 +437,11 @@ void CRasterRender::UpdateCamera(float p_delta)
 	cdata.Q									= m_keys[(int)char('Q')].down;
 	cdata.E									= m_keys[(int)char('E')].down;
 	cdata.Shft								= (m_keys[160].down || m_keys[16].down);
-	m_primaryCamera.Update(cdata);
+	m_primaryCamera->Update(cdata);
 
-	cdata									= CCamera::CamData();
+	cdata									= CCamera::UpdateData();
 	cdata.timeDelta							= p_delta;
-	m_sunLightCamera.Update(cdata);
+	m_sunLightCamera->Update(cdata);
 }
 
 bool CRasterRender::DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkanRHI::CommandBuffer& p_cmdBfr)

@@ -8,6 +8,8 @@ CVulkanCore::CVulkanCore(const char* p_applicaitonName, int p_renderWidth, int p
 		: m_applicationName(p_applicaitonName)
 		, m_renderWidth(p_renderWidth)
 		, m_renderHeight(p_renderHeight)
+		, m_screenWidth(p_renderWidth)
+		, m_screenHeight(p_renderHeight)
 		, m_vkInstance(VK_NULL_HANDLE)
 		, m_vkDevice(VK_NULL_HANDLE)
 		, m_vkPhysicalDevice(VK_NULL_HANDLE)

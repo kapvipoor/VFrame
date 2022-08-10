@@ -9,24 +9,24 @@
 
 struct ImageRaw
 {
-	unsigned char* raw;
-	int width;
-	int height;
-	int channels;
+	unsigned char*				raw;
+	int							width;
+	int							height;
+	int							channels;
 };
 
 struct Material
 {
-	uint32_t color_id;
-	uint32_t normal_id;
+	uint32_t					color_id;
+	uint32_t					normal_id;
 };
 
 struct Vertex
 {
-	nm::float3 pos;
-	nm::float3 normal;
-	nm::float2 uv;
-	nm::float4 tangent;
+	nm::float3					pos;
+	nm::float3					normal;
+	nm::float2					uv;
+	nm::float4					tangent;
 
 	bool operator==(const Vertex& other) const
 	{
@@ -46,32 +46,42 @@ namespace std
 	};
 }
 
-struct Submesh
+struct BBox
 {
-	uint32_t firstIndex;
-	uint32_t indexCount;
-	uint32_t materialId;
+	nm::float3					bbMin;
+	nm::float3					bbMax;
+	nm::float4					bBox[8];
+};
+
+struct SubMesh
+{
+	uint32_t					firstIndex;
+	uint32_t					indexCount;
+	uint32_t					materialId;
+	BBox						bbox;
 };
 
 struct MeshRaw
 {
-	nm::float4x4 transform;
-	std::vector<Vertex> vertexList;
-	std::vector<uint32_t> indicesList;
-	std::vector<Submesh> submeshes;
+	nm::float4x4				transform;
+	std::vector<Vertex>			vertexList;
+	std::vector<uint32_t>		indicesList;
+	std::vector<SubMesh>		submeshes;
+	BBox	 bbox;
 };
 
 struct SceneRaw
 {
-	std::vector<ImageRaw> textureList;
-	std::vector<MeshRaw> meshList;
-	std::vector<Material> materialsList;
+	std::string					name;
+	std::vector<ImageRaw>		textureList;
+	std::vector<MeshRaw>		meshList;
+	std::vector<Material>		materialsList;
 };
 
 struct ObjLoadData
 {
-	bool flipUV;
-	bool loadMeshOnly;
+	bool						flipUV;
+	bool						loadMeshOnly;
 };
 
 nm::float4 ComputeTangent(Vertex p_a, Vertex p_b, Vertex p_c);

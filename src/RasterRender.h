@@ -4,6 +4,7 @@
 #include "core/WinCore.h"
 #include "core/VulkanRHI.h"
 #include "core/Camera.h"
+#include "core/SceneGraph.h"
 #include "core/Asset.h"
 
 #include "ShadowPass.h"
@@ -53,8 +54,8 @@ private:
 	VkCommandBuffer						m_vkCmdBfr[FRAME_BUFFER_COUNT][CommandBufferId::cb_max];
 	std::vector<VkCommandBuffer>		m_cmdBfrsInUse;
 
-	CPerspectiveCamera					m_primaryCamera;
-	COrthoCamera						m_sunLightCamera;
+	CPerspectiveCamera*					m_primaryCamera;
+	COrthoCamera*						m_sunLightCamera;
 	//CPerspectiveCamera m_sunLightCamera;
 		
 	bool								m_pickObject;
@@ -63,6 +64,7 @@ private:
 	CFixedAssets*						m_fixedAssets;
 	CLoadableAssets*					m_loadableAssets;
 	CPrimaryDescriptors*				m_primaryDescriptors;
+	CSceneGraph*						m_sceneGraph;
 
 	CStaticShadowPrepass*				m_staticShadowPass;
 	CSkyboxPass*						m_skyboxPass;
@@ -73,9 +75,7 @@ private:
 	CDeferredLightingPass*				m_deferredLightPass;
 	CUIPass*							m_uiPass;
 
-
-private:
-	
+	bool InitCamera();
 	bool CreateSyncPremitives();																															
 	void DestroySyncPremitives();
 	bool CreatePasses();

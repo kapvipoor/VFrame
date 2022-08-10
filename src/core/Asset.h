@@ -1,6 +1,7 @@
 #pragma once
 
 #include "VulkanRHI.h"
+#include "SceneGraph.h"
 #include "AssetLoader.h"
 #include "external/NiceMath.h"
 
@@ -279,7 +280,7 @@ protected:
 	CVulkanRHI::BufferList			m_indexBuffers;
 };
 
-class CRenderableUI : public CRenderable ,public CTextures ,public CDescriptor
+class CRenderableUI : public CRenderable, public CTextures, public CDescriptor, public CSelectionListener
 {
 public:
 	struct UIPushConstant
@@ -294,35 +295,27 @@ public:
 	bool Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool);
 	void Destroy(CVulkanRHI* p_rhi);
 
-	bool Update(const LoadedUniformData& , CFixedBuffers::PrimaryUniformData& );
-
+	bool Update(CVulkanRHI* p_rhi, const LoadedUniformData& , CFixedBuffers::PrimaryUniformData& );
 	bool PrepareDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx);
 
 private:
-	CUIParticipantManager* m_participantManager;
+	bool								m_showImguiDemo;
+	CUIParticipantManager*				m_participantManager;
+	CFixedBuffers::PrimaryUniformData	m_primUniforms;
 	
 	bool LoadFonts(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 	bool CreateUIDescriptors(CVulkanRHI* p_rhi);
-
-	bool ShowUI(CFixedBuffers::PrimaryUniformData&);
+	bool ShowUI();
+	bool ShowGuizmo(CVulkanRHI* p_rhi);
 };
 
-class CRenderableMesh : public CRenderable
+class CRenderableMesh : public CRenderable, public CEntity
 {
 	friend class CScene;
 public:
-	struct SubMesh
-	{
-		uint32_t					firstIndex;
-		uint32_t					indexCount;
-		uint32_t					materialId;
-	};
-
-	CRenderableMesh(uint32_t p_meshId, nm::float4x4 p_modelMat);
+	CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::float4x4 p_modelMat);
 	~CRenderableMesh() {};
 	
-	void PopulateSubmeshes(const std::vector<Submesh>&);
-
 	uint32_t GetMeshId() const { return m_mesh_id; }
 	uint32_t GetSubmeshCount() const { return (uint32_t)m_submeshes.size(); }
 	const SubMesh* GetSubmesh(uint32_t p_idx) const { return &m_submeshes[p_idx]; }
@@ -334,7 +327,19 @@ private:
 	nm::float4x4					m_viewNormalTransform;
 };
 
-class CScene : public CTextures, public CDescriptor, public CUIParticipant
+class CRenderableDebug : public CRenderable
+{
+public:
+	CRenderableDebug() {};
+	~CRenderableDebug() {};
+
+	void ComputeBBox(BBox& p_bbox);
+
+private:
+
+};
+
+class CScene : public CTextures, public CDescriptor, public CUIParticipant, public CSelectionListener
 {
 public:
 	enum MeshType
@@ -356,7 +361,7 @@ public:
 		uint32_t					material_id;
 	};
 
-	CScene() {};
+	CScene(CSceneGraph*);
 	~CScene() {};
 
 	bool Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, const CVulkanRHI::CommandPool& p_cmdPool);
@@ -365,14 +370,23 @@ public:
 	virtual void Show() override;
 
 	bool Update(CVulkanRHI* p_rhi, const LoadedUniformData&);
+	void SetSelectedRenderableMesh(int p_id) { m_curSelecteRenderableMesh = p_id; }
 
 	uint32_t GetRenderableMeshCount() const { return (uint32_t)m_meshes.size(); }
-	const CRenderableMesh* GetRenderableMesh(uint32_t p_idx) const { return &m_meshes[p_idx]; }
+	const CRenderableMesh* GetRenderableMesh(uint32_t p_idx) const { return m_meshes[p_idx]; }
 
 private:
+	CSceneGraph*					m_sceneGraph;
+	std::vector<CRenderableMesh*>	m_meshes;						// list of all meshes required by the scene
+	CRenderableDebug*				m_debug;
+
+	// todo: need to fix the current selected renderable mesh 
+	// it is used by object picker pass and is not the best way to do.
+	int								m_curSelecteRenderableMesh;		
+
 	CVulkanRHI::Buffer				m_meshInfo_uniform;				// stores all meshes uniform data
 	CVulkanRHI::Buffer				m_material_storage;
-	std::vector<CRenderableMesh>	m_meshes;						// list of all meshes required by the scene
+		
 	std::vector<std::string>		m_scenePaths;					// list of all scene paths
 
 	bool LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
@@ -440,7 +454,7 @@ private:
 class CLoadableAssets
 {
 public:
-	CLoadableAssets();
+	CLoadableAssets(CSceneGraph*);
 	~CLoadableAssets();
 
 	bool Create(CVulkanRHI*, const CFixedAssets&, const CVulkanRHI::CommandPool& );
@@ -448,7 +462,7 @@ public:
 
 	bool Update(CVulkanRHI*, const LoadedUniformData&, CFixedBuffers::PrimaryUniformData&);
 
-	const CScene* GetScene() const { return &m_scene;}
+	CScene* GetScene() { return &m_scene;}
 	const CRenderableUI* GetUI() const { return &m_ui; }
 	CReadOnlyTextures* GetReadonlyTextures() { return &m_readOnlyTextures; }
 	CReadOnlyBuffers* GetReadonlyBuffers() { return &m_readOnlyBuffers; }

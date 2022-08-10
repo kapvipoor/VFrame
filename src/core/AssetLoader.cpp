@@ -1,4 +1,5 @@
 #include "AssetLoader.h"
+#include "Global.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "external/tiny_obj_loader.h"
@@ -68,6 +69,7 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 		return false;
 	}
 
+	bool fileNmae = GetFileName(p_path, p_objScene.name);
 	uint32_t material_offset = (uint32_t)p_objScene.materialsList.size();
 	uint32_t texture_offset = (uint32_t)p_objScene.textureList.size();
 
@@ -111,6 +113,8 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 				uint32_t firstIndex = static_cast<uint32_t>(objMesh.indicesList.size());
 				uint32_t vertexStart = static_cast<uint32_t>(objMesh.vertexList.size());
 				uint32_t indexCount = 0;
+				nm::float3 bbMin{ 0, 0, 0 };
+				nm::float3 bbMax{ 0, 0, 0 };
 
 				//Vertices
 				{
@@ -155,6 +159,15 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 						vert.uv = texCoordsBuffer ? nm::float2(texCoordsBuffer[(v * 2) + 0], texCoordsBuffer[(v * 2) + 1]) : nm::float2(0.0f);
 						vert.tangent = tangentsBuffer ? nm::float4(tangentsBuffer[(v * 4) + 0], tangentsBuffer[(v * 4) + 1], tangentsBuffer[(v * 4) + 2], tangentsBuffer[(v * 4) + 3]) : nm::float4(0.0);
 						//vert.color = nm::float3(1.0, 1.0, 1.0);
+
+						bbMin[0] = std::min(bbMin[0], vert.pos[0]);
+						bbMin[1] = std::min(bbMin[1], vert.pos[1]);
+						bbMin[2] = std::min(bbMin[2], vert.pos[2]);
+
+						bbMax[0] = std::max(bbMax[0], vert.pos[0]);
+						bbMax[1] = std::max(bbMax[1], vert.pos[1]);
+						bbMax[2] = std::max(bbMax[2], vert.pos[2]);
+
 						objMesh.vertexList.push_back(vert);
 					}
 				}
@@ -196,10 +209,22 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 				}
 
 				Submesh submesh{};
-				submesh.firstIndex = firstIndex;
-				submesh.indexCount = indexCount;
-				submesh.materialId = material_offset + glTFPrimitive.material;
+				submesh.firstIndex	= firstIndex;
+				submesh.indexCount	= indexCount;
+				submesh.materialId	= material_offset + glTFPrimitive.material;
+				submesh.bbox.bbMin	= bbMin;
+				submesh.bbox.bbMax	= bbMax;
 				objMesh.submeshes.push_back(submesh);
+
+				objMesh.bbox.bbMin	= nm::float3{0.0f, 0.0f, 0.0f};
+				objMesh.bbox.bbMin[0]	= std::min(objMesh.bbox.bbMin[0], submesh.bbox.bbMin[0]);
+				objMesh.bbox.bbMin[1]	= std::min(objMesh.bbox.bbMin[1], submesh.bbox.bbMin[1]);
+				objMesh.bbox.bbMin[2]	= std::min(objMesh.bbox.bbMin[2], submesh.bbox.bbMin[2]);
+
+				objMesh.bbox.bbMax		= nm::float3{ 0.0f, 0.0f, 0.0f };
+				objMesh.bbox.bbMax[0]	= std::max(objMesh.bbox.bbMax[0], submesh.bbox.bbMax[0]);
+				objMesh.bbox.bbMax[1]	= std::max(objMesh.bbox.bbMax[1], submesh.bbox.bbMax[1]);
+				objMesh.bbox.bbMax[2]	= std::max(objMesh.bbox.bbMax[2], submesh.bbox.bbMax[2]);
 			}
 		}
 	}

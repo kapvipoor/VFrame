@@ -227,11 +227,17 @@ public:
 	VkImageView GetSCImageView(uint32_t p_scIdx)			{ return m_swapchainImageViewList[p_scIdx]; }
 	uint32_t GetRenderWidth()								{ return m_renderWidth; }
 	uint32_t GetRenderHeight()								{ return m_renderHeight; }
+	uint32_t GetScreenWidth()								{ return m_screenWidth; }
+	uint32_t GetScreenHeight()								{ return m_screenHeight; }
+
 	VkSwapchainKHR GetSwapChain()							{ return m_vkSwapchain; }
 
 protected:
 	uint32_t												m_renderWidth;
 	uint32_t												m_renderHeight;
+	uint32_t												m_screenWidth;
+	uint32_t												m_screenHeight;
+
 
 	const char*												m_applicationName;
 	VkInstance												m_vkInstance;
