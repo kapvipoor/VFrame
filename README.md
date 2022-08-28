@@ -5,6 +5,8 @@ External Tools/Packages Used
 1. tinygltf
 2. NiceMath
 3. tiny_obj_loader
+4. ImGui (fork, mule)
+5. ImGuizmo (fork, module)
 
 Feature Integrated
 1.	Vulkan Bindless - Descriptor Indexing
@@ -16,36 +18,42 @@ Feature Integrated
 	- Challanges Faced: -
 	- Algorithm Limitations: -
 	- Bugs: - 
+
 3.	Deferred Rendering
 	- Challanges Faced: -
 	- Algorithm Limitations: -
 	- Bugs:
 		1. Deferred does not present to swapchain
 		2. Must provide run time option to toggle between Forward and Defered
+
 4.	Object Picker
 	- Challanges Faced:	- 
 	- Algorithm Limitations: - 
 	- Bugs:
 		1. Object picking is not accurate in Forward Pass
 		2. Object picking is not correctly implemented in Differed Pass
+
 5.	Skybox
 	- Challanges Faced:	- 
 	- Algorithm Limitations: - 
 	- Bugs: - 
+
 6.	Normal Maps
 	- Challanges Faced:
 		1. Did not use the correct texture format to store Normals and so computed wrong TBN matrix (used UNORM duh!)
 	- Algorithm Limitations: - 
 	- Bugs: - 
+
 7.	SSAO
 	- Challanges Faced: - 
 	- Algorithm Limitations:
 		1. Quality of SSAO is not great. Migh want to implement AMD SSAO for comparision
 	- Bugs: - 
-8.	Shadow Maps
-	- Features:
+
+8.	Shadow Maps (Orthographc Projection and Directonal Light)
+	- Features: 
 		1. Orthographic Shadow Maps implemented
-		2. Implemented PCF - but is very expensive
+		2. Implemented PCF - but is expensive
 	- Challanges Faced:
 		1. Wrong Orthgraphic Matrics were implemented. Ensure there is an implemtation for Right Hand, Zero to One Z value
 		2. Identifying Vulkan Vetex to Pixel pipeline - Z ranges [-1,1] and does not need to be normalised to [0,1]
@@ -62,13 +70,31 @@ Feature Integrated
 		1. Deferred pass is not correctly utilising the light direction
 		2. Peter-Panning effect has not been addressed.  Use front face culling on shadow pass to fix this 
 		3. Shadow Acne has not been addresses
+
 9.	Gltf loader with stb_image support
 	- Challanges Faced:	- 
 	- Algorithm Limitations: - 
 	- Bugs: - 
+
 10. Shader Compilation - GLSL to SPIRV
 	- Challanges Faced:	- 
 	- Algorithm Limitations:
 		1. Currently inspired from Sascha Willems's offline python script using glslangValidator
         2. Will later move to a runtime glsl compilation process
+	- Bugs: - 
+
+11. Bounding Box Debug Display
+	- Challanges Faced:	- 
+	- Algorithm Limitations:
+		1. Currently generating vertex and indices as 1 complete buffer and rending as single draw call (GPU effecient with some CPU overhead)
+        2. Will later add support for Instanced support for displaying bounding boxes
+		3. Will leter add support to display light type identifiers, cameras and other editor friendly visual tools depending on need
+	- Bugs: - 
+
+11. User Interface and Guizmo Control
+	- Challanges Faced:	- 
+	- Algorithm Limitations:
+		1. Using ImGui and ImGuizmo for UI and transform editting
+		2. Implemented simple participant architecture for willing classes to implement their UI display
+		3. Will keep improving UI as I progress
 	- Bugs: - 
