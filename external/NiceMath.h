@@ -1323,10 +1323,10 @@ namespace nm {
         const S n, const S f) {
         constexpr S _2 = (S)2.0, _0 = (S)0.0, _1 = (S)1.0;
         return mat<S, 4>::from_columns(
-            vec<S, 4> { _2 / (r - l), _0, _0, _0 },
-            vec<S, 4> { _0, _2 / (t - b), _0, _0 },
-            vec<S, 4> { _0, _0, -_1 / (f - n), _0, },
-            vec<S, 4> { -(r + l) / (r - l), -(t + b) / (t - b), - n / (f - n), _1 });
+            vec<S, 4> { _2 / (r - l), _0, _0, (r + l) / (l - r) },
+            vec<S, 4> { _0, -_2 / (b - t), _0, (t + b) / (b - t) },
+            vec<S, 4> { _0, _0, _1 / (n - f), n / (n - f), },
+            vec<S, 4> {_0, _0, _0, _1 });
     }
 
     /**
@@ -1528,6 +1528,10 @@ namespace nm {
      */
     template <class S>
     inline constexpr S deg2rad(const S deg) { return deg * ((S)PI / (S)180.0); }
+    
+    template <class S>
+    inline constexpr S rad2deg(const S rad) { return rad * ((S)180.0 / (S)PI); }
+
 
 
      template<class S>
@@ -1538,4 +1542,115 @@ namespace nm {
                  vec<S, 4>{ 2.0f * (q.x() * q.z() + q.y() * q.w()),          2.0f * (q.y() * q.z() - q.x() * q.w()),          1.0f - 2.0f * (q.x() * q.x() + q.y() * q.y()),    0.0f },
                  vec<S, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
      }
+
+     template <class S>
+     inline constexpr void Decompose2Translation(const mat<S, 4>& mat,
+         vec<S, 3>& translation) {     
+         translation[0] = mat[3][0];
+         translation[1] = mat[3][1];
+         translation[2] = mat[3][2];
+     }
+
+     template <class S>
+     inline constexpr void Decompose2Translation(const mat<S, 4>& mat,
+         vec<S, 4>& translation) {
+         translation[0] = mat[3][0];
+         translation[1] = mat[3][1];
+         translation[2] = mat[3][2];
+         translation[3] = (S)1.0;
+     }
+
+     template <class S>
+     inline constexpr void Decompose2Rotation(const mat<S, 4>& Mat,
+         vec<S, 3>& rotation) {
+
+         vec<S, 3> temp0 = normalize(vec<S,3>(Mat[0][0], Mat[0][1], Mat[0][2]));
+         vec<S, 3> temp1 = normalize(vec<S,3>(Mat[1][0], Mat[1][1], Mat[1][2]));
+         vec<S, 3> temp2 = normalize(vec<S,3>(Mat[2][0], Mat[2][1], Mat[2][2]));
+
+         rotation[0] = (atan2f(temp1[2], temp2[2]));
+         rotation[1] = (atan2f(-temp0[2], sqrtf(temp1[2] * temp1[2] + temp2[2] * temp2[2])));
+         rotation[2] = (atan2f(temp0[1], temp0[0]));
+     }
+
+     template <class S>
+     inline constexpr void Decompose2Scaling(const mat<S, 4>& mat,
+         vec<S, 3>& scaling) {
+
+         scaling[0] = mat[0][0];
+         scaling[1] = mat[1][1];
+         scaling[2] = mat[2][2];
+     }
+
+     struct Transform
+     {
+     private:
+         nm::float4x4 transform;
+         nm::float4x4 translate;
+         nm::float4x4 rotate;
+         nm::float4x4 scale;
+         
+         nm::float3 translateVec;
+         nm::float3 rotateVec;
+         nm::float3 scaleVec;
+
+     public:
+         Transform()
+         {
+             transform      = nm::float4x4::identity();
+             translate      = nm::float4x4::identity();
+             rotate         = nm::float4x4::identity();
+             scale          = nm::float4x4::identity();
+             translateVec   = nm::float3(0.0f);
+             rotateVec      = nm::float3(0.0f);
+             scaleVec       = nm::float3(1.0f);
+         }
+
+         nm::float4x4 GetTranslate() { return translate; }
+         nm::float4x4 GetRotate() { return rotate; }
+         nm::float4x4 GetScale() { return scale; }
+         nm::float4x4 GetTransform() { return transform; }
+
+         nm::float3 GetTranslateVector() { return translateVec; }
+         nm::float3 GetRotateVector() { return rotateVec; }
+         nm::float3 GetScaleVector() { return scaleVec; }
+
+         void SetTransform(nm::float4x4 p_transform)
+         {
+             transform = p_transform;
+
+             Decompose2Translation(p_transform, translateVec);
+             translate = nm::translation(translateVec);
+
+             Decompose2Rotation(p_transform, rotateVec);
+             rotate = nm::rotation_x(rotateVec[0]) * nm::rotation_x(rotateVec[1]) * nm::rotation_x(rotateVec[2]);
+
+             Decompose2Scaling(p_transform, scaleVec);
+             scale = nm::scale(nm::float4(scaleVec, 1.0));
+         }
+
+         void SetRotation(nm::float4x4 p_rotate)
+         {
+             rotate = p_rotate;
+             Decompose2Rotation(p_rotate, rotateVec);
+             transform = scale * rotate * translate;
+         }
+
+         void SetScale(nm::float4x4 p_scale)
+         {
+             scale = p_scale;
+             Decompose2Scaling(p_scale, scaleVec);
+             transform = scale * rotate * translate;
+         }
+
+         void SetTranslate(nm::float4x4 p_translate)
+         {
+             translate = p_translate;
+             Decompose2Translation(p_translate, translateVec);
+             transform.column[3][0] = translate.column[3][0];
+             transform.column[3][1] = translate.column[3][1];
+             transform.column[3][2] = translate.column[3][2];
+             transform.column[3][3] = translate.column[3][3];
+         }
+     };
 }

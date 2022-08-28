@@ -37,7 +37,8 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 	float	ssaoKernelSize;
 	float	ssaoRadius;
 	mat4 	sunLightViewProj;
-	vec4	sunLightDirWorld;
+	vec3	sunLightDirWorld;
+	bool	enableShadowPCF;
 	vec4	sunLightDirView;
 } g_Info;
 

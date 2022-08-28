@@ -99,7 +99,7 @@ void main()
 	// ensuring tht shadows are not self applied
 	if(NdotL > 0.0f)
 	{
-		float shadow = InShadow(inLightPosition/inLightPosition.w, true);
+		float shadow = InShadow(inLightPosition/inLightPosition.w, g_Info.enableShadowPCF);
 
 		// Simple lambertian diffuse
 		lighting =  lighting + (g_diffuseCoeff * NdotL);

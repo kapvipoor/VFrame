@@ -25,7 +25,7 @@ bool CVulkanRHI::CreateAllocateBindBuffer(size_t p_size, Buffer& p_buffer, VkBuf
 
 	if (!CreateBuffer(bufferCreateInfo, p_buffer.descInfo.buffer))
 		return false;
-	if (!AllocateBufferMemory(p_buffer.descInfo.buffer, p_propFlag, p_buffer.devMem))
+	if (!AllocateBufferMemory(p_buffer.descInfo.buffer, p_propFlag, p_buffer.devMem, p_buffer.reqMemSize))
 		return false;
 	if (!BindBufferMemory(p_buffer.descInfo.buffer, p_buffer.devMem))
 		return false;
@@ -103,6 +103,7 @@ void CVulkanRHI::FreeMemoryDestroyBuffer(Buffer& p_buffer)
 {
 	FreeDeviceMemory(p_buffer.devMem);
 	DestroyBuffer(p_buffer.descInfo.buffer);
+	p_buffer.descInfo.buffer = VK_NULL_HANDLE;
 }
 
 bool CVulkanRHI::CreateDescriptors(const DescDataList& p_descdataList, VkDescriptorPool& p_descPool, VkDescriptorSetLayout* p_descLayout, uint32_t p_layoutCount, VkDescriptorSet* p_desc, void* p_next)
@@ -175,7 +176,8 @@ bool CVulkanRHI::CreateDescriptors(uint32_t p_varDescCount, const DescDataList& 
 	layoutBindFlags.bindingCount				= (uint32_t)descBindFlags.size();
 	layoutBindFlags.pBindingFlags				= descBindFlags.data();
 
-	if (!CreateDescriptorSetLayout(dsLayoutBinding.data(), (uint32_t)dsLayoutBinding.size(), p_descSetLayout, &layoutBindFlags))
+	void* layoutFlags = (p_varDescCount == 0) ? nullptr : &layoutBindFlags;
+	if (!CreateDescriptorSetLayout(dsLayoutBinding.data(), (uint32_t)dsLayoutBinding.size(), p_descSetLayout, layoutFlags))
 		return false;
 
 	uint32_t varDescCount[] = { p_varDescCount };
@@ -184,7 +186,8 @@ bool CVulkanRHI::CreateDescriptors(uint32_t p_varDescCount, const DescDataList& 
 	varDescCountAllocInfo.descriptorSetCount	= 1;
 	varDescCountAllocInfo.pDescriptorCounts		= varDescCount;
 
-	if (!CreateDescriptors(p_descDataList, p_descPool, &p_descSetLayout, 1, &p_descSet, &varDescCountAllocInfo))
+	void* allocInfo = (p_varDescCount == 0) ? nullptr : &varDescCountAllocInfo;
+	if (!CreateDescriptors(p_descDataList, p_descPool, &p_descSetLayout, 1, &p_descSet, allocInfo))
 		return false;
 
 	return true;

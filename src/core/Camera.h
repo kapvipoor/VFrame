@@ -33,15 +33,11 @@ public:
         bool                        Shft;
     };
 
-    CCamera(std::string p_name)
-    :   CEntity(p_name)
-    {
-        m_moveScale = 1.0f;
-    };
+    CCamera(std::string p_name);
     ~CCamera() {};
 
-    virtual bool Init(InitData*) = 0;
-    virtual void Update(UpdateData data) = 0;
+    virtual bool Init(InitData*);
+    virtual void Update(UpdateData data);
 
     const nm::float4x4 GetViewProj() const { return m_viewProj; }
     const nm::float4x4 GetView() const { return m_view; }
@@ -67,53 +63,9 @@ protected:
     nm::float4x4                    m_projection;
     nm::float4x4                    m_viewProj;
 
-    nm::float4 PolarToVector(float yaw, float pitch)
-    {
-        return  nm::float4(sinf(yaw) * cosf(pitch), sinf(pitch), cosf(yaw) * cosf(pitch), 0);
-    }
-
-    nm::float4x4 LookAtRH(nm::float4 eyePos, nm::float4 lookAt)
-    {
-        nm::float3 eyepos_{ eyePos.x(), eyePos.y(), eyePos.z() };
-        nm::float3 lookat_{ lookAt.x(), lookAt.y(), lookAt.z() };
-
-        return nm::lookAtRH(eyepos_, lookat_, m_up); // up should be nm::float3(0, 1, 0)
-    }
-
-    nm::float4 MoveWASD(UpdateData pdata)
-    {
-        float move = 10.0f;
-        float x = 0, y = 0, z = 0;
-
-        if (pdata.W)
-        {
-            z = -move;
-        }
-        if (pdata.S)
-        {
-            z = move;
-        }
-        if (pdata.A)
-        {
-            x = -move;
-        }
-        if (pdata.D)
-        {
-            x = move;
-        }
-        if (pdata.E)
-        {
-            y = move;
-        }
-        if (pdata.Q)
-        {
-            y = -move;
-        }
-
-        pdata.Shft ? (m_moveScale *= 1.01f) : (m_moveScale = 0.25f);
-
-        return nm::float4(x, y, z, 0.0f) * m_moveScale;
-    }
+    nm::float4 PolarToVector(float yaw, float pitch);
+    nm::float4x4 LookAtRH(nm::float4 eyePos, nm::float4 lookAt);
+    nm::float4 MoveWASD(UpdateData pdata);
 };
 
 class CPerspectiveCamera : public CCamera
@@ -130,7 +82,6 @@ public:
     };
 
     CPerspectiveCamera(std::string p_entityName) : CCamera(p_entityName) {};
-
     ~CPerspectiveCamera() {};
 
     const float GetLensRadius() const { return m_lensRadius; }
@@ -141,70 +92,9 @@ public:
     const nm::float3& GetHorizontal() const { return m_horizontal; }
     const nm::float3& GetVetical() const { return m_vertical; }
 
-    void Move(nm::float3 p_lookFrom) 
-    { 
-        m_lookFrom              = nm::float4(p_lookFrom, 0.0); 
-        m_view                  = m_view * nm::translation(p_lookFrom);
-        m_viewProj              = m_projection * m_view;
-    };
-
-    virtual bool Init(InitData* p_initData) override
-    {
-        PerpspectiveInitdData* persInitData = dynamic_cast<PerpspectiveInitdData*>(p_initData);
-        if (!persInitData)
-            return false;
-
-        {
-            m_vFov              = persInitData->fov;
-            m_aspect            = persInitData->aspect;
-            m_up                = persInitData->up;
-            m_lookFrom          = nm::float4{ persInitData->lookFrom.xyz(), 1.0f};
-            m_lookAt            = persInitData->lookAt;
-
-            m_zNear             = 0.1f;
-            m_zFar              = 1000.0f;
-            m_dist              = 1;
-            m_lensRadius        = persInitData->aperture / 2.0f;
-
-            m_yaw               = persInitData->yaw;
-            m_pitch             = persInitData->pitch;
-
-            float vFovRad       = persInitData->fov * (float)M_PI / 180.f;
-            m_halfHeight        = tan(vFovRad / 2.0f);
-            m_halfWidth         = m_aspect * m_halfHeight;
-
-            m_camZ              = nm::normalize(persInitData->lookFrom.xyz() - persInitData->lookAt);       //w
-            m_camX              = nm::normalize(nm::cross(persInitData->up, m_camZ));                       //u
-            m_camY              = nm::normalize(nm::cross(m_camZ, m_camX));                                 //v
-
-            m_lowerLeft         = nm::float3(m_lookFrom.x(), m_lookFrom.y(), m_lookFrom.z())
-                                        - (m_halfWidth * persInitData->focusDistance * m_camX)
-                                        - (m_halfHeight * persInitData->focusDistance * m_camY)
-                                        - (persInitData->focusDistance * m_camZ);
-
-            m_vertical          = 2.0f * m_halfHeight * persInitData->focusDistance * m_camY;
-            m_horizontal        = 2.0f * m_halfWidth * persInitData->focusDistance * m_camX;
-
-            m_projection        = nm::perspective(vFovRad, persInitData->aspect, m_zNear, m_zFar);
-        }
-
-        return true;
-    }
-
-    virtual void Update(UpdateData data) override
-    {
-        if (data.moveCamera == true)
-        {
-            m_yaw               -= data.mouseDelta[0] / 654.f;
-            m_pitch             += data.mouseDelta[1] / 654.f;
-        }
-    
-        m_lookFrom              = m_lookFrom + nm::transpose(m_view) * nm::float4(MoveWASD(data) * m_speed * (float)data.timeDelta);
-        nm::float4 dir          = PolarToVector(m_yaw, m_pitch) * m_dist;
-        LookAt(m_lookFrom, m_lookFrom - dir);
-
-        m_viewProj              = m_projection * m_view;
-    }
+    void Move(nm::float3 p_lookFrom);
+    virtual bool Init(InitData* p_initData) override;
+    virtual void Update(UpdateData data) override;
 
 private:
     float                       m_lensRadius;  // for DOF
@@ -221,21 +111,7 @@ private:
     nm::float3                  m_camY;
     nm::float3                  m_camZ;
 
-    void LookAt(nm::float4 eyePos, nm::float4 lookAt)
-    {
-        // this is unnessary
-        m_lookAt                = nm::float3(lookAt.x(), lookAt.y(), lookAt.z());
-       
-        m_lookFrom              = eyePos;
-        m_view                  = LookAtRH(eyePos, lookAt);
-        m_dist                  = nm::length(lookAt - eyePos);
-
-        nm::float4x4 inView     = nm::inverse(m_view);
-        nm::float4 zBasis       = inView.column[2];
-        m_yaw                   = atan2f(zBasis.x(), zBasis.z());
-        float fLen              = sqrtf(zBasis.z() * zBasis.z() + zBasis.x() * zBasis.x());
-        m_pitch                 = atan2f(zBasis.y(), fLen);
-    }
+    void LookAt(nm::float4 eyePos, nm::float4 lookAt);
 };
 
 class COrthoCamera : public CCamera
@@ -253,35 +129,8 @@ public:
     COrthoCamera(std::string p_entityName) : CCamera(p_entityName) {}
     ~COrthoCamera() {}
 
-    virtual bool Init(InitData* p_initData) override
-    {
-        OrthInitdData* orthoInitData = dynamic_cast<OrthInitdData*>(p_initData);
-        if (!orthoInitData)
-            return false;
-
-        {
-            m_lrbt              = orthoInitData->lrbt;
-            m_up                = orthoInitData->up;
-            m_lookFrom          = nm::float4{ orthoInitData->lookFrom.xyz(), 1.0f};
-            m_zNear             = orthoInitData->nearPlane;
-            m_zFar              = orthoInitData->farPlane;
-            m_dist              = 1;
-
-            m_yaw               = orthoInitData->yaw;
-            m_pitch             = orthoInitData->pitch;
-
-            m_projection        = nm::orthoRH_01(m_lrbt.x(), m_lrbt.y(), m_lrbt.z(), m_lrbt.w(), m_zNear, m_zFar);
-
-            nm::float4 dir      = PolarToVector(m_yaw, m_pitch)* m_dist;
-            m_lookAt            = (m_lookFrom - dir).xyz();
-            m_view              = LookAtRH(m_lookFrom, m_lookFrom - dir);
-            m_viewProj          = m_projection * m_view;
-        }
-
-        return true;
-    }
-
-    virtual void Update(UpdateData p_data) override {}
+    virtual bool Init(InitData* p_initData) override;
+    virtual void Update(UpdateData p_data) override;
 
 private:
     nm::float4 m_lrbt;  // left, right, bottom, top

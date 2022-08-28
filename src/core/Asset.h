@@ -4,6 +4,45 @@
 #include "SceneGraph.h"
 #include "AssetLoader.h"
 #include "external/NiceMath.h"
+#include <src/core/Asset.h>
+#include <list>
+
+class CCircularList
+{
+public:
+	CCircularList(size_t p_size)
+		: m_size(p_size)
+		, m_list(m_size, 0.0f)
+	{}
+
+	~CCircularList()
+	{
+	}
+
+	void Add(float p_val)
+	{
+		m_list.push_back(p_val);
+		if (m_list.size() > m_size)
+		{
+			m_list.pop_front();
+		}
+	}
+
+	void Data(float* p_data) 
+	{ 
+		uint32_t i = 0;
+		for (auto& it : m_list)
+		{
+			p_data[i] = (1.0f / it);// *1000.0f;
+			i++;
+		}
+	}
+	size_t Size() { return m_size; }
+
+private:
+	size_t m_size;
+	std::list<float> m_list;
+};
 
 enum SamplerId
 {
@@ -14,12 +53,12 @@ enum SamplerId
 enum BindingSet
 {
 	  bs_Primary					= 0
-	, bs_Scene						= 1		, bs_UI					= 1
+	, bs_Scene						= 1		, bs_UI					= 1 ,	bs_DebugDisplay = 1
 };
 
 enum BindingDest
-{	  // Set 0 - Primary				  // Set 1 - Scene				  // Set 1 - UI
-	  bd_Gloabl_Uniform				= 0	, bd_Scene_MeshInfo_Uniform	= 0	, bd_UI_TexArray = 0
+{	  // Set 0 - Primary				  // Set 1 - Scene				  // Set 1 - UI		      // Set 1 - DebugDraw
+	  bd_Gloabl_Uniform				= 0	, bd_Scene_MeshInfo_Uniform	= 0	, bd_UI_TexArray	= 0 , bd_Debug_Transforms_Uniform = 0
 	, bd_Linear_Sampler				= 1	, bd_CubeMap_Texture		= 1	, bd_UI_max
 	, bd_ObjPicker_Storage			= 2	, bd_Material_Storage		= 2
 	, bd_Depth_Image				= 3	, bd_SceneRead_TexArray		= 3
@@ -35,7 +74,7 @@ enum BindingDest
 	, bd_Primary_max				= 13
 };
 
-struct LoadedUniformData
+struct LoadedUpdateData
 {
 	uint32_t							swapchainIndex;
 	float								timeElapsed;
@@ -46,7 +85,6 @@ struct LoadedUniformData
 	bool								isRightMouseDown;
 };
 
-class CUIParticipantManager;
 class CUIParticipant
 {
 public:
@@ -160,6 +198,8 @@ public:
 		, fb_PrimaryUniform_1
 		, fb_ObjectPickerRead
 		, fb_ObjectPickerWrite
+		, fb_DebugUniform_0
+		, fb_DebugUniform_1
 		, fb_max
 	};
 
@@ -179,7 +219,7 @@ public:
 		float						ssaoRadius;
 		nm::float4x4				sunViewProj;
 		nm::float3					sunDirWorldSpace;
-		float						unassigined_0;
+		int							enableShadowPCF;
 		nm::float3					sunDirViewSpace;
 		float						unassigined_1;
 	};
@@ -200,6 +240,13 @@ public:
 
 private:
 	PrimaryUniformData				m_primaryUniformData;
+};
+
+struct FixedUpdateData
+{
+	int									swapchainIndex;
+	CFixedBuffers::PrimaryUniformData*	primaryUniData;
+	CSceneGraph*						sceneGraph;
 };
 
 class CRenderTargets : public CTextures
@@ -230,28 +277,6 @@ public:
 	void SetLayout(RenderTargetId, VkImageLayout);
 
 private:
-};
-
-class CFixedAssets
-{
-public:
-
-	CFixedAssets() {};
-	~CFixedAssets() {};
-
-	bool Create(CVulkanRHI*);
-	void Destroy(CVulkanRHI*);
-
-	CFixedBuffers* GetFixedBuffers() { return &m_fixedBuffers; }
-	const CFixedBuffers* GetFixedBuffers() const { return &m_fixedBuffers; }
-	CRenderTargets* GetRenderTargets() { return &m_renderTargets; }
-	const CRenderTargets* GetRenderTargets() const { return &m_renderTargets; }
-	const CVulkanRHI::SamplerList* GetSamplers() const { return &m_samplers; }
-
-private:
-	CFixedBuffers					m_fixedBuffers;
-	CRenderTargets					m_renderTargets;
-	CVulkanRHI::SamplerList			m_samplers;
 };
 
 class CRenderable
@@ -289,17 +314,31 @@ public:
 		float						scale[2];
 	};
 
+	struct Guizmo
+	{
+		enum Type
+		{
+				Translation			= 0
+			,	Rotation			= 1
+			,	Scale				= 2
+		};
+		Type type;
+		Guizmo():type(Translation) {}
+	};
+
 	CRenderableUI();
 	~CRenderableUI();
 
 	bool Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool);
 	void Destroy(CVulkanRHI* p_rhi);
 
-	bool Update(CVulkanRHI* p_rhi, const LoadedUniformData& , CFixedBuffers::PrimaryUniformData& );
-	bool PrepareDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx);
+	bool Update(CVulkanRHI* p_rhi, const LoadedUpdateData& , CFixedBuffers::PrimaryUniformData& );
+	bool PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx);
 
 private:
+	Guizmo								m_guizmo;
 	bool								m_showImguiDemo;
+	CCircularList						m_latestFPS;
 	CUIParticipantManager*				m_participantManager;
 	CFixedBuffers::PrimaryUniformData	m_primUniforms;
 	
@@ -323,20 +362,30 @@ public:
 private:
 	std::vector<SubMesh>			m_submeshes;
 	uint32_t						m_mesh_id;
-	nm::float4x4					m_modelMatrix;
 	nm::float4x4					m_viewNormalTransform;
 };
 
-class CRenderableDebug : public CRenderable
+class CRenderableDebug : public CRenderable, public CDescriptor
 {
 public:
-	CRenderableDebug() {};
+	struct DebugVertex
+	{
+		nm::float3	pos;
+		int			id;
+	};
+
+	CRenderableDebug();
 	~CRenderableDebug() {};
 
-	void ComputeBBox(BBox& p_bbox);
+	bool Create(CVulkanRHI* p_rhi, const CFixedBuffers*);
+	bool Update();
+	void Destroy(CVulkanRHI* p_rhi);
+	bool PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx, const CFixedBuffers*, const CSceneGraph*);
+	size_t GetIndexBufferCount() { return m_indexCount; }
 
-private:
-
+private: 
+	size_t m_indexCount;
+	bool CreateDebugDescriptors(CVulkanRHI*, const CFixedBuffers*);
 };
 
 class CScene : public CTextures, public CDescriptor, public CUIParticipant, public CSelectionListener
@@ -369,16 +418,14 @@ public:
 
 	virtual void Show() override;
 
-	bool Update(CVulkanRHI* p_rhi, const LoadedUniformData&);
+	bool Update(CVulkanRHI* p_rhi, const LoadedUpdateData&);
 	void SetSelectedRenderableMesh(int p_id) { m_curSelecteRenderableMesh = p_id; }
-
 	uint32_t GetRenderableMeshCount() const { return (uint32_t)m_meshes.size(); }
 	const CRenderableMesh* GetRenderableMesh(uint32_t p_idx) const { return m_meshes[p_idx]; }
 
 private:
 	CSceneGraph*					m_sceneGraph;
 	std::vector<CRenderableMesh*>	m_meshes;						// list of all meshes required by the scene
-	CRenderableDebug*				m_debug;
 
 	// todo: need to fix the current selected renderable mesh 
 	// it is used by object picker pass and is not the best way to do.
@@ -437,6 +484,7 @@ private:
 };
 
 class CLoadableAssets;
+class CFixedAssets;
 class CPrimaryDescriptors : public CDescriptor
 {
 public:
@@ -460,13 +508,13 @@ public:
 	bool Create(CVulkanRHI*, const CFixedAssets&, const CVulkanRHI::CommandPool& );
 	void Destroy(CVulkanRHI*);
 
-	bool Update(CVulkanRHI*, const LoadedUniformData&, CFixedBuffers::PrimaryUniformData&);
+	bool Update(CVulkanRHI*, const LoadedUpdateData&, CFixedBuffers::PrimaryUniformData&);
 
 	CScene* GetScene() { return &m_scene;}
 	const CRenderableUI* GetUI() const { return &m_ui; }
 	CReadOnlyTextures* GetReadonlyTextures() { return &m_readOnlyTextures; }
 	CReadOnlyBuffers* GetReadonlyBuffers() { return &m_readOnlyBuffers; }
-
+	
 	const CReadOnlyTextures* GetReadonlyTextures() const { return &m_readOnlyTextures; }
 	const CReadOnlyBuffers* GetReadonlyBuffers() const { return &m_readOnlyBuffers; }
 
@@ -477,3 +525,26 @@ private:
 	CReadOnlyBuffers				m_readOnlyBuffers;
 };
 
+class CFixedAssets
+{
+public:
+	CFixedAssets() {};
+	~CFixedAssets() {};
+
+	bool Create(CVulkanRHI*);
+	void Destroy(CVulkanRHI*);
+	bool Update(CVulkanRHI*, const FixedUpdateData&);
+
+	CFixedBuffers* GetFixedBuffers() { return &m_fixedBuffers; }
+	const CFixedBuffers* GetFixedBuffers() const { return &m_fixedBuffers; }
+	CRenderTargets* GetRenderTargets() { return &m_renderTargets; }
+	const CRenderTargets* GetRenderTargets() const { return &m_renderTargets; }
+	const CVulkanRHI::SamplerList* GetSamplers() const { return &m_samplers; }
+	CRenderableDebug* GetDebugRenderer() { return &m_renderableDebug; }
+
+private:
+	CFixedBuffers					m_fixedBuffers;
+	CRenderTargets					m_renderTargets;
+	CVulkanRHI::SamplerList			m_samplers;
+	CRenderableDebug				m_renderableDebug;
+};

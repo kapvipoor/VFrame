@@ -35,13 +35,13 @@ bool CWinCore::initialize()
         return false;
     }
 
-    DWORD dwExStyle = WS_EX_OVERLAPPEDWINDOW;
-    DWORD dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
+    //DWORD dwExStyle = WS_EX_OVERLAPPEDWINDOW;
+    DWORD dwStyle = WS_POPUP | WS_CLIPSIBLINGS | WS_CLIPCHILDREN; //WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU
     RECT client_rect = { 0, 0, CWinCore::s_Window.windowWidth, CWinCore::s_Window.windowHeight };
-    AdjustWindowRectEx(&client_rect, dwStyle, FALSE, dwExStyle);
+    AdjustWindowRectEx(&client_rect, dwStyle, FALSE, FALSE);
     int width = client_rect.right - client_rect.left;
     int height = client_rect.bottom - client_rect.top;
-    CWinCore::s_Window.handle = CreateWindowEx(dwExStyle, m_classname, m_title, dwStyle, 0, 0, width, height, NULL, NULL, GetModuleHandle(NULL), NULL);
+    CWinCore::s_Window.handle = CreateWindowEx(NULL, m_classname, m_title, dwStyle, 0, 0, width, height, NULL, NULL, GetModuleHandle(NULL), NULL);
     SetProp(CWinCore::s_Window.handle, m_classname, (HANDLE)this);
 
     if (CWinCore::s_Window.handle == NULL)

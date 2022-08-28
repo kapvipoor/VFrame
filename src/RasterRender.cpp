@@ -5,8 +5,8 @@
 #include "external/imgui/imgui.h"
 #include <assert.h>
 
-float g_sunDistanceFromOrigin = 50.5f;
-nm::float4 g_sunPosition = nm::float4(0.0f, 1.0f, 0.0f, 0.0f);// -93.83f);
+//float g_sunDistanceFromOrigin = 50.0f;
+//nm::float4 g_sunDirection = nm::float4(0.0f, 1.0f, 0.0f, 0.0f);// -93.83f);
 
 CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_height_, int window_scale)
 		:CWinCore(name, screen_width_, screen_height_, window_scale)
@@ -26,8 +26,9 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_forwardPass			= new CForwardPass(m_rhi);
 	m_deferredPass			= new CDeferredPass(m_rhi);
 	m_deferredLightPass		= new CDeferredLightingPass(m_rhi);
-	m_ssaoComputePass		= new CSSAOComputePass(m_rhi);;
+	m_ssaoComputePass		= new CSSAOComputePass(m_rhi);
 	m_ssaoBlurPass			= new CSSAOBlurPass(m_rhi);
+	m_debugDrawPass			= new CDebugDrawPass(m_rhi);
 	m_uiPass				= new CUIPass(m_rhi);
 
 	m_primaryCamera			= new CPerspectiveCamera("Primary Camera");
@@ -42,6 +43,7 @@ CRasterRender::~CRasterRender()
 	delete m_sceneGraph;
 
 	delete m_uiPass;
+	delete m_debugDrawPass;
 	delete m_ssaoBlurPass;
 	delete m_ssaoComputePass;
 	delete m_deferredLightPass;
@@ -60,6 +62,7 @@ CRasterRender::~CRasterRender()
 void CRasterRender::on_destroy()
 {
 	m_uiPass->Destroy();
+	m_debugDrawPass->Destroy();
 	m_ssaoBlurPass->Destroy();
 	m_ssaoBlurPass->Destroy();
 	m_ssaoComputePass->Destroy();
@@ -142,8 +145,8 @@ bool CRasterRender::on_update(float delta)
 {
 	RETURN_FALSE_IF_FALSE(m_rhi->AcquireNextSwapChain(m_vkswapchainAcquireSemaphore, m_swapchainIndex))
 
-	// if left mouse is clicked; prepare and pick object for this frame
-	m_pickObject = m_keys[LEFT_MOUSE_BUTTON].down;
+		// if left mouse is clicked; prepare and pick object for this frame
+		m_pickObject = false;  m_keys[LEFT_MOUSE_BUTTON].down;
 
 	int mousepos_x = 0, mousepos_y = 0;
 	GetCurrentMousePosition(mousepos_x, mousepos_y);
@@ -162,24 +165,26 @@ bool CRasterRender::on_update(float delta)
 		uniformData.sunDirViewSpace					= (m_primaryCamera->GetView() * nm::float4(m_sunLightCamera->GetLookAt(), 1.0f)).xyz();
 		uniformData.sunDirWorldSpace				= m_sunLightCamera->GetLookAt();
 		uniformData.sunViewProj						= m_sunLightCamera->GetViewProj();
-		uniformData.unassigined_0					= 0;
 		uniformData.unassigined_1					= 0;
 
-		m_fixedAssets->GetFixedBuffers()->SetPrimaryUniformData(uniformData);
-		RETURN_FALSE_IF_FALSE(m_fixedAssets->GetFixedBuffers()->Update(m_rhi, m_swapchainIndex));
+		FixedUpdateData fixedUpdate{};
+		fixedUpdate.primaryUniData					= &uniformData;
+		fixedUpdate.swapchainIndex					= m_swapchainIndex;
+		fixedUpdate.sceneGraph						= m_sceneGraph;
+		RETURN_FALSE_IF_FALSE(m_fixedAssets->Update(m_rhi, fixedUpdate));
 	}
 	
 	{
-		LoadedUniformData loadedUniData{};
-		loadedUniData.curMousePos					= nm::float2((float)mousepos_x, (float)mousepos_y);
-		loadedUniData.isLeftMouseDown				= m_keys[LEFT_MOUSE_BUTTON].down;
-		loadedUniData.isRightMouseDown				= m_keys[RIGHT_MOUSE_BUTTON].down;
-		loadedUniData.screenRes						= nm::float2((float)s_Window.screenWidth, (float)s_Window.screenHeight);
-		loadedUniData.swapchainIndex				= m_swapchainIndex;
-		loadedUniData.timeElapsed					= delta;
-		loadedUniData.viewMatrix					= m_primaryCamera->GetView();
+		LoadedUpdateData loadedUpdate{};
+		loadedUpdate.curMousePos					= nm::float2((float)mousepos_x, (float)mousepos_y);
+		loadedUpdate.isLeftMouseDown				= m_keys[LEFT_MOUSE_BUTTON].down;
+		loadedUpdate.isRightMouseDown				= m_keys[RIGHT_MOUSE_BUTTON].down;
+		loadedUpdate.screenRes						= nm::float2((float)s_Window.screenWidth, (float)s_Window.screenHeight);
+		loadedUpdate.swapchainIndex					= m_swapchainIndex;
+		loadedUpdate.timeElapsed					= delta;
+		loadedUpdate.viewMatrix						= m_primaryCamera->GetView();
 
-		RETURN_FALSE_IF_FALSE(m_loadableAssets->Update(m_rhi, loadedUniData, m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData()));
+		RETURN_FALSE_IF_FALSE(m_loadableAssets->Update(m_rhi, loadedUpdate, m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData()));
 	}
 
 	{
@@ -191,6 +196,7 @@ bool CRasterRender::on_update(float delta)
 		m_ssaoComputePass->Update(&updateData);
 		m_ssaoBlurPass->Update(&updateData);
 		m_deferredLightPass->Update(&updateData);
+		m_debugDrawPass->Update(&updateData);
 		m_uiPass->Update(&updateData);
 	}
 
@@ -208,6 +214,7 @@ bool CRasterRender::on_update(float delta)
 		renderData.loadedAssets					= m_loadableAssets;
 		renderData.primaryDescriptors			= m_primaryDescriptors;
 		renderData.scIdx						= m_swapchainIndex;
+		renderData.sceneGraph					= m_sceneGraph;
 
 		renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ShadowMap];
 		RETURN_FALSE_IF_FALSE(m_staticShadowPass->Render(&renderData));
@@ -221,6 +228,14 @@ bool CRasterRender::on_update(float delta)
 		renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Deferred_GBuf];
 		RETURN_FALSE_IF_FALSE(m_deferredPass->Render(&renderData));
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+
+		// placing debug draw here because I do not want the depth buffer to go through another layout barrier
+		// from depth stencil attachment to shader read used in ssao pass
+		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_DebugDraw];
+		if (m_debugDrawPass->Render(&renderData))
+		{
+			m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+		}
 		
 		renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO];
 		RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Render(&renderData));
@@ -230,7 +245,7 @@ bool CRasterRender::on_update(float delta)
 		renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Deferred_Lighting];
 		RETURN_FALSE_IF_FALSE(m_deferredLightPass->Render(&renderData));
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-		
+
 		renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_UI];
 		RETURN_FALSE_IF_FALSE(m_uiPass->Render(&renderData));
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
@@ -294,25 +309,26 @@ bool CRasterRender::InitCamera()
 	CPerspectiveCamera::PerpspectiveInitdData persIntData{};
 	persIntData.fov							= 45.0f;
 	persIntData.aspect						= (float)CWinCore::s_Window.screenWidth / CWinCore::s_Window.screenHeight;
-	persIntData.lookFrom					= (g_sunDistanceFromOrigin * g_sunPosition);
+	persIntData.lookFrom					= nm::float4(0.0f, 50.0f, 0.0f, 1.0f);
 	persIntData.lookAt						= nm::float3{ 0.0f, 0.0f, 0.0f };
 	persIntData.up							= nm::float3{ 0.0f, 1.0f,  0.0f };
 	persIntData.aperture					= 0.1f;							
 	persIntData.focusDistance				= 10.0f;							
 	persIntData.yaw							= 0.0f;									
-	persIntData.pitch						= 1.5708f;							
+	persIntData.pitch						= 0.0f;							
 	RETURN_FALSE_IF_FALSE( m_primaryCamera->Init(&persIntData));
 
 	COrthoCamera::OrthInitdData orthoInit{};
-	orthoInit.lookFrom						= g_sunDistanceFromOrigin * g_sunPosition;	
-	orthoInit.lookAt						= g_sunPosition.xyz();							
+	orthoInit.lookFrom						= nm::float4(0.0f);
 	orthoInit.up							= nm::float3{ 0.0f, 1.0f, 0.0f };
-	orthoInit.lrbt							= nm::float4{ -g_sunDistanceFromOrigin, g_sunDistanceFromOrigin, -g_sunDistanceFromOrigin, g_sunDistanceFromOrigin };
-	orthoInit.nearPlane						= -g_sunDistanceFromOrigin;
-	orthoInit.farPlane						= 250;
-	orthoInit.yaw							= 0.0f/*1.579f*/;
-	orthoInit.pitch							= 1.5708f/*4.71239f*//*0.714f*/;
+	orthoInit.lrbt							= nm::float4{ -50.0f, 50.0f, -50.0f, 50.0f };
+	orthoInit.nearPlane						= 0;
+	orthoInit.farPlane						= 50;
+	orthoInit.yaw							= 0.0f;
+	orthoInit.pitch							= 0.0f;//1.5708f/*4.71239f*//*0.714f*/;
 	RETURN_FALSE_IF_FALSE(m_sunLightCamera->Init(&orthoInit));
+	//m_sunLightCamera->SetTranslation(nm::float3(0.0f, 45.0f, 0.0f));
+	//m_sunLightCamera->SetRotation(nm::float3(1.5708f, 0.0f, 0.0f));
 
 	return true;
 }
@@ -366,8 +382,14 @@ bool CRasterRender::CreatePasses()
 	VkPipelineLayout uiLayout;
 	descLayouts.clear();
 	descLayouts.push_back(m_primaryDescriptors->GetDescriptorSetLayout(0));					// Set 0 - BindingSet::Primary
-	descLayouts.push_back(m_loadableAssets->GetUI()->GetDescriptorSetLayout());					// Set 1 - BindingSet::UI
+	descLayouts.push_back(m_loadableAssets->GetUI()->GetDescriptorSetLayout());				// Set 1 - BindingSet::UI
 	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&uiPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), uiLayout));
+
+	VkPipelineLayout debugLayout;
+	descLayouts.clear();
+	descLayouts.push_back(m_primaryDescriptors->GetDescriptorSetLayout(0));					// Set 0 - BindingSet::Primary
+	descLayouts.push_back(m_fixedAssets->GetDebugRenderer()->GetDescriptorSetLayout());		// Set 1 - BindingSet::Debug
+	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(nullptr, 0, descLayouts.data(), (uint32_t)descLayouts.size(), debugLayout));
 
 	CPass::RenderData renderData{};
 	renderData.fixedAssets					= m_fixedAssets;
@@ -411,6 +433,10 @@ bool CRasterRender::CreatePasses()
 	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Initalize(nullptr, pipeline));
 	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Initalize(nullptr, pipeline));
 	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Initalize(nullptr, pipeline));
+
+	pipeline								= CVulkanRHI::Pipeline{};
+	pipeline.pipeLayout						= debugLayout;
+	RETURN_FALSE_IF_FALSE(m_debugDrawPass->Initalize(&renderData, pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= uiLayout;

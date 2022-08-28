@@ -12,9 +12,10 @@ public:
 		uint32_t					scIdx;
 		CVulkanRHI::CommandBuffer	cmdBfr;
 		CLoadableAssets*			loadedAssets;
-		const CFixedAssets*			fixedAssets;
+		CFixedAssets*				fixedAssets;
 		const CPrimaryDescriptors*	primaryDescriptors;
 		CVulkanRHI::BufferList*		stagingBuffers; // used during the initializing phase
+		CSceneGraph*				sceneGraph;
 	};
 
 	struct UpdateData
@@ -35,7 +36,13 @@ public:
 	virtual bool CreateRenderpass(RenderData*) = 0;
 	virtual bool CreatePipeline(CVulkanRHI::Pipeline) = 0;
 
-	virtual bool Initalize(RenderData*, CVulkanRHI::Pipeline) = 0;
+	virtual bool Initalize(RenderData* p_renderData, CVulkanRHI::Pipeline p_pipeline)
+	{
+		RETURN_FALSE_IF_FALSE(CreateRenderpass(p_renderData));
+		RETURN_FALSE_IF_FALSE(CreatePipeline(p_pipeline));
+		return true;
+	}
+
 	virtual bool Update(UpdateData*) = 0;
 	virtual bool Render(RenderData*) = 0;
 	virtual void Destroy() = 0;

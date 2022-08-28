@@ -48,9 +48,23 @@ namespace std
 
 struct BBox
 {
+	enum Type
+	{
+			Null				= 0
+		,	Unit				= 1
+	};
+
+	enum Origin
+	{
+			Auto				= 0
+		,	Center				= 1
+		,	CameraStyle			= 2
+	};
+
 	nm::float3					bbMin;
 	nm::float3					bbMax;
-	nm::float4					bBox[8];
+	nm::float3					bBox[8];
+	BBox(Type p_type = Null, Origin p_origin = Auto);
 };
 
 struct SubMesh
@@ -58,21 +72,21 @@ struct SubMesh
 	uint32_t					firstIndex;
 	uint32_t					indexCount;
 	uint32_t					materialId;
-	BBox						bbox;
 };
 
 struct MeshRaw
 {
+	std::string					name;
 	nm::float4x4				transform;
 	std::vector<Vertex>			vertexList;
 	std::vector<uint32_t>		indicesList;
 	std::vector<SubMesh>		submeshes;
-	BBox	 bbox;
+	std::vector<BBox>			submeshesBbox;
+	BBox						bbox;
 };
 
 struct SceneRaw
 {
-	std::string					name;
 	std::vector<ImageRaw>		textureList;
 	std::vector<MeshRaw>		meshList;
 	std::vector<Material>		materialsList;
@@ -85,6 +99,7 @@ struct ObjLoadData
 };
 
 nm::float4 ComputeTangent(Vertex p_a, Vertex p_b, Vertex p_c);
+void ComputeBBox(BBox& p_bbox);
 
 bool LoadRawImage(const char* p_path, ImageRaw& p_data);
 void FreeRawImage(ImageRaw& p_data);

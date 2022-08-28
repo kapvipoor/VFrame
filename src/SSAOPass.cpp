@@ -28,13 +28,6 @@ bool CSSAOComputePass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	return true;
 }
 
-bool CSSAOComputePass::Initalize(RenderData* p_renderData, CVulkanRHI::Pipeline p_pipeline)
-{
-	RETURN_FALSE_IF_FALSE(CreateRenderpass(p_renderData));
-	RETURN_FALSE_IF_FALSE(CreatePipeline(p_pipeline));
-	return true;
-}
-
 bool CSSAOComputePass::Update(UpdateData*)
 {
 	return true;
@@ -94,13 +87,6 @@ bool CSSAOBlurPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	if (!m_rhi->CreateComputePipeline(ssaoBlurShaderpaths, m_pipeline))
 		return false;
 
-	return true;
-}
-
-bool CSSAOBlurPass::Initalize(RenderData* p_renderData, CVulkanRHI::Pipeline p_pipeline)
-{
-	RETURN_FALSE_IF_FALSE(CreateRenderpass(p_renderData));
-	RETURN_FALSE_IF_FALSE(CreatePipeline(p_pipeline));
 	return true;
 }
 

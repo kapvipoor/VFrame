@@ -15,6 +15,7 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 
 #define FRAME_BUFFER_COUNT 2
+#define MAX_SUPPORTED_DEBUG_DRAW_ENTITES 256
 
 #include <assert.h>
 #include <iostream>
@@ -145,13 +146,15 @@ public:
 		VkCompareOp											depthCmpOp;
 		bool												enableBlending;
 		Renderpass											renderpassData;
+		bool												isWireframe;
 		VkPipelineLayout									pipeLayout;
 		VkPipeline											pipeline;
 
 		Pipeline() :
 			cullMode(VK_CULL_MODE_BACK_BIT)
 			, depthCmpOp(VK_COMPARE_OP_LESS_OR_EQUAL)
-			, enableBlending(false) {}
+			, enableBlending(false)
+			, isWireframe(false) {}
 	};
 
 	struct Buffer
@@ -159,6 +162,7 @@ public:
 		VkDescriptorBufferInfo								descInfo;
 		VkDeviceMemory										devMem;
 		VkMemoryAllocateFlags								memPropFlags;
+		size_t												reqMemSize;
 	};
 
 	struct Image
@@ -341,7 +345,7 @@ public:
 	void DestroySampler(VkSampler p_sampler);
 
 	bool CreateBuffer(VkBufferCreateInfo p_bufferCreateInfo, VkBuffer& p_buffer);
-	bool AllocateBufferMemory(VkBuffer p_buffer, VkMemoryPropertyFlags p_memFlags, VkDeviceMemory& p_devMem);
+	bool AllocateBufferMemory(VkBuffer p_buffer, VkMemoryPropertyFlags p_memFlags, VkDeviceMemory& p_devMem, size_t& p_reqSize);
 	bool BindBufferMemory(VkBuffer& p_buffer, VkDeviceMemory& p_devMem);
 	void FreeDeviceMemory(VkDeviceMemory& p_devMem);
 	void DestroyBuffer(VkBuffer& p_buffer);

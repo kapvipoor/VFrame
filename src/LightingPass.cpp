@@ -60,13 +60,6 @@ bool CForwardPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 	return true;
 }
 
-bool CForwardPass::Initalize(RenderData* p_renderData, CVulkanRHI::Pipeline p_pipeline)
-{
-	RETURN_FALSE_IF_FALSE(CreateRenderpass(p_renderData));
-	RETURN_FALSE_IF_FALSE(CreatePipeline(p_pipeline));
-	return true;
-}
-
 bool CForwardPass::Update(UpdateData*)
 {
 	return true;
@@ -101,7 +94,7 @@ bool CForwardPass::Render(RenderData* p_renderData)
 
 		for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
 		{
-			const Submesh* submesh				= mesh->GetSubmesh(j);
+			const SubMesh* submesh				= mesh->GetSubmesh(j);
 
 			CScene::MeshPushConst pc{ mesh->GetMeshId(), submesh->materialId};
 
@@ -166,14 +159,6 @@ bool CSkyboxPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 		return false;
 	}
 
-	return true;
-}
-
-
-bool CSkyboxPass::Initalize(RenderData* p_renderData, CVulkanRHI::Pipeline p_pipeline)
-{
-	RETURN_FALSE_IF_FALSE(CreateRenderpass(p_renderData));
-	RETURN_FALSE_IF_FALSE(CreatePipeline(p_pipeline));
 	return true;
 }
 
@@ -257,7 +242,7 @@ bool CDeferredPass::CreateRenderpass(RenderData* p_renderData)
 															VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 	renderPass->AttachDepth(primaryDepthRT.format,			VK_ATTACHMENT_LOAD_OP_LOAD,							VK_ATTACHMENT_STORE_OP_STORE,
-															VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,	VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+															VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 															VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
 	if (!m_rhi->CreateRenderpass(*renderPass))
@@ -299,13 +284,6 @@ bool CDeferredPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 	return true;
 }
 
-bool CDeferredPass::Initalize(RenderData* p_renderData, CVulkanRHI::Pipeline p_pipeline)
-{
-	RETURN_FALSE_IF_FALSE(CreateRenderpass(p_renderData));
-	RETURN_FALSE_IF_FALSE(CreatePipeline(p_pipeline));
-	return true;
-}
-
 bool CDeferredPass::Update(UpdateData*)
 {
 	return true;
@@ -342,7 +320,7 @@ bool CDeferredPass::Render(RenderData* p_renderData)
 
 		for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
 		{
-			const CRenderableMesh::SubMesh* submesh				= mesh->GetSubmesh(j);
+			const SubMesh* submesh				= mesh->GetSubmesh(j);
 
 			CScene::MeshPushConst pc{ mesh->GetMeshId(), submesh->materialId};
 
@@ -386,7 +364,6 @@ CDeferredLightingPass::~CDeferredLightingPass()
 
 bool CDeferredLightingPass::CreateRenderpass(RenderData* p_renderData)
 {
-	// compute shader, nothing to create
 	return true;
 }
 
@@ -398,13 +375,6 @@ bool CDeferredLightingPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 
 	RETURN_FALSE_IF_FALSE(m_rhi->CreateComputePipeline(dfrdLightingShaderpaths, m_pipeline));
 
-	return true;
-}
-
-bool CDeferredLightingPass::Initalize(RenderData* p_renderData, CVulkanRHI::Pipeline p_pipeline)
-{
-	RETURN_FALSE_IF_FALSE(CreateRenderpass(p_renderData));
-	RETURN_FALSE_IF_FALSE(CreatePipeline(p_pipeline));
 	return true;
 }
 

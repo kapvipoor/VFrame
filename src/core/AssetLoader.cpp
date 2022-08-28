@@ -26,6 +26,18 @@ nm::float4 ComputeTangent(Vertex p_a, Vertex p_b, Vertex p_c)
 	return tangent;
 }
 
+void ComputeBBox(BBox& p_bbox)
+{
+	p_bbox.bBox[0] = nm::float3{ p_bbox.bbMin[0], p_bbox.bbMin[1], p_bbox.bbMin[2] };
+	p_bbox.bBox[1] = nm::float3{ p_bbox.bbMax[0], p_bbox.bbMin[1], p_bbox.bbMin[2] };
+	p_bbox.bBox[2] = nm::float3{ p_bbox.bbMax[0], p_bbox.bbMax[1], p_bbox.bbMin[2] };
+	p_bbox.bBox[3] = nm::float3{ p_bbox.bbMin[0], p_bbox.bbMax[1], p_bbox.bbMin[2] };
+	p_bbox.bBox[4] = nm::float3{ p_bbox.bbMin[0], p_bbox.bbMin[1], p_bbox.bbMax[2] };
+	p_bbox.bBox[5] = nm::float3{ p_bbox.bbMax[0], p_bbox.bbMin[1], p_bbox.bbMax[2] };
+	p_bbox.bBox[6] = nm::float3{ p_bbox.bbMax[0], p_bbox.bbMax[1], p_bbox.bbMax[2] };
+	p_bbox.bBox[7] = nm::float3{ p_bbox.bbMin[0], p_bbox.bbMax[1], p_bbox.bbMax[2] };
+}
+
 bool LoadRawImage(const char* p_path, ImageRaw& p_data)
 {
 	p_data.raw = stbi_load(p_path, &p_data.width, &p_data.height, &p_data.channels, STBI_rgb_alpha);
@@ -69,11 +81,16 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 		return false;
 	}
 
-	bool fileNmae = GetFileName(p_path, p_objScene.name);
 	uint32_t material_offset = (uint32_t)p_objScene.materialsList.size();
 	uint32_t texture_offset = (uint32_t)p_objScene.textureList.size();
 
 	MeshRaw objMesh;
+	bool fileNmae = GetFileName(p_path, objMesh.name);
+	if (!fileNmae)
+	{
+		std::cout << "Failed to Get Filename - " << p_path << std::endl;
+		return false;
+	}
 
 	const tinygltf::Scene& scene = input.scenes[0];
 	for (size_t n_id = 0; n_id < scene.nodes.size(); n_id++)
@@ -208,26 +225,36 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 					}
 				}
 
-				Submesh submesh{};
+				SubMesh submesh{};
 				submesh.firstIndex	= firstIndex;
 				submesh.indexCount	= indexCount;
 				submesh.materialId	= material_offset + glTFPrimitive.material;
-				submesh.bbox.bbMin	= bbMin;
-				submesh.bbox.bbMax	= bbMax;
 				objMesh.submeshes.push_back(submesh);
 
-				objMesh.bbox.bbMin	= nm::float3{0.0f, 0.0f, 0.0f};
-				objMesh.bbox.bbMin[0]	= std::min(objMesh.bbox.bbMin[0], submesh.bbox.bbMin[0]);
-				objMesh.bbox.bbMin[1]	= std::min(objMesh.bbox.bbMin[1], submesh.bbox.bbMin[1]);
-				objMesh.bbox.bbMin[2]	= std::min(objMesh.bbox.bbMin[2], submesh.bbox.bbMin[2]);
-
-				objMesh.bbox.bbMax		= nm::float3{ 0.0f, 0.0f, 0.0f };
-				objMesh.bbox.bbMax[0]	= std::max(objMesh.bbox.bbMax[0], submesh.bbox.bbMax[0]);
-				objMesh.bbox.bbMax[1]	= std::max(objMesh.bbox.bbMax[1], submesh.bbox.bbMax[1]);
-				objMesh.bbox.bbMax[2]	= std::max(objMesh.bbox.bbMax[2], submesh.bbox.bbMax[2]);
+				BBox meshbox;
+				meshbox.bbMin		= bbMin;
+				meshbox.bbMax		= bbMax;
+				ComputeBBox(meshbox);
+				objMesh.submeshesBbox.push_back(meshbox);
+				
 			}
 		}
 	}
+
+	BBox* scenebox = &objMesh.bbox;
+	scenebox->bbMin = nm::float3{ 0.0f, 0.0f, 0.0f };
+	scenebox->bbMax = nm::float3{ 0.0f, 0.0f, 0.0f };
+	for(int i = 0; i < objMesh.submeshesBbox.size(); i++)
+	{		
+		scenebox->bbMin[0] = std::min(objMesh.bbox.bbMin[0], objMesh.submeshesBbox[i].bbMin[0]);
+		scenebox->bbMin[1] = std::min(objMesh.bbox.bbMin[1], objMesh.submeshesBbox[i].bbMin[1]);
+		scenebox->bbMin[2] = std::min(objMesh.bbox.bbMin[2], objMesh.submeshesBbox[i].bbMin[2]);
+															 
+		scenebox->bbMax[0] = std::max(objMesh.bbox.bbMax[0], objMesh.submeshesBbox[i].bbMax[0]);
+		scenebox->bbMax[1] = std::max(objMesh.bbox.bbMax[1], objMesh.submeshesBbox[i].bbMax[1]);
+		scenebox->bbMax[2] = std::max(objMesh.bbox.bbMax[2], objMesh.submeshesBbox[i].bbMax[2]);
+	}	
+	ComputeBBox(*scenebox);
 
 	p_objScene.meshList.push_back(objMesh);
 
@@ -409,4 +436,31 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 	}
 
 	return true;
+}
+
+BBox::BBox(Type p_type, Origin p_origin)
+{
+	bbMin = nm::float3{ 0.0f };
+	bbMax = nm::float3{ 0.0f };
+
+	if (p_type == Unit)
+	{
+		bbMin = nm::float3{ -1.0f, -1.0f, -1.0f };
+		bbMax = nm::float3{ 1.0f, 1.0f, 1.0f };
+	}
+
+	if (p_origin == CameraStyle)
+	{
+		bbMin = nm::float3{ -1.0f, -1.0f, 0.0f };
+		bbMax = nm::float3{ 1.0f, 1.0f, 2.0f };
+	}
+
+	bBox[0] = nm::float3{ bbMin[0], bbMin[1], bbMin[2] };
+	bBox[1] = nm::float3{ bbMax[0], bbMin[1], bbMin[2] };
+	bBox[2] = nm::float3{ bbMax[0], bbMax[1], bbMin[2] };
+	bBox[3] = nm::float3{ bbMin[0], bbMax[1], bbMin[2] };
+	bBox[4] = nm::float3{ bbMin[0], bbMin[1], bbMax[2] };
+	bBox[5] = nm::float3{ bbMax[0], bbMin[1], bbMax[2] };
+	bBox[6] = nm::float3{ bbMax[0], bbMax[1], bbMax[2] };
+	bBox[7] = nm::float3{ bbMin[0], bbMax[1], bbMax[2] };
 }

@@ -40,7 +40,24 @@ private:
 	static std::vector<CSelectionListener*> m_listeneers;
 };
 
-class CSceneGraph
+class CDebugData
+{
+public:
+	CDebugData();
+	~CDebugData() {};
+
+	bool IsDebugDrawEnabled() { return m_drawBBox; }
+	void SetDebugDrawEnable(bool p_enable) { m_drawBBox = p_enable; }
+
+	bool IsSubmeshDebugDrawEnabled() { return m_drawSubmeshBBox; }
+	void SetSubmeshDebugDrawEnable(bool p_enable) { m_drawSubmeshBBox = p_enable; }
+
+protected:
+	bool						m_drawBBox;
+	bool						m_drawSubmeshBBox;
+};
+ 
+class CSceneGraph : CDebugData
 {
 	friend class CEntity;
 public:
@@ -50,7 +67,6 @@ public:
 	~CSceneGraph();
 
 	static EntityList* GetEntities() { return &s_entities; };
-
 	void SetCurSelectEntityId(int p_id);
 
 private:
@@ -65,29 +81,33 @@ private:
 	}
 };
 
-class CEntity
+class CEntity : public CDebugData
 {
 public:
-	CEntity(std::string p_name)
-	{
-		m_id						= CSceneGraph::RegisterEntity(this);
-		m_name						= p_name + "_" + std::to_string(m_id);
-		m_transform					= nm::float4x4::identity();
-	}
-
+	CEntity(std::string p_name);
 	~CEntity() {}
-
-	void SetTransform(nm::float4x4 p_transform) { m_transform = p_transform; }
 
 	int	GetId() { return m_id; }
 	const char* GetName() { return m_name.c_str(); }
-	nm::float4x4 GetTransform() { return m_transform; }
+
+	void SetTransform(nm::Transform p_transform);
+	nm::Transform& GetTransform() { return m_transform; }
+	
+	void SetBoundingBox(BBox p_bbox) { m_boundingBox = p_bbox; }
+	BBox* GetBoundingBox() { return &m_boundingBox; }
+
+	uint32_t GetSubBoundingBoxCount() { return (uint32_t)m_subBoundingBoxes.size(); }
+	void SetSubBoundingBox(BBox p_bbox) { m_subBoundingBoxes.push_back(p_bbox); }
+	BBox* GetSubBoundingBox(uint32_t p_id) { return &(m_subBoundingBoxes[p_id]); }
+
+	bool IsDirty() { return m_dirty; }
+	void SetDirty(bool p_dirty) { m_dirty = p_dirty; }
 
 protected:
+	bool						m_dirty;
 	uint32_t					m_id;
 	std::string					m_name;
-	nm::float4x4				m_transform;
-
+	nm::Transform				m_transform;
 	BBox						m_boundingBox;
-
+	std::vector<BBox>			m_subBoundingBoxes;
 };

@@ -1,4 +1,6 @@
 #include "SceneGraph.h"
+#include "external/imgui/imgui.h"
+#include "external/imguizmo/ImGuizmo.h"
 
 std::vector<CEntity*> CSceneGraph::s_entities;
 std::vector<CSelectionListener*> CSelectionBroadcast::m_listeneers;
@@ -32,7 +34,7 @@ void CSelectionBroadcast::Broadcast(CSceneGraph* p_sceneGraph, int p_entityId)
 
 CSceneGraph::CSceneGraph()
 {
-	m_selectionBroadcast = new CSelectionBroadcast();
+	m_selectionBroadcast	= new CSelectionBroadcast();
 }
 
 CSceneGraph::~CSceneGraph()
@@ -48,4 +50,23 @@ void CSceneGraph::SetCurSelectEntityId(int p_entityId)
 	}
 
 	m_selectionBroadcast->Broadcast(this, p_entityId);
+}
+
+CEntity::CEntity(std::string p_name)
+{
+	m_dirty						= false;
+	m_id						= CSceneGraph::RegisterEntity(this);
+	m_name						= p_name + "_" + std::to_string(m_id);
+}
+
+void CEntity::SetTransform(nm::Transform p_transform)
+{
+	m_dirty						= true;
+	m_transform					= p_transform;
+}
+
+CDebugData::CDebugData()
+{
+	m_drawSubmeshBBox			= false;
+	m_drawBBox					= false;
 }

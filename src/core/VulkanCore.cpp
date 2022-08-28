@@ -743,14 +743,14 @@ bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipel
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyCreateInfo{};
 	inputAssemblyCreateInfo.sType				= VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	inputAssemblyCreateInfo.topology			= VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssemblyCreateInfo.topology			= (pData.isWireframe) ? VK_PRIMITIVE_TOPOLOGY_LINE_LIST : VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; ;
 
 	VkPipelineRasterizationStateCreateInfo rasterCreateInfo{};
 	rasterCreateInfo.sType						= VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 	rasterCreateInfo.flags						= 0;
 	rasterCreateInfo.depthClampEnable			= VK_FALSE;
 	rasterCreateInfo.rasterizerDiscardEnable	= VK_FALSE;
-	rasterCreateInfo.polygonMode				= VK_POLYGON_MODE_FILL;
+	rasterCreateInfo.polygonMode				= VK_POLYGON_MODE_FILL;//(pData.isWireframe) ? VK_POLYGON_MODE_LINE: VK_POLYGON_MODE_FILL;
 	rasterCreateInfo.cullMode					= pData.cullMode;
 	rasterCreateInfo.frontFace					= VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterCreateInfo.depthBiasEnable			= VK_FALSE;
@@ -1304,10 +1304,11 @@ bool CVulkanCore::CreateBuffer(VkBufferCreateInfo p_bufferCreateInfo, VkBuffer& 
 	return true;
 }
 
-bool CVulkanCore::AllocateBufferMemory(VkBuffer p_buffer, VkMemoryPropertyFlags p_memFlags, VkDeviceMemory& p_devMem)
+bool CVulkanCore::AllocateBufferMemory(VkBuffer p_buffer, VkMemoryPropertyFlags p_memFlags, VkDeviceMemory& p_devMem, size_t& p_reqSize)
 {
 	VkMemoryRequirements bufferMemReq;
 	vkGetBufferMemoryRequirements(m_vkDevice, p_buffer, &bufferMemReq);
+	p_reqSize = bufferMemReq.size;
 
 	uint32_t memIndex = FindMemoryTypeIndex(m_vkPhysicalDeviceMemProp, &bufferMemReq, p_memFlags);
 
@@ -1352,7 +1353,7 @@ void CVulkanCore::DestroyBuffer(VkBuffer &p_buffer)
 
 bool CVulkanCore::MapMemory(Buffer p_buffer, bool p_flushMemRanges, void** p_data, std::vector<VkMappedMemoryRange>* p_memRanges)
 {
-	VkResult res = vkMapMemory(m_vkDevice, p_buffer.devMem, p_buffer.descInfo.offset, p_buffer.descInfo.range, 0, p_data);
+	VkResult res = vkMapMemory(m_vkDevice, p_buffer.devMem, p_buffer.descInfo.offset, p_buffer.reqMemSize, 0, p_data);
 	if (res != VK_SUCCESS)
 	{
 		std::cerr << "vkMapMemory failed " << res << std::endl;
@@ -1364,7 +1365,7 @@ bool CVulkanCore::MapMemory(Buffer p_buffer, bool p_flushMemRanges, void** p_dat
 		VkMappedMemoryRange range{};
 		range.sType	= VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
 		range.memory = p_buffer.devMem;
-		range.size	= VK_WHOLE_SIZE;
+		range.size = p_buffer.reqMemSize; // we do this because VK_WHOLE_SIZE is raising a validation error because vulkan driver (or loader ?) is picking up VK_WHOLE_SIZE as device range and not required memory size discovered during device buffer memory creation
 		p_memRanges->push_back(range);
 	}
 
@@ -1379,11 +1380,15 @@ bool CVulkanCore::FlushMemoryRanges(std::vector<VkMappedMemoryRange>* p_memRange
 		return false;
 	}
 
-	VkResult res = vkFlushMappedMemoryRanges(m_vkDevice, (uint32_t)p_memRanges->size(), p_memRanges->data());
-	if (res != VK_SUCCESS)
+	//we are 
+	for (auto& mapped : *p_memRanges)
 	{
-		std::cerr << "vkFlushMappedMemoryRanges failed " << res << std::endl;
-		return false;
+		VkResult res = vkFlushMappedMemoryRanges(m_vkDevice, 1, &mapped);
+		if (res != VK_SUCCESS)
+		{
+			std::cout << "CVulkanCore::FlushMemoryRanges " << mapped.size << std::endl;
+			return false;
+		}
 	}
 
 	return true;

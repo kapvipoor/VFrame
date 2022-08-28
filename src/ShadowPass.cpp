@@ -91,13 +91,6 @@ bool CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	return true;
 }
 
-bool CStaticShadowPrepass::Initalize(RenderData* p_renderData, CVulkanRHI::Pipeline p_pipeline)
-{
-	RETURN_FALSE_IF_FALSE(CreateRenderpass(p_renderData));
-	RETURN_FALSE_IF_FALSE(CreatePipeline(p_pipeline));
-	return true;
-}
-
 bool CStaticShadowPrepass::Update(UpdateData*)
 {
 	return true;
@@ -136,7 +129,7 @@ bool CStaticShadowPrepass::Render(RenderData* p_renderData)
 
 		for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
 		{
-			const CRenderableMesh::SubMesh* submesh			= mesh->GetSubmesh(j);
+			const SubMesh* submesh			= mesh->GetSubmesh(j);
 			VkPipelineStageFlags vertex_frag				= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 			CScene::MeshPushConst pc{ mesh->GetMeshId(), submesh->materialId};
 			

@@ -1,6 +1,7 @@
 #include "Asset.h"
 #include "SceneGraph.h"
 #include "RandGen.h"
+#include<algorithm>
 
 #include "external/imgui/imgui.h"
 #include "external/imguizmo/ImGuizmo.h"
@@ -45,7 +46,7 @@ void CRenderable::Clear(CVulkanRHI* p_rhi, uint32_t p_idx)
 	m_vertexBuffers[p_idx].descInfo.offset = 0;
 	m_vertexBuffers[p_idx].descInfo.range = 0;
 	p_rhi->FreeMemoryDestroyBuffer(m_vertexBuffers[p_idx]);
-
+	
 	m_indexBuffers[p_idx].descInfo.offset = 0;
 	m_indexBuffers[p_idx].descInfo.range = 0;
 	p_rhi->FreeMemoryDestroyBuffer(m_indexBuffers[p_idx]);
@@ -274,6 +275,7 @@ CRenderableUI::CRenderableUI()
 	: CRenderable(FRAME_BUFFER_COUNT)
 	, CSelectionListener()
 	, m_showImguiDemo(false)
+	, m_latestFPS(5)
 {
 	m_participantManager = new CUIParticipantManager();
 }
@@ -341,8 +343,10 @@ void CRenderableUI::Destroy(CVulkanRHI* p_rhi)
 	DestroyTextures(p_rhi);
 }
 
-bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUniformData& p_loadedUpdate, CFixedBuffers::PrimaryUniformData& p_primUniData)
+bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate, CFixedBuffers::PrimaryUniformData& p_primUniData)
 {
+	m_latestFPS.Add(p_loadedUpdate.timeElapsed);
+
 	m_primUniforms							= p_primUniData;
 	ImGuiIO& imguiIO						= ImGui::GetIO();
 	imguiIO.DisplaySize						= ImVec2(p_loadedUpdate.screenRes[0], p_loadedUpdate.screenRes[1]);
@@ -395,18 +399,78 @@ bool CRenderableUI::CreateUIDescriptors(CVulkanRHI* p_rhi)
 
 bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
 {
+	// Gizmo Type Selection
+	{
+		ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
+		{
+			const float PAD					= 10.0f;
+			const ImGuiViewport* viewport	= ImGui::GetMainViewport();
+			ImVec2 work_pos					= viewport->WorkPos; // Use work area to avoid menu-bar/task-bar, if any!
+			ImVec2 work_size				= viewport->WorkSize;
+			ImVec2 window_pos, window_pos_pivot;
+			window_pos.x					= (work_pos.x + work_size.x - PAD);
+			window_pos.y					= (work_pos.y + PAD);
+			window_pos_pivot.x				= 1.0f;
+			window_pos_pivot.y				= 0.0f;
+			ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, window_pos_pivot);
+			window_flags |= ImGuiWindowFlags_NoMove;
+		}
+		ImGui::SetNextWindowBgAlpha(0.35f); // Transparent background
+		if (ImGui::Begin("Gizmo Type", nullptr, window_flags))
+		{
+			int guizmoType = (int)m_guizmo.type;
+			ImGui::RadioButton("T", &guizmoType, 0); ImGui::SameLine();
+			ImGui::RadioButton("R", &guizmoType, 1); ImGui::SameLine();
+			ImGui::RadioButton("S", &guizmoType, 2);
+			m_guizmo.type = (Guizmo::Type)guizmoType;
+		}
+		ImGui::End();
+	}
+
 	if(m_selectedEntity)
 	{
-		ImGuizmo::SetOrthographic(true);
+		ImGuizmo::SetOrthographic(false);
 		ImGuizmo::SetRect(0.0f, 0.0f, (float)p_rhi->GetScreenWidth(), (float)p_rhi->GetScreenHeight());
 
-		nm::float4x4 invPrimCamView = m_primUniforms.cameraView;
-		nm::float4x4 primCamProj = m_primUniforms.cameraProj;
-		nm::float4x4 entityTransform = m_selectedEntity->GetTransform();
+		nm::float4x4 invPrimCamView		= m_primUniforms.cameraView;
+		nm::float4x4 primCamProj		= m_primUniforms.cameraProj;
+		nm::Transform transform			= m_selectedEntity->GetTransform();
 
-		if (ImGuizmo::Manipulate(&invPrimCamView.column[0][0], &primCamProj.column[0][0], ImGuizmo::OPERATION::TRANSLATE, ImGuizmo::LOCAL, &entityTransform.column[0][0]))
+		if (m_guizmo.type == Guizmo::Translation)
 		{
-			m_selectedEntity->SetTransform(entityTransform);
+			nm::float4x4 translation = transform.GetTranslate();
+			if (ImGuizmo::Manipulate(&invPrimCamView.column[0][0], &primCamProj.column[0][0], ImGuizmo::OPERATION::TRANSLATE, ImGuizmo::LOCAL, &translation.column[0][0]))
+			{
+				if (!(transform.GetTranslate() == translation))
+				{
+					transform.SetTranslate(translation);
+					m_selectedEntity->SetTransform(transform);
+				}
+			}
+		}
+		else if (m_guizmo.type == Guizmo::Rotation)
+		{
+			nm::float4x4 rotation = transform.GetTransform();
+			if (ImGuizmo::Manipulate(&invPrimCamView.column[0][0], &primCamProj.column[0][0], ImGuizmo::OPERATION::ROTATE, ImGuizmo::LOCAL, &rotation.column[0][0]))
+			{
+				if (!(transform.GetTransform() == rotation))
+				{
+					transform.SetTransform(rotation);
+					m_selectedEntity->SetTransform(transform);
+				}
+			}
+		}
+		else if (m_guizmo.type == Guizmo::Scale)
+		{
+			nm::float4x4 scaling = transform.GetTransform();
+			if (ImGuizmo::Manipulate(&invPrimCamView.column[0][0], &primCamProj.column[0][0], ImGuizmo::OPERATION::SCALE, ImGuizmo::LOCAL, &scaling.column[0][0]))
+			{
+				if (!(transform.GetScale() == scaling))
+				{
+					transform.SetTransform(scaling);
+					m_selectedEntity->SetTransform(transform);
+				}
+			}
 		}
 	}
 
@@ -416,17 +480,30 @@ bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
 bool CRenderableUI::ShowUI()
 {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-	ImGui::SetNextWindowPos(ImVec2(10, 10));
+	ImGui::SetNextWindowPos(ImVec2(10, 25));
 	ImGui::SetNextWindowSize(ImVec2(0, 0), ImGuiCond_::ImGuiCond_FirstUseEver);
 	ImGui::Begin("VFrame Interface", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
 	
-	ImGui::TableNextColumn(); ImGui::Checkbox("Show imGui Demo", &m_showImguiDemo);
-	if(m_showImguiDemo)
 	{
-		bool showDemo = true;
-		ImGui::ShowDemoWindow(&showDemo);
+		ImGui::TableNextColumn(); ImGui::Checkbox("Show imGui Demo", &m_showImguiDemo);
+		if (m_showImguiDemo)
+		{
+			bool showDemo = true;
+			ImGui::ShowDemoWindow(&showDemo);
+		}
+		ImGui::Separator();
 	}
-	
+
+	{
+		ImGui::TextUnformatted("VFrame Analysis");
+		{
+			float data[5];
+			m_latestFPS.Data(data);
+			ImGui::PlotLines("Frame Times", data, (int)m_latestFPS.Size());
+		}
+		ImGui::Separator();
+	}
+
 	ImGui::TextUnformatted("VFrame Settings");
 	ImGui::PushItemWidth(110.0f * 1.0f);
 	m_participantManager->Show();
@@ -438,7 +515,7 @@ bool CRenderableUI::ShowUI()
 	return true;
 }
 
-bool CRenderableUI::PrepareDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx) 
+bool CRenderableUI::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx)
 {
 	ImGui::Render();
 	ImDrawData* drawData					= ImGui::GetDrawData();
@@ -468,7 +545,7 @@ bool CRenderableUI::PrepareDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx)
 			{
 				p_rhi->CreateAllocateBindBuffer(verteSize, m_vertexBuffers[p_scIdx], VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 				p_rhi->CreateAllocateBindBuffer(indexSize, m_indexBuffers[p_scIdx], VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-
+				
 				ImDrawVert* vertexMemIdx	= nullptr;
 				ImDrawIdx* indexMemIdx		= nullptr;
 				bool flushMemRanges			= true;
@@ -505,27 +582,11 @@ bool CRenderableUI::PrepareDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx)
 CRenderableMesh::CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::float4x4 p_modelMat)
 	: CEntity(p_name)
 	, m_mesh_id(p_meshId)
-	, m_modelMatrix(p_modelMat)
 {
 }
 
-//void CRenderableMesh::PopulateSubmeshes(const std::vector<Submesh>& p_rawSubMeshes)
-//{
-//	std::vector<CRenderableMesh::SubMesh> meshList;
-//	for (const auto& rawSubmesh : p_rawSubMeshes)
-//	{
-//		CRenderableMesh::SubMesh submesh{ rawSubmesh.firstIndex, rawSubmesh.indexCount, rawSubmesh.materialId };
-//		meshList.push_back(submesh);
-//	}
-//
-//	m_submeshes.resize(p_rawSubMeshes.size());
-//	std::copy(meshList.begin(), meshList.end(), m_submeshes.begin());
-//}
-
 CScene::CScene(CSceneGraph* p_sceneGraph)
 	: m_sceneGraph(p_sceneGraph)
-	, m_debug(new CRenderableDebug())
-
 {
 }
 
@@ -600,38 +661,76 @@ void CScene::Destroy(CVulkanRHI* p_rhi)
 	p_rhi->FreeMemoryDestroyBuffer(m_meshInfo_uniform);
 }
 
+bool draw[5] = { false, true, true, false, false };
 void CScene::Show()
 {
 	int32_t sceneIndex = 0;
 	if(Header("Scene Settings"))
 	{
-		ImGui::Indent();
-		ComboBox("Load: ", &sceneIndex, m_scenePaths);
-		ImGui::Unindent();
-
 		if (ImGui::TreeNode("Scene Graph"))
 		{
 			CSceneGraph::EntityList* entities = CSceneGraph::GetEntities();
 			for (int i = 0; i < entities->size(); i++)
 			{
 				CEntity* entity = (*entities)[i];
-				char buf[32];
-				sprintf(buf, entity->GetName());
-				if (ImGui::Selectable(buf, m_selectedEntity == entity))
+
+				{
+					bool drawBBox = entity->IsDebugDrawEnabled();
+					std::string str = std::to_string(i) + ". ";
+					ImGui::Checkbox(str.c_str(), &drawBBox);
+					entity->SetDebugDrawEnable(drawBBox);
+					ImGui::SameLine(65);
+				}
+
+				if (ImGui::Selectable(entity->GetName(), m_selectedEntity == entity))
 				{
 					m_sceneGraph->SetCurSelectEntityId(i);
 				}
 
 				if (m_selectedEntity == entity)
 				{
-					float matrixTranslation[3], matrixRotation[3], matrixScale[3];
-					ImGuizmo::DecomposeMatrixToComponents(&(*entities)[i]->GetTransform().column[0][0], matrixTranslation, matrixRotation, matrixScale);
-					
 					ImGui::Indent();
 
-					ImGui::Text("Translation "); ImGui::SameLine(150); ImGui::InputFloat4("", matrixTranslation);
-					ImGui::Text("Rotation "); ImGui::SameLine(150); ImGui::InputFloat4("", matrixRotation);
-					ImGui::Text("Scale "); ImGui::SameLine(150); ImGui::InputFloat4("", matrixScale);
+					if (entity->IsDebugDrawEnabled())
+					{
+						bool drawSubBBox = entity->IsSubmeshDebugDrawEnabled();
+						ImGui::Checkbox("Display Submeshes BBox", &drawSubBBox);
+						entity->SetSubmeshDebugDrawEnable(drawSubBBox);
+					}
+
+					nm::float4x4 transform = (*entities)[i]->GetTransform().GetTransform();
+					float matrixTranslation[3], matrixRotation[3], matrixScale[3];
+					ImGuizmo::DecomposeMatrixToComponents(&transform.column[0][0], matrixTranslation, matrixRotation, matrixScale);
+										
+					{
+						ImGui::Text("Translation "); 
+						ImGui::PushItemWidth(45);
+						ImGui::SameLine(150); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.5f, 0.0f, 0.0f)); ImGui::InputFloat("", &matrixTranslation[0]);
+						ImGui::SameLine(200); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.0f, 0.5f, 0.0f)); ImGui::InputFloat("", &matrixTranslation[1]);
+						ImGui::SameLine(250); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.0f, 0.0f, 0.5f)); ImGui::InputFloat("", &matrixTranslation[2]);
+						ImGui::PopStyleColor(3);
+						ImGui::PopItemWidth();
+					}
+
+					{
+						ImGui::Text("Rotation ");
+						ImGui::PushItemWidth(45);
+						ImGui::SameLine(150); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.5f, 0.0f, 0.0f)); ImGui::InputFloat("", &matrixRotation[0]);
+						ImGui::SameLine(200); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.0f, 0.5f, 0.0f)); ImGui::InputFloat("", &matrixRotation[1]);
+						ImGui::SameLine(250); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.0f, 0.0f, 0.5f)); ImGui::InputFloat("", &matrixRotation[2]);
+						ImGui::PopStyleColor(3);
+						ImGui::PopItemWidth();
+					}
+
+					{
+						ImGui::Text("Scale ");
+						ImGui::PushItemWidth(45);
+						ImGui::SameLine(150); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.5f, 0.0f, 0.0f)); ImGui::InputFloat("", &matrixScale[0]);
+						ImGui::SameLine(200); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.0f, 0.5f, 0.0f)); ImGui::InputFloat("", &matrixScale[1]);
+						ImGui::SameLine(250); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.0f, 0.0f, 0.5f)); ImGui::InputFloat("", &matrixScale[2]);
+						ImGui::PopStyleColor(3);
+						ImGui::PopItemWidth();
+					}
 					ImGui::Unindent();
 				}
 			}
@@ -641,18 +740,18 @@ void CScene::Show()
 	}
 }
 
-bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUniformData& p_loadedUpdate)
+bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 {
 	std::vector<float> perMeshUniformData;
 	for (auto& mesh : m_meshes)
 	{
-		mesh->m_modelMatrix					= mesh->GetTransform();
-		mesh->m_viewNormalTransform			= nm::transpose(nm::inverse(p_loadedUpdate.viewMatrix * mesh->m_modelMatrix));
+		mesh->SetDirty(false);
+		mesh->m_viewNormalTransform			= nm::transpose(nm::inverse(p_loadedUpdate.viewMatrix * mesh->GetTransform().GetTransform()));
 
-		const float* modelMat = &mesh->m_modelMatrix.column[0][0];
-		const float* trn_inv_model = &nm::transpose(nm::inverse(mesh->m_modelMatrix)).column[0][0];
+		const float* modelMat = &mesh->GetTransform().GetTransform().column[0][0];
+		const float* trn_inv_model = &nm::transpose(nm::inverse(mesh->GetTransform().GetTransform())).column[0][0];
 
-		std::copy(&modelMat[0], &modelMat[16], std::back_inserter(perMeshUniformData));					// model matrix for this mesh
+		std::copy(&modelMat[0], &modelMat[16], std::back_inserter(perMeshUniformData));				// model matrix for this mesh
 		std::copy(&trn_inv_model[0], &trn_inv_model[16], std::back_inserter(perMeshUniformData));		// Tranpose(inverse(model)) for transforming normal to world space
 	}
 
@@ -669,7 +768,7 @@ bool CScene::LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg
 		CVulkanRHI::Buffer stg;
 		ImageRaw tex;
 		
-		RETURN_FALSE_IF_FALSE(LoadRawImage((g_AssetPath + "/tex_not_found.png").c_str(), tex));
+		RETURN_FALSE_IF_FALSE(LoadRawImage((g_DefaultPath + "/tex_not_found.png").c_str(), tex));
 		RETURN_FALSE_IF_FALSE(CreateTexture(p_rhi, stg, &tex, VK_FORMAT_B8G8R8A8_SRGB,p_cmdBfr));
 		
 		FreeRawImage(tex);
@@ -737,6 +836,7 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 
 	std::vector<std::string> paths;
 	paths.push_back(m_scenePaths[4]);
+	paths.push_back(m_scenePaths[5]);
 
 	std::vector<bool> flipYList{ false, false, false };
 
@@ -752,13 +852,15 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 	
 	for (auto& meshraw : sceneraw.meshList)
 	{
-		CRenderableMesh* mesh = new CRenderableMesh(sceneraw.name, (uint32_t)m_meshes.size(), meshraw.transform);
+		CRenderableMesh* mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform);
 		mesh->m_submeshes = meshraw.submeshes;
-		for(auto& subMesh : mesh->m_submeshes)
-		{ 
-			m_debug->ComputeBBox(subMesh.bbox);
+
+		mesh->SetBoundingBox(meshraw.bbox);
+		for (auto& bbox : meshraw.submeshesBbox)
+		{
+			mesh->SetSubBoundingBox(bbox);
 		}
-		
+
 		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr));
 		m_meshes.push_back(mesh);
 	}
@@ -829,10 +931,10 @@ bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
 
 	VkShaderStageFlags vertex_frag = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_MeshInfo_Uniform,			1,	VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag,					&m_meshInfo_uniform.descInfo,	VK_NULL_HANDLE });
-	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_CubeMap_Texture,					1,	VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,					&m_textures[TextureType::tt_skybox].descInfo });
-	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Material_Storage,					1,	VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			VK_SHADER_STAGE_FRAGMENT_BIT,	&m_material_storage.descInfo,	VK_NULL_HANDLE });
-	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SceneRead_TexArray,	texturesCount,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,					imageInfoList.data() });
+	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_MeshInfo_Uniform,	1,				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag,					&m_meshInfo_uniform.descInfo,	VK_NULL_HANDLE });
+	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_CubeMap_Texture,			1,				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,					&m_textures[TextureType::tt_skybox].descInfo });
+	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Material_Storage,			1,				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			VK_SHADER_STAGE_FRAGMENT_BIT,	&m_material_storage.descInfo,	VK_NULL_HANDLE });
+	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SceneRead_TexArray,		texturesCount,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,					imageInfoList.data() });
 
 	RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, texturesCount, BindingDest::bd_SceneRead_TexArray));
 
@@ -1007,7 +1109,7 @@ bool CLoadableAssets::Create(CVulkanRHI* p_rhi, const CFixedAssets& p_fixedAsset
 
 	RETURN_FALSE_IF_FALSE(m_scene.Create(p_rhi, samplers, p_cmdPool));
 	RETURN_FALSE_IF_FALSE(m_ui.Create(p_rhi, p_cmdPool));
-
+	
 	CFixedBuffers& fixeBuffer = *const_cast<CFixedBuffers*>(p_fixedAssets.GetFixedBuffers());
 	RETURN_FALSE_IF_FALSE(m_readOnlyBuffers.Create(p_rhi, fixeBuffer, p_cmdPool));
 	RETURN_FALSE_IF_FALSE(m_readOnlyTextures.Create(p_rhi, fixeBuffer, p_cmdPool));
@@ -1023,11 +1125,10 @@ void CLoadableAssets::Destroy(CVulkanRHI* p_rhi)
 	m_readOnlyTextures.Destroy(p_rhi);
 }
 
-bool CLoadableAssets::Update(CVulkanRHI* p_rhi, const LoadedUniformData& p_uniData, CFixedBuffers::PrimaryUniformData& p_primUniData)
+bool CLoadableAssets::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_updateData, CFixedBuffers::PrimaryUniformData& p_primUniData)
 {
-	RETURN_FALSE_IF_FALSE(m_scene.Update(p_rhi, p_uniData));
-	RETURN_FALSE_IF_FALSE(m_ui.Update(p_rhi, p_uniData, p_primUniData));
-
+	RETURN_FALSE_IF_FALSE(m_scene.Update(p_rhi, p_updateData));
+	RETURN_FALSE_IF_FALSE(m_ui.Update(p_rhi, p_updateData, p_primUniData));
 	return true;
 }
 
@@ -1072,6 +1173,7 @@ CFixedBuffers::CFixedBuffers()
 {
 	m_primaryUniformData.ssaoKernelSize			= 64.0f;
 	m_primaryUniformData.ssaoRadius				= 0.5f;
+	m_primaryUniformData.enableShadowPCF		= 1;
 }
 
 CFixedBuffers::~CFixedBuffers()
@@ -1095,16 +1197,19 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(float) * 1)				// SSAO Radius
 		+ (sizeof(float) * 16)				// sun light View Projection
 		+ (sizeof(float) * 3)				// sun light direction in world space
-		+ (sizeof(float) * 1)				// unassigned_0
+		+ (sizeof(int) * 1)					// enbaled PCF for shadow
 		+ (sizeof(float) * 3)				// sun light direction in view space
 		+ (sizeof(float) * 1);				// unassigned_1
 
 	size_t objPickerBufferSize = sizeof(uint32_t) * 1; // selected mesh ID
+	size_t debugDrawUniformSize = MAX_SUPPORTED_DEBUG_DRAW_ENTITES * ((sizeof(float) * 16)); // storing transforms
 
 	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_PrimaryUniform_0,	VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,										VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, primaryUniformBufferSize));
 	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_PrimaryUniform_1,	VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,										VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, primaryUniformBufferSize));
 	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_ObjectPickerRead,	VK_BUFFER_USAGE_TRANSFER_DST_BIT,										VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,										objPickerBufferSize));
 	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_ObjectPickerWrite,	VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,	VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,										objPickerBufferSize));
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_DebugUniform_0,	VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,										VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, debugDrawUniformSize));
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_DebugUniform_1,	VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,										VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, debugDrawUniformSize));
 
 	return true;
 }
@@ -1116,9 +1221,9 @@ void CFixedBuffers::Show()
 		ImGui::Indent();
 		if (ImGui::TreeNode("General"))
 		{
-			Text("Time Elapsed: %f", m_primaryUniformData.elapsedTime);
-			Text("Render Resolution: %d x %d", (int)m_primaryUniformData.renderRes[0], (int)m_primaryUniformData.renderRes[1]);
-			Text("Mouse Position: %d x %d", (int)m_primaryUniformData.mousePos[0], (int)m_primaryUniformData.mousePos[1]);
+			Text("Time Elapsed:		%f", m_primaryUniformData.elapsedTime);
+			Text("Render Resolution:	%d x %d", (int)m_primaryUniformData.renderRes[0], (int)m_primaryUniformData.renderRes[1]);
+			Text("Mouse Position:		%d x %d", (int)m_primaryUniformData.mousePos[0], (int)m_primaryUniformData.mousePos[1]);
 			ImGui::TreePop();
 		}
 		if (ImGui::TreeNode("Camera"))
@@ -1127,13 +1232,22 @@ void CFixedBuffers::Show()
 		}
 		if (ImGui::TreeNode("SSAO"))
 		{
-			Text("Noise Scale: %f, %f", m_primaryUniformData.ssaoNoiseScale[0], m_primaryUniformData.ssaoNoiseScale[1]);
-			Text("Kernel Size: %d", (int)m_primaryUniformData.ssaoKernelSize);
-			Text("Kernel Radius: %f", m_primaryUniformData.ssaoRadius);
+			Text("Noise Scale:		%f, %f", m_primaryUniformData.ssaoNoiseScale[0], m_primaryUniformData.ssaoNoiseScale[1]);
+			Text("Kernel Size:		%d", (int)m_primaryUniformData.ssaoKernelSize);
+			Text("Kernel Radius:		%f", m_primaryUniformData.ssaoRadius);
 			ImGui::TreePop();
+		}
+		if (ImGui::TreeNode("Shadow"))
+		{
+			bool enablePCF = (bool)m_primaryUniformData.enableShadowPCF;
+			ImGui::Checkbox("PCF", &enablePCF);
+			m_primaryUniformData.enableShadowPCF = (int)enablePCF;
+			ImGui::TreePop();
+
 		}
 		if (ImGui::TreeNode("Sunlight"))
 		{
+			Text("World Sapce:		%f, %f, %f", m_primaryUniformData.sunDirWorldSpace[0], m_primaryUniformData.sunDirWorldSpace[1], m_primaryUniformData.sunDirWorldSpace[2]);
 			ImGui::TreePop();
 		}		
 		ImGui::Unindent();
@@ -1174,7 +1288,7 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	uniformValues.push_back((float)m_primaryUniformData.ssaoRadius);																								// ssao radius
 	std::copy(&sunViewProj[0], &sunViewProj[16], std::back_inserter(uniformValues));																// sun light view projection matrix
 	std::copy(&m_primaryUniformData.sunDirWorldSpace[0], &m_primaryUniformData.sunDirWorldSpace[3], std::back_inserter(uniformValues));			// sun light sunLightDirection x, y, z in world space
-	uniformValues.push_back(m_primaryUniformData.unassigined_0);																									// unassigned_0
+	uniformValues.push_back((float)m_primaryUniformData.enableShadowPCF);																							// enable PCF for shadows
 	std::copy(&m_primaryUniformData.sunDirViewSpace[0], &m_primaryUniformData.sunDirViewSpace[3], std::back_inserter(uniformValues));				// sun light sunLightDirection x, y, z in view space
 	uniformValues.push_back(m_primaryUniformData.unassigined_1);																									// unassigned_1
 
@@ -1209,6 +1323,8 @@ bool CFixedAssets::Create(CVulkanRHI* p_rhi)
 		}
 	}
 
+	RETURN_FALSE_IF_FALSE(m_renderableDebug.Create(p_rhi, &m_fixedBuffers));
+
 	return true;
 }
 
@@ -1216,12 +1332,20 @@ void CFixedAssets::Destroy(CVulkanRHI* p_rhi)
 {
 	m_fixedBuffers.Destroy(p_rhi);
 	m_renderTargets.Destroy(p_rhi);
+	m_renderableDebug.Destroy(p_rhi);
 
 	for (auto& sampler: m_samplers)
 	{
 		p_rhi->DestroySampler(sampler.descInfo.sampler);
 	}
 	m_samplers.clear();
+}
+
+bool CFixedAssets::Update(CVulkanRHI* p_rhi, const FixedUpdateData& p_updateData)
+{
+	m_fixedBuffers.SetPrimaryUniformData(*p_updateData.primaryUniData);
+	RETURN_FALSE_IF_FALSE(m_fixedBuffers.Update(p_rhi, p_updateData.swapchainIndex));
+	return true;
 }
 
 CPrimaryDescriptors::CPrimaryDescriptors()
@@ -1276,7 +1400,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_COMPUTE_BIT,	&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}		, 0);
 		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,		1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_ALL,			VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_LightDepth).descInfo }		, 0);
 		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredLighting_Image,	1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredLighting).descInfo }, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	readTexDesInfoList.data() }												, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	readTexDesInfoList.data() }												, 0);
 
 		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, tr_max, BindingDest::bd_PrimaryRead_TexArray, 0));
 	}
@@ -1437,14 +1561,182 @@ void CUIParticipantManager::Show()
 	}
 }
 
-void CRenderableDebug::ComputeBBox(BBox& p_bbox)
+CRenderableDebug::CRenderableDebug()
+	: CDescriptor(FRAME_BUFFER_COUNT)
+	, CRenderable(FRAME_BUFFER_COUNT)
 {
-	p_bbox.bBox[0] = nm::float4{p_bbox.bbMin[0], p_bbox.bbMin[1], p_bbox.bbMin[2], 1.0f};
-	p_bbox.bBox[1] = nm::float4{p_bbox.bbMax[0], p_bbox.bbMin[1], p_bbox.bbMin[2], 1.0f};
-	p_bbox.bBox[2] = nm::float4{p_bbox.bbMax[0], p_bbox.bbMax[1], p_bbox.bbMin[2], 1.0f};
-	p_bbox.bBox[3] = nm::float4{p_bbox.bbMin[0], p_bbox.bbMax[1], p_bbox.bbMin[2], 1.0f};
-	p_bbox.bBox[4] = nm::float4{p_bbox.bbMin[0], p_bbox.bbMin[1], p_bbox.bbMax[2], 1.0f};
-	p_bbox.bBox[5] = nm::float4{p_bbox.bbMax[0], p_bbox.bbMin[1], p_bbox.bbMax[2], 1.0f};
-	p_bbox.bBox[6] = nm::float4{p_bbox.bbMax[0], p_bbox.bbMax[1], p_bbox.bbMax[2], 1.0f};
-	p_bbox.bBox[7] = nm::float4{p_bbox.bbMin[0], p_bbox.bbMax[1], p_bbox.bbMax[2], 1.0f};
+}
+
+bool CRenderableDebug::Create(CVulkanRHI* p_rhi, const CFixedBuffers* p_fixedBuffers)
+{
+	RETURN_FALSE_IF_FALSE(CreateDebugDescriptors(p_rhi, p_fixedBuffers));
+	return true;
+}
+
+bool CRenderableDebug::Update()
+{
+	return false;
+}
+
+bool CRenderableDebug::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx, const CFixedBuffers* p_fixedBuffers, const CSceneGraph* p_sceneGraph)
+{
+	std::vector<int>			indexData;
+	std::vector<DebugVertex>	vertexData;
+	std::vector<int>			indexTemplate{ 0, 1, 2, 3, 4, 5, 6, 7, 0, 4, 1, 5, 2, 6, 3, 7, 1, 2, 3, 0, 5, 6, 7, 4};	
+	uint32_t					modelMatIndex = 0;
+	uint32_t					displayingBBoxIndex = 0;
+	std::vector<float>			perbBoxTransformData;
+	CSceneGraph::EntityList*	entityList = p_sceneGraph->GetEntities();
+	uint32_t					vertexTemplateSize = 8; // 8 because that is number of vetices of the bbox
+
+	for (auto& entity : (*entityList))
+	{
+		if (entity->IsDebugDrawEnabled() && !entity->IsSubmeshDebugDrawEnabled())
+		{
+			nm::float3* box = entity->GetBoundingBox()->bBox;
+			for (uint32_t i = 0; i < vertexTemplateSize; i++)
+			{
+				DebugVertex dVert{ box[i], (int)modelMatIndex };
+				vertexData.push_back(dVert);
+			}
+			
+			{
+				auto indices		= indexTemplate;
+				int vertexfactor	= (displayingBBoxIndex * vertexTemplateSize);
+				std::transform(indices.begin(), indices.end(), indices.begin(), [=](int& c)
+					{
+						return vertexfactor + c;
+					});
+
+				size_t indexOffset = indexData.size();
+				indexData.resize((displayingBBoxIndex + 1) * (int)indexTemplate.size());
+				std::copy(indices.begin(), indices.end(), indexData.begin() + indexOffset);
+			}
+
+			displayingBBoxIndex++;
+		}
+		else if (entity->IsSubmeshDebugDrawEnabled() && entity->IsDebugDrawEnabled())
+		{
+			for (uint32_t subBoxID = 0; subBoxID < entity->GetSubBoundingBoxCount(); subBoxID++)
+			{
+				nm::float3* box = entity->GetSubBoundingBox(subBoxID)->bBox;
+				for (uint32_t i = 0; i < vertexTemplateSize; i++)
+				{
+					// Adding vertex data and associated transformatioon index. This is same as per entity bbox
+					// beacuse every submesh of the bbox will have the transform
+					DebugVertex dVert{ box[i], (int)modelMatIndex };
+					vertexData.push_back(dVert);
+				}
+
+				{
+					// making a copy of the index template for this specific bounding box vertices
+					auto indices = indexTemplate;
+
+					// for each index i = i + (number of vertices in bbox * index of number of bboxes added for display )
+					int vertexfactor = (displayingBBoxIndex * vertexTemplateSize);
+					std::transform(indices.begin(), indices.end(), indices.begin(), [=](int& c)
+						{
+							return vertexfactor + c;
+						});
+
+					// this is number of indices already added to be displayed
+					size_t indexOffset = indexData.size();
+
+					// resizing the index buffer size to accomodate for another bbox for display
+					indexData.resize((displayingBBoxIndex + 1) * (int)indexTemplate.size());
+
+					// copying the indices data of this bbox to list of all the bboxes to display
+					std::copy(indices.begin(), indices.end(), indexData.begin() + indexOffset);
+				}
+
+				displayingBBoxIndex++;
+			}
+		}
+
+		if (entity->IsDebugDrawEnabled() || entity->IsSubmeshDebugDrawEnabled())
+		{
+			const float* transform = &entity->GetTransform().GetTransform().column[0][0];
+			std::copy(&transform[0], &transform[16], std::back_inserter(perbBoxTransformData));
+
+			modelMatIndex++;
+		}
+	}
+	m_indexCount = indexData.size();
+	
+	if(!vertexData.empty())
+	{
+		// if the vertex buffer if already created from previous frame, destroy them and free the asscoiated memroy for this frame's use
+		if (m_vertexBuffers[p_scIdx].descInfo.buffer != VK_NULL_HANDLE)
+		{
+			Clear(p_rhi, p_scIdx);
+		}
+
+		{
+			CVulkanRHI::Buffer uniformBuffer = (p_scIdx == 0) ? p_fixedBuffers->GetBuffer(CFixedBuffers::fb_DebugUniform_0) : p_fixedBuffers->GetBuffer(CFixedBuffers::fb_DebugUniform_1);
+
+			uint8_t* data = (uint8_t*)(perbBoxTransformData.data());
+			RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, uniformBuffer));
+		}
+		{
+			// Create vertex / index buffers
+			size_t vertexSize = vertexData.size() * sizeof(DebugVertex);
+			size_t indexSize = (size_t)m_indexCount * sizeof(int);
+
+			// Creating vertex and index buffers and upload all data to single contigeous GPU buffers respectively
+			{
+				p_rhi->CreateAllocateBindBuffer(vertexSize, m_vertexBuffers[p_scIdx], VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+				p_rhi->CreateAllocateBindBuffer(indexSize, m_indexBuffers[p_scIdx], VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+				bool flushMemRanges = true;
+				std::vector<VkMappedMemoryRange> memRanges;
+				void* vertexMapped;
+				void* indexMapped;
+
+				if (!p_rhi->MapMemory(m_vertexBuffers[p_scIdx], flushMemRanges, &vertexMapped, &memRanges))
+					return false;
+
+				if (!p_rhi->MapMemory(m_indexBuffers[p_scIdx], flushMemRanges, &indexMapped, &memRanges))
+					return false;
+
+				{
+					memcpy(vertexMapped, vertexData.data(), vertexSize);
+					memcpy(indexMapped, indexData.data(), indexSize);
+				}
+
+				if (!p_rhi->FlushMemoryRanges(&memRanges))
+					return false;
+
+				p_rhi->UnMapMemory(m_vertexBuffers[p_scIdx]);
+				p_rhi->UnMapMemory(m_indexBuffers[p_scIdx]);
+			}
+		}
+
+		return true;
+	}
+
+	return false;
+}
+
+
+
+void CRenderableDebug::Destroy(CVulkanRHI* p_rhi)
+{
+}
+
+bool CRenderableDebug::CreateDebugDescriptors(CVulkanRHI* p_rhi, const CFixedBuffers* p_fixedBuffers)
+{
+	VkShaderStageFlags vertex_frag = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	{
+		CVulkanRHI::Buffer uniformBuffer = p_fixedBuffers->GetBuffer(CFixedBuffers::fb_DebugUniform_0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_MeshInfo_Uniform,	1,	VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	vertex_frag,	&uniformBuffer.descInfo,	VK_NULL_HANDLE}, 0);
+		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 0, BindingDest::bd_Debug_Transforms_Uniform, 0));
+	}
+
+	{
+		CVulkanRHI::Buffer uniformBuffer = p_fixedBuffers->GetBuffer(CFixedBuffers::fb_DebugUniform_1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_MeshInfo_Uniform,	1,	VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	vertex_frag,	&uniformBuffer.descInfo,	VK_NULL_HANDLE }, 1);
+		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 0, BindingDest::bd_Debug_Transforms_Uniform, 1));
+	}
+
+	return true;
 }

@@ -23,7 +23,6 @@ public:
 	bool on_update(float delta) override;
 	void on_present() override;	
 
-
 private:
 	enum CommandBufferId
 	{
@@ -32,8 +31,9 @@ private:
 		, cb_Deferred_GBuf			= 2
 		, cb_SSAO					= 3
 		, cb_Deferred_Lighting		= 4
-		, cb_UI						= 5
-		, cb_PickerCopy2CPU			= 6
+		, cb_DebugDraw				= 5
+		, cb_UI						= 6
+		, cb_PickerCopy2CPU			= 7
 		, cb_max
 	};
 
@@ -73,6 +73,7 @@ private:
 	CSSAOComputePass*					m_ssaoComputePass;
 	CSSAOBlurPass*						m_ssaoBlurPass;
 	CDeferredLightingPass*				m_deferredLightPass;
+	CDebugDrawPass*						m_debugDrawPass;
 	CUIPass*							m_uiPass;
 
 	bool InitCamera();

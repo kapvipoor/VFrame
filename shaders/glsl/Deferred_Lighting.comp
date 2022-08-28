@@ -57,7 +57,7 @@ void main()
     vec3 normal         = imageLoad(g_NormalImage, xy).xyz;
     vec3 albedo         = imageLoad(g_AlbedoImage, xy).xyz;
     float ssaoFactor    = imageLoad(g_SSAOBlurImage, xy).x;
-    vec3 sunLightDir    = (g_Info.camView * g_Info.sunLightDirWorld).xyz;
+    vec3 sunLightDir    = (g_Info.camView * vec4(g_Info.sunLightDirWorld, 1.0)).xyz;
     
     // applying ambient factor
     float lighting      = g_ambientCoeff; //ssaoFactor * (g_ambientCoeff + (g_diffuseCoeff * NdotL));
