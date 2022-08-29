@@ -72,6 +72,8 @@ Feature Integrated
 		1. Deferred pass is not correctly utilising the light direction
 		2. Peter-Panning effect has not been addressed.  Use front face culling on shadow pass to fix this 
 		3. Shadow Acne has not been addresses
+		4. PCF seems wrong
+		5. Illumination under shadow is wrong
 
 9.	Gltf loader with stb_image support
 	- Challanges Faced:	- 
