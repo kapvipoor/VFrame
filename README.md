@@ -7,7 +7,7 @@ External Tools/Packages Used
 1. tinygltf
 2. NiceMath
 3. tiny_obj_loader
-4. ImGui (fork, mule)
+4. ImGui (fork, module)
 5. ImGuizmo (fork, module)
 
 Feature Integrated
