@@ -15,3 +15,5 @@ Disucsses in detail of algorithm and inspiration but nothing on algorithm and so
 Hybrid Ray tracing with svgf for denoising https://diharaw.github.io/post/adventures_in_hybrid_rendering/
 
 https://gpuopen.com/download/publications/GPUOpen2022_GI1_0.pdf
+
+https://github.com/NVIDIAGameWorks/RTXGI
