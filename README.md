@@ -1,6 +1,5 @@
 <img width="1445" alt="Forward_PBR_PCF_SSAO" src="https://user-images.githubusercontent.com/7133245/197421975-43097966-0593-43d1-a72a-d590b19dc8de.PNG">
-<img width="1445" alt="DirectionalLight_ShadoePCF" src="https://user-images.githubusercontent.com/7133245/197422266-8dacdbd3-ceba-4ff4-a30e-afc14aa50ee4.PNG">
-
+<img width="1445" alt="Differed_PBR_SSAO" src="https://user-images.githubusercontent.com/7133245/197422282-5f507afe-8b78-4434-bce5-56f11aaab199.PNG">
 
 # VFrame
  A compilation of few rasterization techniques using Vulkan API and C++
