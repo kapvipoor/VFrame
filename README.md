@@ -17,14 +17,19 @@ Feature Integrated
 2.	Forward Rendering
 	- Challanges Faced: -
 	- Algorithm Limitations: -
-	- Bugs: - 
+	- Bugs:
+		1. Potentially not calculing correct light direction for specular computation
 
 3.	Deferred Rendering
-	- Challanges Faced: -
-	- Algorithm Limitations: -
+	- Features:
+		1. Runtime toggle to switch between rendering techniques
+	- Challanges Faced:
+		1. Had to manually implement depth test in compute shader during lighting resolve for correct skybox compositing
+	- Algorithm Limitations:
+		1. Deferred Lighting Resolve compute shader has not been evalauted for performance
 	- Bugs:
-		1. Deferred does not present to swapchain
-		2. Must provide run time option to toggle between Forward and Defered
+		1. PCF is not correct in this pass
+		2. There also seems to be some problem with Specular computation as it is not identicial with forward pass (assuming Light Vector)
 
 4.	Object Picker
 	- Challanges Faced:	- 
@@ -34,26 +39,28 @@ Feature Integrated
 		2. Object picking is not correctly implemented in Differed Pass
 
 5.	Skybox
-	- Challanges Faced:	- 
-	- Algorithm Limitations: - 
-	- Bugs: - 
+	- Challanges Faced:
+	- Algorithm Limitations:
+	- Bugs:
 
 6.	Normal Maps
 	- Challanges Faced:
 		1. Did not use the correct texture format to store Normals and so computed wrong TBN matrix (used UNORM duh!)
-	- Algorithm Limitations: - 
-	- Bugs: - 
+	- Algorithm Limitations:
+	- Bugs:
+		1. Forward pass is also computing lighting in View Space however inverse-transposing the light vector (after multiplying with view materix) is giving incorrect results
 
 7.	SSAO
-	- Challanges Faced: - 
+	- Challanges Faced:
+		1. Noise computation was bugy in my previous implementaiton. Now fixed
 	- Algorithm Limitations:
 		1. Quality of SSAO is not great. Migh want to implement AMD SSAO for comparision
-	- Bugs: - 
+	- Bugs:
 
 8.	Shadow Maps (Orthographc Projection and Directonal Light)
 	- Features: 
 		1. Orthographic Shadow Maps implemented
-		2. Implemented PCF - but is expensive
+		2. Implemented PCF - Fixed buggy PCF in Forward
 	- Challanges Faced:
 		1. Wrong Orthgraphic Matrics were implemented. Ensure there is an implemtation for Right Hand, Zero to One Z value
 		2. Identifying Vulkan Vetex to Pixel pipeline - Z ranges [-1,1] and does not need to be normalised to [0,1]
@@ -67,23 +74,37 @@ Feature Integrated
 		3. Directional Light is being applied to regions in shaodw as well.
 		4. High Perspective and Projection Aliasing
 	- Bugs:
-		1. Deferred pass is not correctly utilising the light direction
-		2. Peter-Panning effect has not been addressed.  Use front face culling on shadow pass to fix this 
-		3. Shadow Acne has not been addresses
+		1. PCF is not correct in the differed pass
+		2. Peter-Panning effect has not been addressed
+		3. Shadow Acne has not been addressed
+		4. Front face culling in shadow pass is producing buggy results
+		5. PCF is producing buggy results
 
-9.	Gltf loader with stb_image support
+9.	Physically Based Rendering
+	- Features 
+		1. Using Schlick GGX Geometry Shadowing and Geometry Occlusion
+		2. Using Trowbridge-Reitz GGX normal distribution
+		3. Schlick GGX to statistically estiamte light ray occlusion
+		4. Fresnel Schlick Approximation for Fresnel Effect
+	- Challanges Faced:	- 
+	- Algorithm Limitations:
+		1. Not implemented IBL for accuracy
+		2. Only using Lambertian for diffuse computation
+	- Bugs: - 
+
+10.	Gltf loader with stb_image support
 	- Challanges Faced:	- 
 	- Algorithm Limitations: - 
 	- Bugs: - 
 
-10. Shader Compilation - GLSL to SPIRV
+11. Shader Compilation - GLSL to SPIRV
 	- Challanges Faced:	- 
 	- Algorithm Limitations:
 		1. Currently inspired from Sascha Willems's offline python script using glslangValidator
         2. Will later move to a runtime glsl compilation process
 	- Bugs: - 
 
-11. Bounding Box Debug Display
+12. Bounding Box Debug Display
 	- Challanges Faced:	- 
 	- Algorithm Limitations:
 		1. Currently generating vertex and indices as 1 complete buffer and rending as single draw call (GPU effecient with some CPU overhead)
@@ -91,7 +112,7 @@ Feature Integrated
 		3. Will leter add support to display light type identifiers, cameras and other editor friendly visual tools depending on need
 	- Bugs: - 
 
-11. User Interface and Guizmo Control
+13. User Interface and Guizmo Control
 	- Challanges Faced:	- 
 	- Algorithm Limitations:
 		1. Using ImGui and ImGuizmo for UI and transform editting
