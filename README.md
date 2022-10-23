@@ -1,3 +1,5 @@
+<img width="1448" alt="sample1" src="https://user-images.githubusercontent.com/7133245/187303930-09191491-d657-4502-aed8-323c84dd5ae5.PNG">
+
 # VFrame
  A compilation of few rasterization techniques using Vulkan API and C++
 
@@ -5,7 +7,7 @@ External Tools/Packages Used
 1. tinygltf
 2. NiceMath
 3. tiny_obj_loader
-4. ImGui (fork, mule)
+4. ImGui (fork, module)
 5. ImGuizmo (fork, module)
 
 Feature Integrated
@@ -79,6 +81,7 @@ Feature Integrated
 		3. Shadow Acne has not been addressed
 		4. Front face culling in shadow pass is producing buggy results
 		5. PCF is producing buggy results
+		6. PCF Causing HAlo effect aroung intersecting geometry (Eg: Sponza and Suzzane)
 
 9.	Physically Based Rendering
 	- Features 
