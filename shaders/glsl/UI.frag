@@ -15,7 +15,12 @@ layout (location = 1) in vec2 inUV;
 
 layout (location = 0) out vec4 outFragColor;
 
+vec4 SampleUITexture(uint id, vec2 uv)
+{
+	return texture(sampler2D(g_uiTexture[id], g_LinearSampler), uv).xyzw;
+}
+
 void main()
 {
-    outFragColor = inColor * texture(sampler2D(g_texture[0], g_LinearSampler), inUV.xy);
+    outFragColor = inColor *  SampleUITexture(0, inUV); // SamplePrimaryColor(inUV) *
 }

@@ -3,6 +3,7 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 #extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_nonuniform_qualifier : require
 
 #include "Common.h"
 #include "MeshCommon.h"
@@ -14,6 +15,6 @@ layout (location = 3) in vec4 inTangent;
 
 void main() 
 {
-	MeshData meshData = g_meshUniform.data[g_pushConstant.mesh_id];
-	gl_Position = g_Info.sunLightViewProj * meshData.model * vec4(inPos, 1.0);
+	MeshData meshData 			= g_meshUniform.data[g_pushConstant.mesh_id];
+	gl_Position 				= g_Info.sunLightViewProj * meshData.modelMatrix * vec4(inPos, 1.0);
 }

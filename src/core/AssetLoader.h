@@ -17,8 +17,23 @@ struct ImageRaw
 
 struct Material
 {
+	nm::float3					color;
+	float						metallic;
+	nm::float3					pbr_color;
+	float						roughness;
 	uint32_t					color_id;
 	uint32_t					normal_id;
+	uint32_t					roughMetal_id;
+	uint32_t					unassigned_0;
+	Material() 
+		: color_id(MAX_SUPPORTED_TEXTURES)
+		, color(0.0f)
+		, normal_id(MAX_SUPPORTED_TEXTURES)
+		, roughMetal_id(MAX_SUPPORTED_TEXTURES)
+		, pbr_color(1.0f)
+		, metallic(0.5f)
+		, roughness(0.5f)
+	{}
 };
 
 struct Vertex
@@ -69,6 +84,7 @@ struct BBox
 
 struct SubMesh
 {
+	std::string					name;
 	uint32_t					firstIndex;
 	uint32_t					indexCount;
 	uint32_t					materialId;

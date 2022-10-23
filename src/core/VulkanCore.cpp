@@ -717,11 +717,21 @@ bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipel
 	}
 
 	VkPipelineVertexInputStateCreateInfo vertInInfo{};
-	vertInInfo.sType							= VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertInInfo.pVertexBindingDescriptions		= &pData.vertexInBinding;
-	vertInInfo.vertexBindingDescriptionCount	= 1;
-	vertInInfo.pVertexAttributeDescriptions		= pData.vertexAttributeDesc.data();
-	vertInInfo.vertexAttributeDescriptionCount	= (uint32_t)pData.vertexAttributeDesc.size();
+	vertInInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	if (pData.vertexAttributeDesc.empty())
+	{
+		vertInInfo.pVertexBindingDescriptions		= VK_NULL_HANDLE;
+		vertInInfo.vertexBindingDescriptionCount	= 0;
+		vertInInfo.pVertexAttributeDescriptions		= VK_NULL_HANDLE;
+		vertInInfo.vertexAttributeDescriptionCount	= 0;
+	}
+	else
+	{
+		vertInInfo.pVertexBindingDescriptions		= &pData.vertexInBinding;
+		vertInInfo.vertexBindingDescriptionCount	= 1;
+		vertInInfo.pVertexAttributeDescriptions		= pData.vertexAttributeDesc.data();
+		vertInInfo.vertexAttributeDescriptionCount	= (uint32_t)pData.vertexAttributeDesc.size();
+	}
 
 	std::vector<VkPipelineShaderStageCreateInfo> shaderStageCreateInfo;
 	VkPipelineShaderStageCreateInfo shaderCreateInfo{};
@@ -1077,7 +1087,7 @@ void CVulkanCore::IssueImageLayoutBarrier(VkImageLayout p_old, VkImageLayout p_n
 		dst = VK_PIPELINE_STAGE_TRANSFER_BIT;
 	}
 	else if (p_old == VK_IMAGE_LAYOUT_UNDEFINED && 
-		(p_new == VK_IMAGE_LAYOUT_GENERAL || p_new == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL || p_new == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL))
+		(p_new == VK_IMAGE_LAYOUT_GENERAL || p_new == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL || p_new == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL || p_new == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR))
 	{
 		imgMemBarrier.srcAccessMask = 0;
 		imgMemBarrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;

@@ -7,6 +7,7 @@
 #define MAX_SUPPORTED_TEXTURES 2048
 
 #define TEXTURE_READ_ID_SSAO_NOISE 0
+#define DEFAULT_TEXTURE_ID 0
 
 
 const float PHI = 1.61803398874989484820459; //Golden Ratio
@@ -39,7 +40,12 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 	mat4 	sunLightViewProj;
 	vec3	sunLightDirWorld;
 	bool	enableShadowPCF;
-	vec4	sunLightDirView;
+	vec3	sunLightDirView;
+	float 	sunLightIntensity;
+	float 	pbrAmbientFactor;
+	float 	enabelSSAO;
+	float 	biasSSAO;
+	float 	unassigned_1;
 } g_Info;
 
 layout(set = 0, binding = 1) uniform sampler g_LinearSampler;
@@ -61,8 +67,32 @@ layout(set = 0, binding = 9) 								buffer		SSAOKernel
 } g_SSAOStorage;
 
 layout(set = 0, binding = 10)			uniform				texture2D	g_LightDepthImage; 
-layout(set = 0, binding = 11, rgba16f)	uniform 		 	image2D		g_DeferredLighting;
-layout(set = 0, binding = 12) 			uniform				texture2D	g_ReadOnlyTexures[];
+layout(set = 0, binding = 11, rgba32f)	uniform 		 	image2D		g_PrimaryColor;
+layout(set = 0, binding = 12)			uniform 		 	texture2D	g_PrimaryColorTexture;
+layout(set = 0, binding = 13, rg16f)	uniform readonly	image2D		g_DeferredRoughMetal;
+layout(set = 0, binding = 14) 			uniform				texture2D	g_ReadOnlyTexures[];
+
+vec4 LoadPrimaryColor(ivec2 xy)
+{
+	return imageLoad(g_PrimaryColor, xy);
+}
+
+vec4 SamplePrimaryColor(vec2 uv)
+{
+	return texture(sampler2D(g_PrimaryColorTexture, g_LinearSampler), uv);
+}
+
+
+// currently being used by the deferred pipeline
+vec2 GetSceenSapceRoughMetal(ivec2 xy)
+{
+	return imageLoad(g_DeferredRoughMetal, xy).xy;
+}
+
+float GetSSAOBlur(ivec2 xy)
+{
+	return imageLoad(g_SSAOBlurImage, xy).x;
+}
 
 struct Ray
 {

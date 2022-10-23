@@ -213,6 +213,7 @@ public:
 	typedef	VkQueue											Queue;
 	typedef VkCommandPool									CommandPool;
 	typedef VkCommandBuffer									CommandBuffer;
+	typedef std::vector<VkCommandBuffer>					CommandBufferList;
 	typedef std::vector<Buffer>								BufferList;
 	typedef std::vector<Image>								ImageList;
 	typedef std::vector<Sampler>							SamplerList;

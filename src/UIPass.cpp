@@ -1,6 +1,104 @@
 #include "UIPass.h"
 #include "external/imgui/imgui.h"
 
+CToneMapPass::CToneMapPass(CVulkanRHI* p_rhi)
+	: CPass(p_rhi)
+{
+	m_frameBuffer.resize(FRAME_BUFFER_COUNT);
+}
+
+CToneMapPass::~CToneMapPass()
+{
+}
+
+bool CToneMapPass::CreateRenderpass(RenderData* p_renderData)
+{
+	CVulkanRHI::Renderpass* renderpass = &m_pipeline.renderpassData;
+
+	renderpass->AttachColor(VK_FORMAT_B8G8R8A8_UNORM, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+	if (!m_rhi->CreateRenderpass(*renderpass))
+		return false;
+
+	renderpass->framebufferWidth = m_rhi->GetRenderWidth();
+	renderpass->framebufferHeight = m_rhi->GetRenderHeight();
+	std::vector<VkImageView> attachments(1, VkImageView{});
+	attachments[0] = m_rhi->GetSCImageView(0);
+	if (!m_rhi->CreateFramebuffer(renderpass->renderpass, m_frameBuffer[0], attachments.data(), (uint32_t)attachments.size(), renderpass->framebufferWidth, renderpass->framebufferHeight))
+		return false;
+
+	attachments[0] = m_rhi->GetSCImageView(1);
+	if (!m_rhi->CreateFramebuffer(renderpass->renderpass, m_frameBuffer[1], attachments.data(), (uint32_t)attachments.size(), renderpass->framebufferWidth, renderpass->framebufferHeight))
+		return false;
+
+	return true;
+}
+
+bool CToneMapPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
+{
+	CVulkanRHI::ShaderPaths uiShaderpaths{};
+	uiShaderpaths.shaderpath_vertex				= g_EnginePath + "/shaders/spirv/FulllScreenQuad.vert.spv";
+	uiShaderpaths.shaderpath_fragment			= g_EnginePath + "/shaders/spirv/ToneMap.frag.spv";
+	m_pipeline.pipeLayout						= p_Pipeline.pipeLayout;
+	m_pipeline.cullMode							= VK_CULL_MODE_FRONT_BIT;
+	m_pipeline.enableBlending					= false;
+	m_pipeline.enableDepthTest					= false;
+	m_pipeline.enableDepthWrite					= false;
+	if (!m_rhi->CreateGraphicsPipeline(uiShaderpaths, m_pipeline))
+	{
+		std::cout << "Error Creating Tone Mapping Pipeline" << std::endl;
+		return false;
+	}
+
+	return true;
+}
+
+bool CToneMapPass::Update(UpdateData* p_updateData)
+{
+	return true;
+}
+
+bool CToneMapPass::Render(RenderData* p_renderData)
+{
+	uint32_t scId								= p_renderData->scIdx;
+	CVulkanRHI::CommandBuffer cmdBfr			= p_renderData->cmdBfr;
+	CVulkanRHI::Renderpass renderPass			= m_pipeline.renderpassData;
+	const CRenderableUI* ui						= p_renderData->loadedAssets->GetUI();
+	const CPrimaryDescriptors* primaryDesc		= p_renderData->primaryDescriptors;
+	
+	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Tone Mapping"));
+
+	m_rhi->SetClearColorValue(renderPass, 0, VkClearColorValue{ 0.0f, 0.0f, 0.0f, 1.00f });
+	m_rhi->BeginRenderpass(m_frameBuffer[p_renderData->scIdx], renderPass, cmdBfr);
+
+	m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, (float)renderPass.framebufferHeight);
+	m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
+
+	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
+
+	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+	
+	vkCmdDraw(cmdBfr, 3, 1, 0, 0);
+
+	m_rhi->EndRenderPass(cmdBfr);
+	m_rhi->EndCommandBuffer(cmdBfr);
+
+	return true;
+}
+
+void CToneMapPass::Destroy()
+{
+	m_rhi->DestroyFramebuffer(m_frameBuffer[0]);
+	m_rhi->DestroyFramebuffer(m_frameBuffer[1]);
+	m_rhi->DestroyRenderpass(m_pipeline.renderpassData.renderpass);
+	m_rhi->DestroyPipeline(m_pipeline);
+}
+
+void CToneMapPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
+{
+	p_vertexBinding.attributeDescription = m_pipeline.vertexAttributeDesc;
+	p_vertexBinding.bindingDescription = m_pipeline.vertexInBinding;
+}
 
 CUIPass::CUIPass(CVulkanRHI* p_rhi)
 	: CPass(p_rhi)
@@ -14,24 +112,21 @@ CUIPass::~CUIPass()
 
 bool CUIPass::CreateRenderpass(RenderData* p_renderData)
 {
-	CVulkanRHI::Image renderTarget			= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_LightDepth);
-	CVulkanRHI::Renderpass* renderpass		= &m_pipeline.renderpassData; 
-
-	renderpass->AttachColor(VK_FORMAT_B8G8R8A8_UNORM,		VK_ATTACHMENT_LOAD_OP_LOAD,					VK_ATTACHMENT_STORE_OP_STORE,
-															VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,			VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-															VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	CVulkanRHI::Renderpass* renderpass			= &m_pipeline.renderpassData;
+	
+	renderpass->AttachColor(VK_FORMAT_B8G8R8A8_UNORM,	VK_ATTACHMENT_LOAD_OP_LOAD,	VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,	VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,	VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 	if (!m_rhi->CreateRenderpass(*renderpass))
 		return false;
 
-	renderpass->framebufferWidth			= m_rhi->GetRenderWidth();
-	renderpass->framebufferHeight			= m_rhi->GetRenderHeight();
+	renderpass->framebufferWidth				= m_rhi->GetRenderWidth();
+	renderpass->framebufferHeight				= m_rhi->GetRenderHeight();
 	std::vector<VkImageView> attachments(1, VkImageView{});
-	attachments[0] = m_rhi->GetSCImageView(0);
+	attachments[0]								= m_rhi->GetSCImageView(0);
 	if (!m_rhi->CreateFramebuffer(renderpass->renderpass, m_frameBuffer[0], attachments.data(), (uint32_t)attachments.size(), renderpass->framebufferWidth, renderpass->framebufferHeight))
 		return false;
 
-	attachments[0] = m_rhi->GetSCImageView(1);
+	attachments[0]								= m_rhi->GetSCImageView(1);
 	if (!m_rhi->CreateFramebuffer(renderpass->renderpass, m_frameBuffer[1], attachments.data(), (uint32_t)attachments.size(), renderpass->framebufferWidth, renderpass->framebufferHeight))
 		return false;
 
@@ -117,7 +212,7 @@ bool CUIPass::Render(RenderData* p_renderData)
 
 	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "UI"));
 
-	m_rhi->SetClearColorValue(renderPass, 0, VkClearColorValue{ 0.45f, 0.55f, 0.60f, 1.00f });
+	m_rhi->SetClearColorValue(renderPass, 0, VkClearColorValue{ 0.0f, 0.0f, 0.0f, 1.00f });
 	m_rhi->BeginRenderpass(m_frameBuffer[p_renderData->scIdx], renderPass, cmdBfr);
 
 	m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, (float)renderPass.framebufferHeight);
@@ -208,7 +303,7 @@ void CUIPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
 CDebugDrawPass::CDebugDrawPass(CVulkanRHI* p_rhi)
 	: CPass(p_rhi)
 {
-	m_frameBuffer.resize(FRAME_BUFFER_COUNT);
+	m_frameBuffer.resize(1);
 }
 
 CDebugDrawPass::~CDebugDrawPass()
@@ -218,15 +313,11 @@ CDebugDrawPass::~CDebugDrawPass()
 bool CDebugDrawPass::CreateRenderpass(RenderData* p_renderData)
 {
 	CVulkanRHI::Renderpass* renderPass						= &m_pipeline.renderpassData;
+	CVulkanRHI::Image primaryColorRT						= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
 	CVulkanRHI::Image primaryDepthRT						= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
 
-	renderPass->AttachColor(VK_FORMAT_B8G8R8A8_UNORM,		VK_ATTACHMENT_LOAD_OP_LOAD,					VK_ATTACHMENT_STORE_OP_STORE,
-																VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,			VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-																VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-	renderPass->AttachDepth(primaryDepthRT.format,			VK_ATTACHMENT_LOAD_OP_LOAD,						VK_ATTACHMENT_STORE_OP_STORE,
-															VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-															VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+	renderPass->AttachColor(primaryColorRT.format,	VK_ATTACHMENT_LOAD_OP_LOAD,VK_ATTACHMENT_STORE_OP_STORE,	VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	renderPass->AttachDepth(primaryDepthRT.format,	VK_ATTACHMENT_LOAD_OP_LOAD,VK_ATTACHMENT_STORE_OP_STORE,	VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,	VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
 	if (!m_rhi->CreateRenderpass(*renderPass))
 		return false;
@@ -235,12 +326,9 @@ bool CDebugDrawPass::CreateRenderpass(RenderData* p_renderData)
 	renderPass->framebufferHeight							= primaryDepthRT.height;
 
 	std::vector<VkImageView> attachments(2, VkImageView{});
-	attachments[0]											= m_rhi->GetSCImageView(0);
+	attachments[0]											= primaryColorRT.descInfo.imageView;
 	attachments[1]											= primaryDepthRT.descInfo.imageView;
 	RETURN_FALSE_IF_FALSE(m_rhi->CreateFramebuffer(renderPass->renderpass, m_frameBuffer[0], attachments.data(), (uint32_t)attachments.size(), renderPass->framebufferWidth, renderPass->framebufferHeight));
-
-	attachments[0]											= m_rhi->GetSCImageView(1);
-	RETURN_FALSE_IF_FALSE(m_rhi->CreateFramebuffer(renderPass->renderpass, m_frameBuffer[1], attachments.data(), (uint32_t)attachments.size(), renderPass->framebufferWidth, renderPass->framebufferHeight));
 
 	return true;
 }
@@ -311,7 +399,7 @@ bool CDebugDrawPass::Render(RenderData* p_renderData)
 
 	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Debug Draw"));
 
-	m_rhi->BeginRenderpass(m_frameBuffer[p_renderData->scIdx], renderPass, cmdBfr);
+	m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
 
 	m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
 	m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);

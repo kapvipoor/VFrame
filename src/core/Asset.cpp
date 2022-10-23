@@ -1,7 +1,7 @@
 #include "Asset.h"
 #include "SceneGraph.h"
 #include "RandGen.h"
-#include<algorithm>
+#include <algorithm>
 
 #include "external/imgui/imgui.h"
 #include "external/imguizmo/ImGuizmo.h"
@@ -358,7 +358,7 @@ bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUp
 	ImGui::NewFrame();
 	ImGuizmo::BeginFrame();
 
-	ShowUI();
+	ShowUI(p_rhi);
 	ShowGuizmo(p_rhi);
 
 	return true;
@@ -477,14 +477,21 @@ bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
 	return true;
 }
 
-bool CRenderableUI::ShowUI()
+bool CRenderableUI::ShowUI(CVulkanRHI* p_rhi)
 {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
 	ImGui::SetNextWindowPos(ImVec2(10, 25));
 	ImGui::SetNextWindowSize(ImVec2(0, 0), ImGuiCond_::ImGuiCond_FirstUseEver);
 	ImGui::Begin("VFrame Interface", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
-	
 	{
+		ImGui::TextUnformatted("VFrame Analysis");
+		{
+			int rtype = (int)p_rhi->GetRendererType();
+			ImGui::RadioButton("Forward ", &rtype, 0); ImGui::SameLine(); ImGui::RadioButton("Deferred ", &rtype, 1);
+			p_rhi->SetRenderType((CVulkanRHI::RendererType)rtype);
+		}
+		ImGui::Separator();
+
 		ImGui::TableNextColumn(); ImGui::Checkbox("Show imGui Demo", &m_showImguiDemo);
 		if (m_showImguiDemo)
 		{
@@ -508,7 +515,6 @@ bool CRenderableUI::ShowUI()
 	ImGui::PushItemWidth(110.0f * 1.0f);
 	m_participantManager->Show();
 	ImGui::PopItemWidth();
-	
 	ImGui::End();
 	ImGui::PopStyleVar();
 
@@ -664,6 +670,7 @@ void CScene::Destroy(CVulkanRHI* p_rhi)
 bool draw[5] = { false, true, true, false, false };
 void CScene::Show()
 {
+	bool doubleClickedEntity = false;
 	int32_t sceneIndex = 0;
 	if(Header("Scene Settings"))
 	{
@@ -673,7 +680,6 @@ void CScene::Show()
 			for (int i = 0; i < entities->size(); i++)
 			{
 				CEntity* entity = (*entities)[i];
-
 				{
 					bool drawBBox = entity->IsDebugDrawEnabled();
 					std::string str = std::to_string(i) + ". ";
@@ -682,8 +688,12 @@ void CScene::Show()
 					ImGui::SameLine(65);
 				}
 
-				if (ImGui::Selectable(entity->GetName(), m_selectedEntity == entity))
+				if (ImGui::Selectable(entity->GetName(), m_selectedEntity == entity, ImGuiSelectableFlags_AllowDoubleClick))
 				{
+					if (ImGui::IsMouseDoubleClicked(0))
+					{
+						doubleClickedEntity = true;
+					}
 					m_sceneGraph->SetCurSelectEntityId(i);
 				}
 
@@ -691,17 +701,9 @@ void CScene::Show()
 				{
 					ImGui::Indent();
 
-					if (entity->IsDebugDrawEnabled())
-					{
-						bool drawSubBBox = entity->IsSubmeshDebugDrawEnabled();
-						ImGui::Checkbox("Display Submeshes BBox", &drawSubBBox);
-						entity->SetSubmeshDebugDrawEnable(drawSubBBox);
-					}
-
 					nm::float4x4 transform = (*entities)[i]->GetTransform().GetTransform();
 					float matrixTranslation[3], matrixRotation[3], matrixScale[3];
-					ImGuizmo::DecomposeMatrixToComponents(&transform.column[0][0], matrixTranslation, matrixRotation, matrixScale);
-										
+					ImGuizmo::DecomposeMatrixToComponents(&transform.column[0][0], matrixTranslation, matrixRotation, matrixScale);										
 					{
 						ImGui::Text("Translation "); 
 						ImGui::PushItemWidth(45);
@@ -731,11 +733,54 @@ void CScene::Show()
 						ImGui::PopStyleColor(3);
 						ImGui::PopItemWidth();
 					}
+
+					// Display submesh data
+					CRenderableMesh* mesh = dynamic_cast<CRenderableMesh*>(m_selectedEntity);
+					if (mesh)
+					{									
+						bool drawSubBBox = m_selectedEntity->IsSubmeshDebugDrawEnabled();
+						ImGui::Checkbox(" ", &drawSubBBox);
+						m_selectedEntity->SetSubmeshDebugDrawEnable(drawSubBBox);
+						ImGui::SameLine(75);
+
+						std::string treeNodeName = "Submeshes (" + std::to_string(mesh->GetSubmeshCount()) + ")";
+						if (ImGui::TreeNode(treeNodeName.c_str()))
+						{
+							for (uint32_t i = 0; i < mesh->GetSubmeshCount(); i++)
+							{
+								if (ImGui::Selectable(mesh->GetSubmesh(i)->name.c_str(), m_selectedSubMeshIndex == i, ImGuiSelectableFlags_AllowDoubleClick))
+								{
+									m_selectedSubMeshIndex = i;
+								}
+
+								if (m_selectedSubMeshIndex == i)
+								{
+									int matId = mesh->GetSubmesh(i)->materialId;
+									Material mat = m_materialsList[matId];
+									ImGui::Text("Albedo Id %d", mat.color_id);
+									ImGui::Text("Normal Id %d", mat.normal_id);
+									ImGui::Text("Metal/Rough Id %d", mat.roughMetal_id);
+									ImGui::InputFloat("Metallic ", &mat.metallic);
+									ImGui::InputFloat("Roughness ", &mat.roughness);
+									ImGui::InputFloat3("Color ", &mat.color[0]);
+									ImGui::InputFloat3("PBR Color ", &mat.pbr_color[0]);
+								}
+							}
+							ImGui::TreePop();
+						}
+					}
 					ImGui::Unindent();
 				}
 			}
-
 			ImGui::TreePop();
+
+			// Assuming primary camera is object 0
+			if (doubleClickedEntity)
+			{
+				nm::Transform primaryCameraTransform = (*entities)[0]->GetTransform();
+				primaryCameraTransform.SetTranslate(m_selectedEntity->GetTransform().GetTranslate());
+				(*entities)[0]->SetTransform(primaryCameraTransform);
+			}
 		}
 	}
 }
@@ -746,13 +791,13 @@ bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 	for (auto& mesh : m_meshes)
 	{
 		mesh->SetDirty(false);
-		mesh->m_viewNormalTransform			= nm::transpose(nm::inverse(p_loadedUpdate.viewMatrix * mesh->GetTransform().GetTransform()));
+		mesh->m_viewNormalTransform					= (p_loadedUpdate.viewMatrix * mesh->GetTransform().GetTransform());	// nm::inverse(nm::transpose(p_loadedUpdate.viewMatrix * mesh->GetTransform().GetTransform()));
 
-		const float* modelMat = &mesh->GetTransform().GetTransform().column[0][0];
-		const float* trn_inv_model = &nm::transpose(nm::inverse(mesh->GetTransform().GetTransform())).column[0][0];
+		const float* modelMat						= &mesh->GetTransform().GetTransform().column[0][0];
+		const float* trn_inv_model					= &mesh->m_viewNormalTransform.column[0][0];							// this needs to be inverse transpose so as to negate the scaling in the matrix before multipling with nomral. But this isn't working and I do not know why !
 
-		std::copy(&modelMat[0], &modelMat[16], std::back_inserter(perMeshUniformData));				// model matrix for this mesh
-		std::copy(&trn_inv_model[0], &trn_inv_model[16], std::back_inserter(perMeshUniformData));		// Tranpose(inverse(model)) for transforming normal to world space
+		std::copy(&modelMat[0], &modelMat[16], std::back_inserter(perMeshUniformData));										// model matrix for this mesh
+		std::copy(&trn_inv_model[0], &trn_inv_model[16], std::back_inserter(perMeshUniformData));							// Tranpose(inverse(view * model)) for transforming normal to view space
 	}
 
 	uint8_t* data = (uint8_t*)(perMeshUniformData.data());
@@ -815,7 +860,7 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 		RETURN_FALSE_IF_FALSE(LoadObj(skybox_obj_path.c_str(), sceneraw, loadData));
 
 		MeshRaw meshraw					= sceneraw.meshList[0];
-		CRenderableMesh* mesh = new CRenderableMesh("Skybox", MeshType::mt_Skybox, nm::float4x4::identity());
+		CRenderableMesh* mesh			= new CRenderableMesh("Skybox", MeshType::mt_Skybox, nm::float4x4::identity());
 		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr));
 		m_meshes.push_back(mesh);
 	}
@@ -825,18 +870,19 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 
 bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/DragonAttenuation/glTF/DragonAttenuation.gltf");
-	m_scenePaths.push_back(g_AssetPath + "/shadow_test_3.gltf");
-	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");
-	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");
-	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");
-	m_scenePaths.push_back(g_AssetPath + "/Sponza/glTF/Sponza.gltf");
-	m_scenePaths.push_back(g_AssetPath + "/DamagedHelmet/glTF/DamagedHelmet.gltf");
-	m_scenePaths.push_back(g_AssetPath + "/cube/cube.obj");
+	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/DragonAttenuation/glTF/DragonAttenuation.gltf");						//0
+	m_scenePaths.push_back(g_AssetPath + "/shadow_test_3.gltf");																		//1
+	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");							//2
+	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
+	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");											//4
+	m_scenePaths.push_back(g_AssetPath + "/Sponza/glTF/Sponza.gltf");																	//5
+	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");					//6
+	m_scenePaths.push_back(g_AssetPath + "/cube/cube.obj");																				//7
 
 	std::vector<std::string> paths;
-	paths.push_back(m_scenePaths[4]);
+	//paths.push_back(m_scenePaths[3]);
 	paths.push_back(m_scenePaths[5]);
+	paths.push_back(m_scenePaths[4]);
 
 	std::vector<bool> flipYList{ false, false, false };
 
@@ -885,6 +931,7 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 
 	// storage buffer for materials
 	{
+		m_materialsList = sceneraw.materialsList;
 		CVulkanRHI::Buffer matStg;
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(Material) * sceneraw.materialsList.size(), matStg, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
 
@@ -990,12 +1037,12 @@ void CReadOnlyTextures::Destroy(CVulkanRHI* p_rhi)
 
 bool CReadOnlyTextures::CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData& p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	uint32_t ssaoNoiseDimSquared				= 16;
-	p_primaryUniformData.ssaoNoiseScale			= nm::float2((float)p_rhi->GetRenderWidth() / (float)ssaoNoiseDimSquared, (float)p_rhi->GetRenderHeight() / (float)ssaoNoiseDimSquared);
+	uint32_t ssaoNoiseDim						= 4;
+	p_primaryUniformData.ssaoNoiseScale			= nm::float2((float)p_rhi->GetRenderWidth() / (float)ssaoNoiseDim, (float)p_rhi->GetRenderHeight() / (float)ssaoNoiseDim);
 
 	std::vector<unsigned char> ssaoNoise;
 	// introducing good random rotation can reduce number of samples required
-	for (uint32_t i = 0; i < ssaoNoiseDimSquared; i++)
+	for (uint32_t i = 0; i < (ssaoNoiseDim * ssaoNoiseDim); i++)
 	{
 		ssaoNoise.push_back((unsigned char)(randf() * 255.0f));
 		ssaoNoise.push_back((unsigned char)(randf() * 255.0f));
@@ -1004,7 +1051,7 @@ bool CReadOnlyTextures::CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::B
 	}
 	
 	CVulkanRHI::Buffer staging;
-	ImageRaw raw{ ssaoNoise.data(), (int)sqrt(ssaoNoiseDimSquared) , (int)sqrt(ssaoNoiseDimSquared), 4 };
+	ImageRaw raw{ ssaoNoise.data(), (int)ssaoNoiseDim , (int)ssaoNoiseDim, 4 };
 	
 	RETURN_FALSE_IF_FALSE(CreateTexture(p_rhi, staging, &raw, VK_FORMAT_R8G8B8A8_UNORM, p_cmdBfr, CReadOnlyTextures::tr_SSAONoise));
 	
@@ -1073,15 +1120,15 @@ bool CReadOnlyBuffers::CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::Buff
 				randf() * 2.0f - 1.0f
 			,	randf() * 2.0f - 1.0f
 			,	randf()
-			,	0.0f };
+			,	1.0f };
 
-		sample = nm::normalize(sample);
-		sample = randf() * sample;
+		sample		= nm::normalize(sample);
+		sample		= randf() * sample;
 
 		// we also want to make sure the random 3d positions are placed closer to the actual fragment
 		float scale = (float)i / 64.0f;
-		scale = 0.01f + (scale * scale) * (1.0f - 0.01f);	// exponential curve forcing values close to frag
-		sample = scale * sample;
+		scale		= 0.1f + (scale * scale) * (0.9f); // lerp(a,b, f) = a + f * (b - a);
+		sample		= scale * sample;
 
 		ssaoKernel.push_back(sample);
 	}
@@ -1146,14 +1193,15 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	uint32_t fullResWidth = p_rhi->GetRenderWidth();
 	uint32_t fullResHeight = p_rhi->GetRenderHeight();
 
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryDepth,	VK_FORMAT_D32_SFLOAT_S8_UINT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Position,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Normal,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Albedo,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAO,			VK_FORMAT_R32_SFLOAT,			fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAOBlur,		VK_FORMAT_R32_SFLOAT,			fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_LightDepth,		VK_FORMAT_D32_SFLOAT_S8_UINT,	4096, 4096,					VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DeferredLighting,VK_FORMAT_R16G16B16A16_SFLOAT, fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryDepth,		VK_FORMAT_D32_SFLOAT_S8_UINT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Position,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Normal,				VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Albedo,				VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAO,				VK_FORMAT_R32_SFLOAT,			fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAOBlur,			VK_FORMAT_R32_SFLOAT,			fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_LightDepth,			VK_FORMAT_D32_SFLOAT_S8_UINT,	4096, 4096,						VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DeferredRoughMetal,	VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
 
 	return true;
 }
@@ -1173,7 +1221,12 @@ CFixedBuffers::CFixedBuffers()
 {
 	m_primaryUniformData.ssaoKernelSize			= 64.0f;
 	m_primaryUniformData.ssaoRadius				= 0.5f;
-	m_primaryUniformData.enableShadowPCF		= 1;
+	m_primaryUniformData.enableShadowPCF		= 0;
+	m_primaryUniformData.sunIntensity			= 20.0f;
+	m_primaryUniformData.pbrAmbientFactor		= 0.03f;
+	m_primaryUniformData.enableSSAO				= 1;
+	m_primaryUniformData.biasSSAO				= 0.015f;
+	m_primaryUniformData.unassigned_1			= 0.0f;
 }
 
 CFixedBuffers::~CFixedBuffers()
@@ -1199,6 +1252,10 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(float) * 3)				// sun light direction in world space
 		+ (sizeof(int) * 1)					// enbaled PCF for shadow
 		+ (sizeof(float) * 3)				// sun light direction in view space
+		+ (sizeof(float) * 1)				// sun intensity
+		+ (sizeof(float) * 1)				// PBR Ambeient Factor
+		+ (sizeof(int) * 1)					// enable SSAO
+		+ (sizeof(float) * 1)				// unassigned_0
 		+ (sizeof(float) * 1);				// unassigned_1
 
 	size_t objPickerBufferSize = sizeof(uint32_t) * 1; // selected mesh ID
@@ -1221,9 +1278,10 @@ void CFixedBuffers::Show()
 		ImGui::Indent();
 		if (ImGui::TreeNode("General"))
 		{
-			Text("Time Elapsed:		%f", m_primaryUniformData.elapsedTime);
-			Text("Render Resolution:	%d x %d", (int)m_primaryUniformData.renderRes[0], (int)m_primaryUniformData.renderRes[1]);
-			Text("Mouse Position:		%d x %d", (int)m_primaryUniformData.mousePos[0], (int)m_primaryUniformData.mousePos[1]);
+			ImGui::InputFloat("Time Elapsed", &m_primaryUniformData.elapsedTime);
+			ImGui::InputFloat2("Render Resolution", &m_primaryUniformData.renderRes[0]);
+			ImGui::InputFloat2("Mouse Position", &m_primaryUniformData.mousePos[0]);
+
 			ImGui::TreePop();
 		}
 		if (ImGui::TreeNode("Camera"))
@@ -1232,9 +1290,17 @@ void CFixedBuffers::Show()
 		}
 		if (ImGui::TreeNode("SSAO"))
 		{
-			Text("Noise Scale:		%f, %f", m_primaryUniformData.ssaoNoiseScale[0], m_primaryUniformData.ssaoNoiseScale[1]);
-			Text("Kernel Size:		%d", (int)m_primaryUniformData.ssaoKernelSize);
-			Text("Kernel Radius:		%f", m_primaryUniformData.ssaoRadius);
+			bool enableSSAO = (bool)m_primaryUniformData.enableSSAO;
+			ImGui::Checkbox("Enable SSAO ", &enableSSAO);
+			m_primaryUniformData.enableSSAO = (int)enableSSAO;
+
+			float ssaoBias = m_primaryUniformData.biasSSAO;
+			ImGui::SliderFloat("SSAO Bias", &ssaoBias, 0.00f, 0.1f);
+			m_primaryUniformData.biasSSAO = ssaoBias;
+
+			ImGui::InputFloat2("Noise Scale", &m_primaryUniformData.ssaoNoiseScale[0]);
+			ImGui::InputFloat("Kernel Size", &m_primaryUniformData.ssaoKernelSize);
+			ImGui::InputFloat("Kernel Radius", &m_primaryUniformData.ssaoRadius);
 			ImGui::TreePop();
 		}
 		if (ImGui::TreeNode("Shadow"))
@@ -1247,9 +1313,15 @@ void CFixedBuffers::Show()
 		}
 		if (ImGui::TreeNode("Sunlight"))
 		{
-			Text("World Sapce:		%f, %f, %f", m_primaryUniformData.sunDirWorldSpace[0], m_primaryUniformData.sunDirWorldSpace[1], m_primaryUniformData.sunDirWorldSpace[2]);
+			ImGui::InputFloat3("World Sapce", &m_primaryUniformData.sunDirWorldSpace[0]);
+			ImGui::SliderFloat("Intensity", &m_primaryUniformData.sunIntensity, 0.0f, 20.0f);
 			ImGui::TreePop();
 		}		
+		if (ImGui::TreeNode("PBR"))
+		{
+			ImGui::SliderFloat("Ambient Factor", &m_primaryUniformData.pbrAmbientFactor, 0.00f, 1.0f);
+			ImGui::TreePop();
+		}
 		ImGui::Unindent();
 	}
 }
@@ -1274,23 +1346,27 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	skyboxModelView[15]						= 1.0;
 
 	std::vector<float> uniformValues;
-	uniformValues.push_back(m_primaryUniformData.elapsedTime);																										// time elapsed delata
-	std::copy(&m_primaryUniformData.cameraLookFrom[0], &m_primaryUniformData.cameraLookFrom[3], std::back_inserter(uniformValues));				// camera look from x, y, z
-	std::copy(&cameraViewProj[0], &cameraViewProj[16], std::back_inserter(uniformValues));														// camera view projection matrix
-	std::copy(&cameraProj[0], &cameraProj[16], std::back_inserter(uniformValues));																// camera projection matrix
-	std::copy(&cameraView[0], &cameraView[16], std::back_inserter(uniformValues));																// camera view matrix
-	std::copy(&cameraInvView[0], &cameraInvView[16], std::back_inserter(uniformValues));															// inverse camera view matrix
-	std::copy(&skyboxModelView[0], &skyboxModelView[16], std::back_inserter(uniformValues));														// skybox model view
-	uniformValues.push_back((float)m_primaryUniformData.renderRes[0]);	uniformValues.push_back((float)m_primaryUniformData.renderRes[1]);						// render resolution
-	uniformValues.push_back((float)m_primaryUniformData.mousePos[0]);	uniformValues.push_back((float)m_primaryUniformData.mousePos[1]);						// mouse pos
-	uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[0]); uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[1]);				// ssao noise scale
-	uniformValues.push_back((float)m_primaryUniformData.ssaoKernelSize);																							// ssao kernel size
-	uniformValues.push_back((float)m_primaryUniformData.ssaoRadius);																								// ssao radius
-	std::copy(&sunViewProj[0], &sunViewProj[16], std::back_inserter(uniformValues));																// sun light view projection matrix
-	std::copy(&m_primaryUniformData.sunDirWorldSpace[0], &m_primaryUniformData.sunDirWorldSpace[3], std::back_inserter(uniformValues));			// sun light sunLightDirection x, y, z in world space
-	uniformValues.push_back((float)m_primaryUniformData.enableShadowPCF);																							// enable PCF for shadows
-	std::copy(&m_primaryUniformData.sunDirViewSpace[0], &m_primaryUniformData.sunDirViewSpace[3], std::back_inserter(uniformValues));				// sun light sunLightDirection x, y, z in view space
-	uniformValues.push_back(m_primaryUniformData.unassigined_1);																									// unassigned_1
+	uniformValues.push_back(m_primaryUniformData.elapsedTime);																							// time elapsed delata
+	std::copy(&m_primaryUniformData.cameraLookFrom[0], &m_primaryUniformData.cameraLookFrom[3], std::back_inserter(uniformValues));						// camera look from x, y, z
+	std::copy(&cameraViewProj[0], &cameraViewProj[16], std::back_inserter(uniformValues));																// camera view projection matrix
+	std::copy(&cameraProj[0], &cameraProj[16], std::back_inserter(uniformValues));																		// camera projection matrix
+	std::copy(&cameraView[0], &cameraView[16], std::back_inserter(uniformValues));																		// camera view matrix
+	std::copy(&cameraInvView[0], &cameraInvView[16], std::back_inserter(uniformValues));																// inverse camera view matrix
+	std::copy(&skyboxModelView[0], &skyboxModelView[16], std::back_inserter(uniformValues));															// skybox model view
+	uniformValues.push_back((float)m_primaryUniformData.renderRes[0]);	uniformValues.push_back((float)m_primaryUniformData.renderRes[1]);				// render resolution
+	uniformValues.push_back((float)m_primaryUniformData.mousePos[0]);	uniformValues.push_back((float)m_primaryUniformData.mousePos[1]);				// mouse pos
+	uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[0]); uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[1]);		// ssao noise scale
+	uniformValues.push_back((float)m_primaryUniformData.ssaoKernelSize);																				// ssao kernel size
+	uniformValues.push_back((float)m_primaryUniformData.ssaoRadius);																					// ssao radius
+	std::copy(&sunViewProj[0], &sunViewProj[16], std::back_inserter(uniformValues));																	// sun light view projection matrix
+	std::copy(&m_primaryUniformData.sunDirWorldSpace[0], &m_primaryUniformData.sunDirWorldSpace[3], std::back_inserter(uniformValues));					// sun light sunLightDirection x, y, z in world space
+	uniformValues.push_back((float)m_primaryUniformData.enableShadowPCF);																				// enable PCF for shadows
+	std::copy(&m_primaryUniformData.sunDirViewSpace[0], &m_primaryUniformData.sunDirViewSpace[3], std::back_inserter(uniformValues));					// sun light sunLightDirection x, y, z in view space
+	uniformValues.push_back(m_primaryUniformData.sunIntensity);																							// Sunlight Intensity
+	uniformValues.push_back(m_primaryUniformData.pbrAmbientFactor);																						// PBR Ambient Factor
+	uniformValues.push_back((float)m_primaryUniformData.enableSSAO);																					// enable SSAO
+	uniformValues.push_back(m_primaryUniformData.biasSSAO);																								// ssao Bias
+	uniformValues.push_back(m_primaryUniformData.unassigned_1);																							// unassigned_1
 
 	uint8_t* data							= (uint8_t*)(uniformValues.data());
 	uint32_t id								= (p_scId == 0) ? fb_PrimaryUniform_0 : fb_PrimaryUniform_1;
@@ -1359,7 +1435,8 @@ CPrimaryDescriptors::~CPrimaryDescriptors()
 
 void CPrimaryDescriptors::SetLayoutForDescriptorCreation(CRenderTargets* p_renderTargets)
 {
-	p_renderTargets->SetLayout(CRenderTargets::rt_DeferredLighting,		VK_IMAGE_LAYOUT_GENERAL);
+	p_renderTargets->SetLayout(CRenderTargets::rt_DeferredRoughMetal,	VK_IMAGE_LAYOUT_GENERAL);
+	p_renderTargets->SetLayout(CRenderTargets::rt_PrimaryColor,			VK_IMAGE_LAYOUT_GENERAL);
 	p_renderTargets->SetLayout(CRenderTargets::rt_LightDepth,			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	p_renderTargets->SetLayout(CRenderTargets::rt_SSAOBlur,				VK_IMAGE_LAYOUT_GENERAL);
 	p_renderTargets->SetLayout(CRenderTargets::rt_SSAO,					VK_IMAGE_LAYOUT_GENERAL);
@@ -1388,37 +1465,41 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 	}
 
 	{
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Gloabl_Uniform,			1,		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	VK_SHADER_STAGE_ALL,			&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_0).descInfo,	VK_NULL_HANDLE }	, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Linear_Sampler,			1,		VK_DESCRIPTOR_TYPE_SAMPLER,			VK_SHADER_STAGE_ALL,			VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }										, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_ObjPicker_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_FRAGMENT_BIT,	&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}		, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Depth_Image,			1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }	, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PosGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }		, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_NormGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_AlbedoGBuf_Image,		1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAO_Image,				1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOBlur_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }		, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_COMPUTE_BIT,	&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}		, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,		1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_ALL,			VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_LightDepth).descInfo }		, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredLighting_Image,	1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredLighting).descInfo }, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	readTexDesInfoList.data() }												, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Gloabl_Uniform,			1,		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	VK_SHADER_STAGE_ALL,										&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_0).descInfo,	VK_NULL_HANDLE }		, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Linear_Sampler,			1,		VK_DESCRIPTOR_TYPE_SAMPLER,			VK_SHADER_STAGE_ALL,										VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }											, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_ObjPicker_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_FRAGMENT_BIT,								&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Depth_Image,				1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }		, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PosGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_NormGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_AlbedoGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAO_Image,				1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOBlur_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_COMPUTE_BIT,								&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,			1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_ALL,										VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_LightDepth).descInfo }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Image,		1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }		, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Texture,		1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }		, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredRoughMetal_Image,	1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredRoughMetal).descInfo }	, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	readTexDesInfoList.data() }													, 0);
 
 		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, tr_max, BindingDest::bd_PrimaryRead_TexArray, 0));
 	}
 
 	{
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Gloabl_Uniform,			1,		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	VK_SHADER_STAGE_ALL,			&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_1).descInfo,	VK_NULL_HANDLE }	, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Linear_Sampler,			1,		VK_DESCRIPTOR_TYPE_SAMPLER,			VK_SHADER_STAGE_ALL,			VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }										, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_ObjPicker_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_FRAGMENT_BIT,	&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}		, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Depth_Image,			1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }	, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PosGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }		, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_NormGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_AlbedoGBuf_Image,		1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAO_Image,				1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOBlur_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }		, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_COMPUTE_BIT,	&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}		, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,		1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_ALL,			VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_LightDepth).descInfo }		, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredLighting_Image,	1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredLighting).descInfo }, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	readTexDesInfoList.data() }												, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Gloabl_Uniform,			1,		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	VK_SHADER_STAGE_ALL,										&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_1).descInfo,	VK_NULL_HANDLE }		, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Linear_Sampler,			1,		VK_DESCRIPTOR_TYPE_SAMPLER,			VK_SHADER_STAGE_ALL,										VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }											, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_ObjPicker_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_FRAGMENT_BIT,								&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Depth_Image,				1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }		, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PosGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_NormGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_AlbedoGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAO_Image,				1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOBlur_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_COMPUTE_BIT,								&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,			1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_ALL,										VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_LightDepth).descInfo }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Image,		1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }		, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Texture,		1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }		, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredRoughMetal_Image,	1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredRoughMetal).descInfo }	, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	readTexDesInfoList.data() }													, 1);
 
 		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, tr_max, BindingDest::bd_PrimaryRead_TexArray, 1));
 	}
@@ -1430,7 +1511,8 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 
 void CPrimaryDescriptors::UnSetLayoutForDescriptorCreation(CRenderTargets* p_renderTargets)
 {
-	p_renderTargets->SetLayout(CRenderTargets::rt_DeferredLighting	, VK_IMAGE_LAYOUT_UNDEFINED);
+	p_renderTargets->SetLayout(CRenderTargets::rt_DeferredRoughMetal, VK_IMAGE_LAYOUT_UNDEFINED);
+	p_renderTargets->SetLayout(CRenderTargets::rt_PrimaryColor,		  VK_IMAGE_LAYOUT_UNDEFINED);
 	p_renderTargets->SetLayout(CRenderTargets::rt_LightDepth		, VK_IMAGE_LAYOUT_UNDEFINED);
 	p_renderTargets->SetLayout(CRenderTargets::rt_SSAOBlur			, VK_IMAGE_LAYOUT_UNDEFINED);
 	p_renderTargets->SetLayout(CRenderTargets::rt_SSAO				, VK_IMAGE_LAYOUT_UNDEFINED);
@@ -1615,7 +1697,7 @@ bool CRenderableDebug::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx, const CFixed
 
 			displayingBBoxIndex++;
 		}
-		else if (entity->IsSubmeshDebugDrawEnabled() && entity->IsDebugDrawEnabled())
+		if (entity->IsSubmeshDebugDrawEnabled())// && entity->IsDebugDrawEnabled())
 		{
 			for (uint32_t subBoxID = 0; subBoxID < entity->GetSubBoundingBoxCount(); subBoxID++)
 			{

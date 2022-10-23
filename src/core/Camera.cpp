@@ -147,7 +147,7 @@ void CPerspectiveCamera::Update(UpdateData p_data)
 
     m_viewProj = m_projection * m_view;
 
-    //CCamera::Update(p_data);
+    CCamera::Update(p_data);
 }
 
 void CPerspectiveCamera::LookAt(nm::float4 eyePos, nm::float4 lookAt)

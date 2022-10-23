@@ -69,9 +69,11 @@ enum BindingDest
 	, bd_SSAOBlur_Image				= 8
 	, bd_SSAOKernel_Storage			= 9
 	, bd_LightDepth_Image			= 10
-	, bd_DeferredLighting_Image		= 11
-	, bd_PrimaryRead_TexArray		= 12
-	, bd_Primary_max				= 13
+	, bd_PrimaryColor_Image			= 11
+	, bd_PrimaryColor_Texture		= 12
+	, bd_DeferredRoughMetal_Image	= 13
+	, bd_PrimaryRead_TexArray		= 14
+	, bd_Primary_max				= 15
 };
 
 struct LoadedUpdateData
@@ -221,7 +223,11 @@ public:
 		nm::float3					sunDirWorldSpace;
 		int							enableShadowPCF;
 		nm::float3					sunDirViewSpace;
-		float						unassigined_1;
+		float						sunIntensity;
+		float						pbrAmbientFactor;
+		int							enableSSAO;
+		float						biasSSAO;
+		float						unassigned_1;
 	};
 
 	CFixedBuffers();
@@ -254,14 +260,15 @@ class CRenderTargets : public CTextures
 public:
 	enum RenderTargetId
 	{
-		  rt_PrimaryDepth = 0
-		, rt_Position = 1
-		, rt_Normal = 2
-		, rt_Albedo = 3
-		, rt_SSAO = 4
-		, rt_SSAOBlur = 5
-		, rt_LightDepth = 6
-		, rt_DeferredLighting = 7
+		  rt_PrimaryDepth			= 0
+		, rt_Position				= 1
+		, rt_Normal					= 2
+		, rt_Albedo					= 3
+		, rt_SSAO					= 4
+		, rt_SSAOBlur				= 5
+		, rt_LightDepth				= 6
+		, rt_PrimaryColor			= 7
+		, rt_DeferredRoughMetal		= 8
 		, rt_max
 	};
 
@@ -344,7 +351,7 @@ private:
 	
 	bool LoadFonts(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 	bool CreateUIDescriptors(CVulkanRHI* p_rhi);
-	bool ShowUI();
+	bool ShowUI(CVulkanRHI* p_rhi);
 	bool ShowGuizmo(CVulkanRHI* p_rhi);
 };
 
@@ -426,6 +433,7 @@ public:
 private:
 	CSceneGraph*					m_sceneGraph;
 	std::vector<CRenderableMesh*>	m_meshes;						// list of all meshes required by the scene
+	std::vector<Material>			m_materialsList;
 
 	// todo: need to fix the current selected renderable mesh 
 	// it is used by object picker pass and is not the best way to do.

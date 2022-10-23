@@ -7,12 +7,13 @@
 
 #include "Common.h"
 #include "MeshCommon.h"
+#include "PBRHelper.h"
 
 #define DISPLAY_MOUSE_POINTER
 
 float CalculateShadow(in vec4 fragPosViewSpace, bool applyPCF)
 {
-    // converting from view space to work space
+    // converting from view space to world space
     vec4 fragPosWorldSpace = g_Info.invCamView * fragPosViewSpace;
 
     // converting from world space to light space
@@ -26,59 +27,107 @@ float CalculateShadow(in vec4 fragPosViewSpace, bool applyPCF)
     //projCoord.y = 1.0 - projCoord.y;
 
     // sampling Shadow Map at projected position
-    if(applyPCF == true)
-    {
-        float shadowFactor = 0.0f;
-        for(int dx = -1; dx < 2; dx++)
-        {
-            for(int dy = -1; dy < 2; dy++)
-            {
-                vec2 uv = projCoord.xy + (vec2(dx, dy)/g_Info.renderResolution);
-                float sampledDepth = texture(sampler2D(g_LightDepthImage, g_LinearSampler), uv).r;
-                shadowFactor = shadowFactor + ((projCoord.z > sampledDepth) ? g_shadowFactor : 1.0f);
-            }
-        }
+	if(projCoord.z > -1.0 && projCoord.z < 1.0f)
+	{
+    	if(applyPCF == true)
+    	{
+    	    float shadowFactor = 0.0f;
+    	    for(int dx = -1; dx < 2; dx++)
+    	    {
+    	        for(int dy = -1; dy < 2; dy++)
+    	        {
+    	            vec2 uv = projCoord.xy + (vec2(dx, dy)/vec2(4096, 4096));
+    	            float sampledDepth = texture(sampler2D(g_LightDepthImage, g_LinearSampler), uv).r;
+    	            shadowFactor = shadowFactor + ((projCoord.z > sampledDepth) ? g_shadowFactor : 1.0f);
+    	        }
+    	    }
 
-        return (shadowFactor / 9.0f);
-    }
-    else
-    {
-        float sampledDepth = texture(sampler2D(g_LightDepthImage, g_LinearSampler), projCoord.xy).r;
-        return (projCoord.z > sampledDepth) ? g_shadowFactor : 1.0f;
-    }
+    	    return (shadowFactor / 9.0f);
+    	}
+    	else
+    	{
+    	    float sampledDepth = texture(sampler2D(g_LightDepthImage, g_LinearSampler), projCoord.xy).r;
+    	    return (projCoord.z > sampledDepth) ? g_shadowFactor : 1.0f;
+    	}
+	}
+	return 1.0f;
 }
 
 layout (local_size_x = 8, local_size_y = 8) in;
 void main()
 {
-    ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 xy 								= ivec2(gl_GlobalInvocationID.xy);
+
     // these resources are in view space
-    vec4 fragPos        = imageLoad(g_PositionImage, xy).xyzw;
-    vec3 normal         = imageLoad(g_NormalImage, xy).xyz;
-    vec3 albedo         = imageLoad(g_AlbedoImage, xy).xyz;
-    float ssaoFactor    = imageLoad(g_SSAOBlurImage, xy).x;
-    vec3 sunLightDir    = (g_Info.camView * vec4(g_Info.sunLightDirWorld, 1.0)).xyz;
-    
-    // applying ambient factor
-    float lighting      = g_ambientCoeff; //ssaoFactor * (g_ambientCoeff + (g_diffuseCoeff * NdotL));
+	vec4 skyboxColor						= imageLoad(g_PrimaryColor, xy).xyzw;                                              
+    vec3 camerPosition 						= vec3(0.0f);                                                                       
+	vec4 fragPos                            = imageLoad(g_PositionImage, xy).xyzw;                                              
+    vec3 V 									= normalize(camerPosition - fragPos.xyz);                                                                                 
+    vec3 N                                  = imageLoad(g_NormalImage, xy).xyz;                                                         
+    vec3 color                              = imageLoad(g_AlbedoImage, xy).xyz;
+    vec2 roughMetal                         = imageLoad(g_DeferredRoughMetal, xy).xy;
+    vec3 Lo 								= vec3(0.0);
 
-    // calculating lambertian diffuse
-    vec3 lightDir       = normalize(sunLightDir);
-    float NdotL         = max(dot(normal, lightDir), 0.0);
-    // applying diffue factor
-    lighting = (lighting + (g_diffuseCoeff * NdotL));
-    
-    if(NdotL > 0.0f)
-    {  
-        // calulating and applying shadows
-        float shadow = CalculateShadow(fragPos, true);
-        lighting = shadow * lighting;     
-    }
+	// setting the default color to be the skybox if
+	vec4 finalColor 						= skyboxColor;
 
-    // applying SSAO factor
-    lighting = lighting * ssaoFactor;
+	// the the depth value of the fragment in NDC is calculated and checkd if it is within the far plane at 1.0
+	// if it is, compute the lighting, else the skybox is the final deciding color
+	vec4 fragPosInClipSpace 				= g_Info.camProj * fragPos;
+	float fragDepthInClipSpace 				= fragPosInClipSpace.z / fragPosInClipSpace.w;
+	float fragDepthInNDC 					= fragDepthInClipSpace * 0.5 + 0.5;
+	if(fragDepthInNDC < 1.0)
+	{			
+		// for each light source
+		{
+			// As light color is over 1, the result will be over 1, hence will need tonemapping
+			vec3 lightColor 					= vec3(1.0, 1.0, 0.9) * g_Info.sunLightIntensity;
+			//vec3 lightDir 					= g_Info.sunLightDirWorld.xyz - inWorldPosition.xyz;
+			vec3 L 								= normalize((inverse(transpose(g_Info.camView)) * vec4(g_Info.sunLightDirWorld, 1.0)).xyz);             
+			vec3 H 								= normalize(V+L);
 
-    vec4 outFragColor   = vec4(lighting * albedo.xyz, 0.0);
+			// before we calculate anything related to light, we want to make sure
+			// the position is not in shadow
+			float shadow 						= CalculateShadow(fragPos, g_Info.enableShadowPCF);
+			if(shadow == 1.0f)
+			{
+				// as we do not want to calculate light attenuation on directional light
+				// commenting this part of code
+				//float distance = length(lightDir);
+				//float attenuation = 1.0/(distance * distance);
+				vec3 radiance 					= lightColor;// * attenuation;
 
-    imageStore(g_DeferredLighting, xy, outFragColor);
-}
+				// calculating fresnel value to get the reflection to refraction ratio
+				vec3 F0 						= vec3(0.04);
+				F0 								= mix(F0, color.xyz, roughMetal.y); // revisit this if necessary as the color here needs to be the metal's color for fresnel effect
+				vec3 F 							= FresnelSchlick(max(dot(H, V), 0.0) , F0);
+
+				// calculating Geometry factor and Normal Distribution Function
+				float NDF 						= DistrubutionGGX(N, H, roughMetal.x);
+				float G 						= GeometrySmith(N, V, L, roughMetal.x);
+
+				vec3 numen 						= NDF * G * F;
+				 // adding 0.0001 to avoid division by 0
+				float denom 					= 4.0 * max(dot(N, V), 0.0) * max(dot(L, N), 0.0) + 0.0001;
+				vec3 specular					= numen/denom;
+
+				// Fresnel value directly corresponds to the reflection factor
+				vec3 Ks 						= F;
+				vec3 Kd 						= 1.0 - Ks;
+				// As we know metals do not participate in diffuse
+				Kd 								= Kd * (1.0 - roughMetal.y);
+
+				// calculating Lambertian diffuse
+				float NdotL 					= max(dot(N, L), 0.0);
+				Lo 								= (Lo + ((Kd * color.xyz / PI) + specular) * radiance * NdotL) * shadow;
+			}
+		}
+
+		finalColor = vec4(vec3(g_Info.pbrAmbientFactor) * color.xyz + Lo, 1.0);
+		
+		// Reinhard Operator for Tonemapping (moving from HDR to LDR)
+		finalColor 							    = finalColor / (finalColor + vec4(1.0));
+	}
+
+	imageStore(g_PrimaryColor, xy, finalColor); //vec4(finalColor.xyz, 1.0f));
+}	

@@ -3,6 +3,7 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 #extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_nonuniform_qualifier : require
 
 #include "Common.h"
 #include "MeshCommon.h"
@@ -43,15 +44,15 @@ void main()
 
 	outUV 				= inUV;
 	
-	outNormal 			= normalize((meshData.trans_inv_model * vec4(inNormal.x, inNormal.y, inNormal.z, 0.0f)).xyz); 
-	outTangent 			= normalize((meshData.trans_inv_model * vec4(inTangent.x, inTangent.y, inTangent.z, 0.0f)).xyz); 
+	outNormal 			= normalize((meshData.normalMatrix * vec4(inNormal.x, inNormal.y, inNormal.z, 0.0f)).xyz); 
+	outTangent 			= normalize((meshData.normalMatrix * vec4(inTangent.x, inTangent.y, inTangent.z, 0.0f)).xyz); 
 	outBiTangent 		= cross(outNormal, outTangent) * inTangent.w;
 
-	outPosition 		= (meshData.model * vec4(inPos, 1.0));
+	outPosition 		= (meshData.modelMatrix * vec4(inPos, 1.0));
 	gl_Position 		= g_Info.camViewProj * outPosition;
 
 	outPosition 		= g_Info.camView * outPosition;
-	outNormal 			= (g_Info.camView * vec4(outNormal, 0.0)).xyz;
-	outTangent 			= (g_Info.camView * vec4(outTangent, 0.0)).xyz;
-	outBiTangent 		= (g_Info.camView * vec4(outBiTangent, 0.0)).xyz;
+	//outNormal 			= (g_Info.camView * vec4(outNormal, 0.0)).xyz;
+	//outTangent 			= (g_Info.camView * vec4(outTangent, 0.0)).xyz;
+	//outBiTangent 		= (g_Info.camView * vec4(outBiTangent, 0.0)).xyz;
 }

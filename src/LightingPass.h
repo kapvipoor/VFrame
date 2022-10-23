@@ -34,6 +34,22 @@ public:
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 };
 
+class CSkyboxDeferredPass : public CPass
+{
+public:
+	CSkyboxDeferredPass(CVulkanRHI*);
+	~CSkyboxDeferredPass();
+
+	virtual bool CreateRenderpass(RenderData* p_renderData) override;
+	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
+
+	virtual bool Update(UpdateData*) override;
+	virtual bool Render(RenderData*) override;
+	virtual void Destroy() override;
+
+	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+};
+
 class CDeferredPass : public CPass
 {
 public:

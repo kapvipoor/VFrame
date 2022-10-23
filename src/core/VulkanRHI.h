@@ -5,6 +5,12 @@
 class CVulkanRHI : public CVulkanCore
 {
 public:
+	enum RendererType
+	{
+		 Forward
+		,Deferred
+	};
+
 	struct DescriptorData
 	{
 		int									bindingDest;
@@ -28,6 +34,9 @@ public:
 	bool CreateDescriptors(const DescDataList& p_descdataList, VkDescriptorPool& p_descPool,VkDescriptorSetLayout* p_descLayout, uint32_t p_layoutCount, VkDescriptorSet* p_desc, void* p_next = VK_NULL_HANDLE);
 	bool CreateDescriptors(uint32_t p_varDescCount, const DescDataList& p_descDataList, VkDescriptorPool& p_descPool,VkDescriptorSetLayout& p_descSetLayout, VkDescriptorSet& p_descSet, uint32_t p_texArrayIndex);
 
-private:
+	RendererType GetRendererType() { return m_rendererType; }
+	void SetRenderType(RendererType p_type) { m_rendererType = p_type; }
 
+private:
+	RendererType m_rendererType;
 };

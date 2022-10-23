@@ -7,6 +7,7 @@ std::vector<CSelectionListener*> CSelectionBroadcast::m_listeneers;
 
 CSelectionListener::CSelectionListener()
 {
+	m_selectedSubMeshIndex = -1;
 	CSelectionBroadcast::m_listeneers.push_back(this);
 };
 

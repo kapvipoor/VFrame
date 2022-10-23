@@ -27,13 +27,16 @@ private:
 	enum CommandBufferId
 	{
 		  cb_ShadowMap				= 0
-		, cb_Forward				= 1
-		, cb_Deferred_GBuf			= 2
-		, cb_SSAO					= 3
-		, cb_Deferred_Lighting		= 4
-		, cb_DebugDraw				= 5
-		, cb_UI						= 6
-		, cb_PickerCopy2CPU			= 7
+		, cb_SSAO					= 1
+		, cb_SSAO_Blur				= 2
+		, cb_Forward				= 3
+		, cb_Deferred_GBuf			= 4
+		, cb_Deferred_Lighting		= 5
+		, cb_DebugDraw				= 6
+		, cb_UI						= 7
+		, cb_PickerCopy2CPU			= 8
+		, cb_ToneMapping			= 9
+		, cb_Skybox					= 10
 		, cb_max
 	};
 
@@ -51,8 +54,8 @@ private:
 	VkFence								m_vkFenceCmdBfrFree[FRAME_BUFFER_COUNT];
 
 	VkCommandPool						m_vkCmdPool;
-	VkCommandBuffer						m_vkCmdBfr[FRAME_BUFFER_COUNT][CommandBufferId::cb_max];
-	std::vector<VkCommandBuffer>		m_cmdBfrsInUse;
+	CVulkanRHI::CommandBuffer			m_vkCmdBfr[FRAME_BUFFER_COUNT][CommandBufferId::cb_max];
+	CVulkanRHI::CommandBufferList		m_cmdBfrsInUse;
 
 	CPerspectiveCamera*					m_primaryCamera;
 	COrthoCamera*						m_sunLightCamera;
@@ -67,14 +70,17 @@ private:
 	CSceneGraph*						m_sceneGraph;
 
 	CStaticShadowPrepass*				m_staticShadowPass;
-	CSkyboxPass*						m_skyboxPass;
+	CSkyboxPass*						m_skyboxForwardPass;
+	CSkyboxDeferredPass*				m_skyboxDeferredPass;
 	CForwardPass*						m_forwardPass;
 	CDeferredPass*						m_deferredPass;
 	CSSAOComputePass*					m_ssaoComputePass;
 	CSSAOBlurPass*						m_ssaoBlurPass;
 	CDeferredLightingPass*				m_deferredLightPass;
 	CDebugDrawPass*						m_debugDrawPass;
+	CToneMapPass*						m_toneMapPass;
 	CUIPass*							m_uiPass;
+	
 
 	bool InitCamera();
 	bool CreateSyncPremitives();																															
@@ -83,4 +89,6 @@ private:
 
 	void UpdateCamera(float p_delta);																																
 	bool DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkanRHI::CommandBuffer& p_cmdBfr);
+	bool RenderForward();
+	bool RenderDeferred();
 };

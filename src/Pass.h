@@ -14,8 +14,9 @@ public:
 		CLoadableAssets*			loadedAssets;
 		CFixedAssets*				fixedAssets;
 		const CPrimaryDescriptors*	primaryDescriptors;
-		CVulkanRHI::BufferList*		stagingBuffers; // used during the initializing phase
+		CVulkanRHI::BufferList*		stagingBuffers;			// used during the initializing phase
 		CSceneGraph*				sceneGraph;
+		CVulkanRHI::RendererType	rendererType;
 	};
 
 	struct UpdateData

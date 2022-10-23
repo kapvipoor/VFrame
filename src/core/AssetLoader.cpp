@@ -175,7 +175,10 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 						vert.normal = nm::float3(normalsBuffer ? nm::float3(normalsBuffer[(v * 3) + 0], normalsBuffer[(v * 3) + 1], normalsBuffer[(v * 3) + 2]) : nm::float3(0.0f));
 						vert.uv = texCoordsBuffer ? nm::float2(texCoordsBuffer[(v * 2) + 0], texCoordsBuffer[(v * 2) + 1]) : nm::float2(0.0f);
 						vert.tangent = tangentsBuffer ? nm::float4(tangentsBuffer[(v * 4) + 0], tangentsBuffer[(v * 4) + 1], tangentsBuffer[(v * 4) + 2], tangentsBuffer[(v * 4) + 3]) : nm::float4(0.0);
-						//vert.color = nm::float3(1.0, 1.0, 1.0);
+						if (p_loadData.flipUV == true)
+						{
+							vert.uv[1] = 1.0f - vert.uv[1];
+						}
 
 						bbMin[0] = std::min(bbMin[0], vert.pos[0]);
 						bbMin[1] = std::min(bbMin[1], vert.pos[1]);
@@ -226,6 +229,7 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 				}
 
 				SubMesh submesh{};
+				submesh.name		= mesh.name + "_" + std::to_string(objMesh.submeshes.size());	// this is to make sure all names are unique
 				submesh.firstIndex	= firstIndex;
 				submesh.indexCount	= indexCount;
 				submesh.materialId	= material_offset + glTFPrimitive.material;
@@ -261,7 +265,7 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 	// load materials
 	for (auto& gltf_mat : input.materials)
 	{
-		Material mat{ MAX_SUPPORTED_TEXTURES, MAX_SUPPORTED_TEXTURES };
+		Material mat;
 		if (gltf_mat.values.find("baseColorTexture") != gltf_mat.values.end())
 		{
 			mat.color_id = texture_offset + gltf_mat.values["baseColorTexture"].TextureIndex();
@@ -271,6 +275,11 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 		{
 			mat.normal_id = texture_offset + gltf_mat.additionalValues["normalTexture"].TextureIndex();
 		}
+		
+		mat.pbr_color		= nm::float3(1.0f); // nm::float3((float)gltf_mat.pbrMetallicRoughness.baseColorFactor[0], (float)gltf_mat.pbrMetallicRoughness.baseColorFactor[1], (float)gltf_mat.pbrMetallicRoughness.baseColorFactor[2]);
+		mat.metallic		= (float)gltf_mat.pbrMetallicRoughness.metallicFactor;
+		mat.roughness		= (float)gltf_mat.pbrMetallicRoughness.roughnessFactor;
+		mat.roughMetal_id	= texture_offset + ((gltf_mat.pbrMetallicRoughness.metallicRoughnessTexture.index < 0) ? MAX_SUPPORTED_TEXTURES : gltf_mat.pbrMetallicRoughness.metallicRoughnessTexture.index);
 
 		p_objScene.materialsList.push_back(mat);
 	}

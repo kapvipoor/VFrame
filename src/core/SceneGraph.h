@@ -22,9 +22,11 @@ public:
 	//virtual void OnSelectionChange(CEntity*) = 0;
 
 	CEntity* GetCurSelectEntity() { return m_selectedEntity; }
+	int GetSelectedSubMesh() { return m_selectedSubMeshIndex; }
 
 protected:
 	CEntity* m_selectedEntity;
+	int	m_selectedSubMeshIndex;
 };
 
 class CSelectionBroadcast
@@ -110,4 +112,6 @@ protected:
 	nm::Transform				m_transform;
 	BBox						m_boundingBox;
 	std::vector<BBox>			m_subBoundingBoxes;
+
+	virtual void forPolymorphism() {};
 };

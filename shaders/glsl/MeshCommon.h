@@ -6,8 +6,8 @@ layout(push_constant) uniform MeshID
 
 struct MeshData
 {
-	mat4  model;				// model matrix for this vertex buffer
-	mat4  trans_inv_model;
+	mat4  modelMatrix;			// model matrix for this vertex buffer
+	mat4  normalMatrix;			// inverse transpose of (view * model)
 };
 layout(set = 1, binding = 0) uniform Mesh
 {
@@ -18,8 +18,14 @@ layout(set = 1, binding = 1) uniform samplerCube g_skyboxSampler;
 
 struct Material
 {
-	uint color_id;
-	uint normal_id;
+	vec3 						color;
+	float						metallic;
+	vec3 						pbr_color;
+	float						roughness;
+	uint						color_id;
+	uint						normal_id;
+	uint						roughMetal_id;
+	uint						unassigned_0;
 };
 layout(set = 1, binding = 2) buffer Material_Storage
 {
@@ -27,3 +33,51 @@ layout(set = 1, binding = 2) buffer Material_Storage
 } g_materials;
 
 layout(set = 1, binding = 3) uniform texture2D g_textures[];
+
+
+vec4 GetColor(uint color_id, vec2 uv)
+{
+	vec4 color;
+	if(color_id < MAX_SUPPORTED_TEXTURES)
+	{
+		color 							= texture(sampler2D(g_textures[color_id], g_LinearSampler), uv);
+	}
+	else
+	{
+		color 							= texture(sampler2D(g_textures[DEFAULT_TEXTURE_ID], g_LinearSampler), uv);
+	}
+	return color;
+}
+
+vec3 GetNormal(mat3 TBN, uint normal_id, vec2 uv, vec3 inNormal)
+{
+	vec3 normal;
+	if(normal_id < MAX_SUPPORTED_TEXTURES)
+	{
+		vec2 xy 						= (texture(sampler2D(g_textures[normal_id], g_LinearSampler), uv).xy * 2.0) - vec2(1.0);
+		float z 						= sqrt(1.0 - dot(xy, xy));
+		normal 							= vec3(xy, z);
+		normal 							= normalize(TBN * normal);
+	}
+	else
+	{
+		normal 							= normalize(inNormal);
+	}
+
+	return normal;
+}
+
+vec2 GetRoughMetalPBR(uint roughMetal_id, vec2 uv, vec2 inRoughMetal)
+{
+	vec2 roughMetal;
+	if(roughMetal_id < MAX_SUPPORTED_TEXTURES)
+	{
+		roughMetal 						= texture(sampler2D(g_textures[roughMetal_id], g_LinearSampler), uv).yz;
+	}
+	else
+	{
+		roughMetal 						= inRoughMetal;
+	}
+
+	return roughMetal;
+}

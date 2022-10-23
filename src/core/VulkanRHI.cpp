@@ -2,6 +2,7 @@
 
 CVulkanRHI::CVulkanRHI(const char* p_applicaitonName, int p_renderWidth, int p_renderHeight)
 : CVulkanCore(p_applicaitonName, p_renderWidth, p_renderHeight)
+, m_rendererType(RendererType::Forward)
 {
 }
 
