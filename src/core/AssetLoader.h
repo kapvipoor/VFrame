@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <vector>
+#include <cmath>
 
 #include "external/NiceMath.h"
 
@@ -80,6 +81,19 @@ struct BBox
 	nm::float3					bbMax;
 	nm::float3					bBox[8];
 	BBox(Type p_type = Null, Origin p_origin = Auto);
+	
+	BBox operator* (nm::Transform const& p_transform);
+	bool operator==(const BBox& other);
+	
+	void Merge(const BBox&);
+	void Reset(Type p_type = Null, Origin p_origin = Auto);
+
+	float GetDepth() const;		// along Z
+	float GetHeight() const;	// along Y
+	float GetWidth() const;		// along X
+
+private:
+	void CalculateCorners();
 };
 
 struct SubMesh

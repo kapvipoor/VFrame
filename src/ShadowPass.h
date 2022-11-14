@@ -16,4 +16,9 @@ public:
 	virtual void Destroy() override;
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+
+	bool ReuseShadowMap() { return m_bReuseShadowMap; }
+
+private:
+	bool m_bReuseShadowMap;
 };

@@ -1606,6 +1606,22 @@ namespace nm {
              scaleVec       = nm::float3(1.0f);
          }
 
+         // for now only handling scaling multiplication
+         //Transform operator*(nm::Transform const& p_rhs)
+         //{
+         //   Transform temp;
+         //   //temp.SetScale(scale * p_rhs.scale);
+         //   //temp.SetRotation(p_rhs.rotate);
+         //   //temp.SetTranslate(p_rhs.translate);
+         //   temp = p_rhs;
+         //   return temp;
+         //}
+
+         nm::float4x4 GetTranslate()   const { return translate; }
+         nm::float4x4 GetRotate()      const { return rotate; }
+         nm::float4x4 GetScale()       const { return scale; }
+         nm::float4x4 GetTransform()   const { return transform; }
+
          nm::float4x4 GetTranslate() { return translate; }
          nm::float4x4 GetRotate() { return rotate; }
          nm::float4x4 GetScale() { return scale; }
@@ -1636,6 +1652,56 @@ namespace nm {
              transform = scale * rotate * translate;
          }
 
+         void SetRotation(float p_roll, float p_pitch, float p_yaw)
+         {
+             rotate = nm::float4x4::identity();
+             nm::float4x4 yawMat = nm::float4x4::identity();
+             nm::float4x4 pitchMat = nm::float4x4::identity();
+             nm::float4x4 rollMat = nm::float4x4::identity();
+
+             float su = sin(p_roll);
+             float cu = cos(p_roll);
+             float sv = sin(p_pitch);
+             float cv = cos(p_pitch);
+             float sw = sin(p_yaw);
+             float cw = cos(p_yaw);
+
+             //ensure order for multiplixation - (roll * yaw) * pitch 
+
+             if(p_roll != 0.0f)
+             {
+                rollMat = nm::float4x4::from_rows(  nm::float4(cos(p_roll),     sin(p_roll),    0.0f,           0.0f),
+                                                    nm::float4(-sin(p_roll),    cos(p_roll),    0.0f,           0.0f),
+                                                    nm::float4(0.0f,            0.0f,           1.0f,           0.0f),
+                                                    nm::float4(0.0f,            0.0f,           0.0f,           1.0f));
+
+                rotate = rotate * rollMat;
+             }
+
+             if(p_yaw != 0.0f)
+             {
+                yawMat = nm::float4x4::from_rows(   nm::float4(cos(p_yaw),      0.0f,           -sin(p_yaw),   0.0f),
+                                                    nm::float4(0.0f,            1.0f,           0.0f,          0.0f),
+                                                    nm::float4(sin(p_yaw),      0.0f,           cos(p_yaw),    0.0f),
+                                                    nm::float4(0.0f,            0.0f,           0.0f,          1.0f));
+
+                rotate = rotate * yawMat;
+             }
+
+             if(p_pitch != 0.0f)
+             {
+                pitchMat = nm::float4x4::from_rows( nm::float4(1.0f,            0.0f,          0.0f,           0.0f),
+                                                    nm::float4(0.0f,            cos(p_pitch),  sin(p_pitch),   0.0f),
+                                                    nm::float4(0.0f,            -sin(p_pitch), cos(p_pitch),   0.0f),
+                                                    nm::float4(0.0f,            0.0f,          0.0f,           1.0f));
+
+                rotate = rotate * pitchMat;
+             }
+
+             Decompose2Rotation(rotate, rotateVec);
+             transform = scale * rotate * translate;
+         }
+
          void SetScale(nm::float4x4 p_scale)
          {
              scale = p_scale;
@@ -1652,5 +1718,21 @@ namespace nm {
              transform.column[3][2] = translate.column[3][2];
              transform.column[3][3] = translate.column[3][3];
          }
+
+         void SetTranslate(nm::float4 p_translate)
+         {
+             translateVec = p_translate.xyz();
+
+             translate.column[3][0] = p_translate[0];
+             translate.column[3][1] = p_translate[1];
+             translate.column[3][2] = p_translate[2];
+             translate.column[3][3] = p_translate[3];
+          
+             transform.column[3][0] = p_translate[0];
+             transform.column[3][1] = p_translate[1];
+             transform.column[3][2] = p_translate[2];
+             transform.column[3][3] = p_translate[3];
+         }
+
      };
 }

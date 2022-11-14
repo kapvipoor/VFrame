@@ -3,7 +3,9 @@
 #include "external/imguizmo/ImGuizmo.h"
 
 std::vector<CEntity*> CSceneGraph::s_entities;
+bool CSceneGraph::s_bShouldUpdateSceneBBox = false;
 std::vector<CSelectionListener*> CSelectionBroadcast::m_listeneers;
+nm::Transform CSceneGraph::s_sceneTransform = nm::Transform();
 
 CSelectionListener::CSelectionListener()
 {
@@ -43,6 +45,28 @@ CSceneGraph::~CSceneGraph()
 	delete m_selectionBroadcast;
 }
 
+bool CSceneGraph::Update()
+{
+	m_sceneStatus = SceneStatus::ss_NoChange;
+	BBox prevBBox = m_boundingBox;
+	if (s_bShouldUpdateSceneBBox == true)
+	{
+		m_boundingBox.Reset();
+		s_bShouldUpdateSceneBBox = false;
+		for (int i = 3; i < s_entities.size(); i++)
+		{
+			m_boundingBox.Merge((*s_entities[i]->GetBoundingBox()) * s_entities[i]->GetTransform());
+			m_sceneStatus = SceneStatus::ss_SceneMoved;
+		}
+	}
+	if (!(prevBBox == m_boundingBox))
+	{
+		m_sceneStatus = SceneStatus::ss_BoundsChange;
+	}
+
+	return true;
+}
+
 void CSceneGraph::SetCurSelectEntityId(int p_entityId)
 {
 	if (p_entityId < -1 || p_entityId > GetEntities()->size())
@@ -51,6 +75,18 @@ void CSceneGraph::SetCurSelectEntityId(int p_entityId)
 	}
 
 	m_selectionBroadcast->Broadcast(this, p_entityId);
+}
+
+uint32_t CSceneGraph::RegisterEntity(CEntity* p_entity)
+{
+	uint32_t count = (uint32_t)s_entities.size();
+	s_entities.push_back(p_entity);
+	return count;
+}
+
+void CSceneGraph::RequestSceneBBoxUpdate()
+{
+	s_bShouldUpdateSceneBBox = true;
 }
 
 CEntity::CEntity(std::string p_name)
@@ -64,6 +100,18 @@ void CEntity::SetTransform(nm::Transform p_transform)
 {
 	m_dirty						= true;
 	m_transform					= p_transform;
+	CSceneGraph::RequestSceneBBoxUpdate();
+}
+
+nm::Transform& CEntity::GetTransform()
+{
+	return m_transform;
+}
+
+void CEntity::SetBoundingBox(BBox p_bbox, bool p_bRecomputeSceneBBox)
+{
+	m_boundingBox				= p_bbox;
+	CSceneGraph::RequestSceneBBoxUpdate();
 }
 
 CDebugData::CDebugData()

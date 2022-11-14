@@ -46,6 +46,8 @@ public:
     const nm::float3 GetLookAt() const { return m_lookAt; }
 
 protected:
+    bool                            m_bInverted;
+    const nm::float3                c_up = nm::float3(0.0f, -1.0f * (m_bInverted ? -1.0f : 1.0f), 0.0f);
     float                           m_dist;
     float                           m_zNear;
     float                           m_zFar;
@@ -126,12 +128,12 @@ public:
         virtual void Pure() override {};
     };
 
-    COrthoCamera(std::string p_entityName) : CCamera(p_entityName) {}
+    COrthoCamera(std::string p_entityName);
     ~COrthoCamera() {}
 
     virtual bool Init(InitData* p_initData) override;
     virtual void Update(UpdateData p_data) override;
 
 private:
-    nm::float4 m_lrbt;  // left, right, bottom, top
+    nm::float4                  m_lrbt;  // left, right, bottom, top
 };
