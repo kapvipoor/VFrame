@@ -1,5 +1,5 @@
-<img width="1445" alt="Forward_PBR_PCF_SSAO" src="https://user-images.githubusercontent.com/7133245/197421975-43097966-0593-43d1-a72a-d590b19dc8de.PNG">
-<img width="1445" alt="Differed_PBR_SSAO" src="https://user-images.githubusercontent.com/7133245/197422282-5f507afe-8b78-4434-bce5-56f11aaab199.PNG">
+<img width="1453" alt="FixedShadowSceneFitting" src="https://user-images.githubusercontent.com/7133245/201559754-c2055929-a7ba-41d2-b3dd-21b5e5826d2f.PNG">
+<img width="1444" alt="FixedShadowSceneFitting_2" src="https://user-images.githubusercontent.com/7133245/201559782-e4a9f4fd-1cc3-4093-8c4c-896b1de31adb.PNG">
 
 # VFrame
  A compilation of few rasterization techniques using Vulkan API and C++
@@ -64,6 +64,8 @@ Feature Integrated
 	- Features: 
 		1. Orthographic Shadow Maps implemented
 		2. Implemented PCF - Fixed buggy PCF in Forward
+		3. Used scene's bounding box to perfectly fit the directional light's shaodw camera for best shadow map results
+		4. Reuseing shadow map from previous frame if the scene has not changed
 	- Challanges Faced:
 		1. Wrong Orthgraphic Matrics were implemented. Ensure there is an implemtation for Right Hand, Zero to One Z value
 		2. Identifying Vulkan Vetex to Pixel pipeline - Z ranges [-1,1] and does not need to be normalised to [0,1]
@@ -72,17 +74,13 @@ Feature Integrated
 		5. Some wrong self shadowing issues related to low Depth Precision - FIXED by increasing precision from 16 bits to 24 bits
 		6. Some other wrong self shadowing issues - FIXED by ensuring shadow is applied to (NdotL < 0)
 	- Algorithm Limitations:
-		1. Shadow map quality at 1024x1024 for 1080p is terrible. Not good at 8Kx8K either
-		2. Perspective shadow map needs linearization of depth values to work
-		3. Directional Light is being applied to regions in shaodw as well.
-		4. High Perspective and Projection Aliasing
+		1. Perspective shadow map needs linearization of depth values to work
+		2. High Perspective and Projection Aliasing
 	- Bugs:
 		1. PCF is not correct in the differed pass
 		2. Peter-Panning effect has not been addressed
-		3. Shadow Acne has not been addressed
-		4. Front face culling in shadow pass is producing buggy results
-		5. PCF is producing buggy results
-		6. PCF Causing HAlo effect aroung intersecting geometry (Eg: Sponza and Suzzane)
+		3. Front face culling in shadow pass is producing buggy results
+		4. PCF Causing HAlo effect aroung intersecting geometry (Eg: Sponza and Suzzane)
 
 9.	Physically Based Rendering
 	- Features 
