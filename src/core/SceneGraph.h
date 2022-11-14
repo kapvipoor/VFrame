@@ -48,39 +48,53 @@ public:
 	CDebugData();
 	~CDebugData() {};
 
-	bool IsDebugDrawEnabled() { return m_drawBBox; }
+	bool IsDebugDrawEnabled() const { return m_drawBBox; }
 	void SetDebugDrawEnable(bool p_enable) { m_drawBBox = p_enable; }
 
 	bool IsSubmeshDebugDrawEnabled() { return m_drawSubmeshBBox; }
 	void SetSubmeshDebugDrawEnable(bool p_enable) { m_drawSubmeshBBox = p_enable; }
 
 protected:
-	bool						m_drawBBox;
-	bool						m_drawSubmeshBBox;
+	bool m_drawBBox;
+	bool m_drawSubmeshBBox;
 };
  
-class CSceneGraph : CDebugData
+class CSceneGraph : public CDebugData
 {
 	friend class CEntity;
 public:
 	typedef std::vector<CEntity*> EntityList;
 
+	enum SceneStatus
+	{
+			ss_NoChange = 0
+		,	ss_SceneMoved				// the submeshes have moved but have not changed the bounds of the scene
+		,	ss_BoundsChange				// the submeshes have moved and have chnaged the bounds of the scene
+	};
+
 	CSceneGraph();
 	~CSceneGraph();
+
+	bool Update();
 
 	static EntityList* GetEntities() { return &s_entities; };
 	void SetCurSelectEntityId(int p_id);
 
-private:
-	CSelectionBroadcast*		m_selectionBroadcast;
-	static EntityList			s_entities;
+	const BBox* GetBoundingBox() const { return &m_boundingBox; }
 
-	static uint32_t RegisterEntity(CEntity* p_entity)
-	{
-		uint32_t count = (uint32_t)s_entities.size();
-		s_entities.push_back(p_entity);
-		return count;
-	}
+	nm::Transform GetTransform() const { return s_sceneTransform; }
+	SceneStatus GetSceneStatus() { return m_sceneStatus; }
+
+private:
+	static EntityList			s_entities;
+	static bool					s_bShouldUpdateSceneBBox;
+	static nm::Transform		s_sceneTransform;				// this is only used by the entity to multiply with its transform 
+	BBox						m_boundingBox;
+	CSelectionBroadcast*		m_selectionBroadcast;
+	SceneStatus					m_sceneStatus;
+
+	static uint32_t RegisterEntity(CEntity* p_entity);
+	static void RequestSceneBBoxUpdate();
 };
 
 class CEntity : public CDebugData
@@ -93,9 +107,9 @@ public:
 	const char* GetName() { return m_name.c_str(); }
 
 	void SetTransform(nm::Transform p_transform);
-	nm::Transform& GetTransform() { return m_transform; }
+	nm::Transform& GetTransform();
 	
-	void SetBoundingBox(BBox p_bbox) { m_boundingBox = p_bbox; }
+	void SetBoundingBox(BBox p_bbox, bool p_bRecomputeSceneBBox = true);
 	BBox* GetBoundingBox() { return &m_boundingBox; }
 
 	uint32_t GetSubBoundingBoxCount() { return (uint32_t)m_subBoundingBoxes.size(); }

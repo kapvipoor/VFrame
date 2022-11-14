@@ -81,13 +81,12 @@ private:
 	CToneMapPass*						m_toneMapPass;
 	CUIPass*							m_uiPass;
 	
-
 	bool InitCamera();
 	bool CreateSyncPremitives();																															
 	void DestroySyncPremitives();
 	bool CreatePasses();
 
-	void UpdateCamera(float p_delta);																																
+	bool UpdateCamera(float p_delta);																																
 	bool DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkanRHI::CommandBuffer& p_cmdBfr);
 	bool RenderForward();
 	bool RenderDeferred();

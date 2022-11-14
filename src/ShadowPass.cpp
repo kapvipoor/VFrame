@@ -4,6 +4,7 @@ CStaticShadowPrepass::CStaticShadowPrepass(CVulkanRHI* p_rhi)
 	: CPass(p_rhi)
 {
 	m_frameBuffer.resize(1);
+	m_bReuseShadowMap = false;
 }
 
 CStaticShadowPrepass::~CStaticShadowPrepass()
@@ -12,7 +13,7 @@ CStaticShadowPrepass::~CStaticShadowPrepass()
 
 bool CStaticShadowPrepass::CreateRenderpass(RenderData* p_renderData)
 {
-	CVulkanRHI::Image renderTarget			= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_LightDepth);
+	CVulkanRHI::Image renderTarget			= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_DirectionalShadowDepth);
 	CVulkanRHI::Renderpass* renderpass		= &m_pipeline.renderpassData; 
 
 	renderpass->AttachDepth(renderTarget.format, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE,	VK_IMAGE_LAYOUT_UNDEFINED,	VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
@@ -88,8 +89,11 @@ bool CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	return true;
 }
 
-bool CStaticShadowPrepass::Update(UpdateData*)
+bool CStaticShadowPrepass::Update(UpdateData* p_updateData)
 {
+	// we are choosig to reuse the shadow map if the scene graph has not gone through any changes 
+	m_bReuseShadowMap = (p_updateData->sceneGraph->GetSceneStatus() == CSceneGraph::SceneStatus::ss_NoChange) ? true : false;
+	
 	return true;
 }
 

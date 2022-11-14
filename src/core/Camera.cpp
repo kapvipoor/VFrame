@@ -4,7 +4,8 @@
 CCamera::CCamera(std::string p_name)
     : CEntity(p_name)
 {
-    m_moveScale = 1.0f;
+    m_bInverted         = false;
+    m_moveScale         = 1.0f;
 }
 
 bool CCamera::Init(InitData*)
@@ -166,14 +167,22 @@ void CPerspectiveCamera::LookAt(nm::float4 eyePos, nm::float4 lookAt)
     m_pitch                     = atan2f(zBasis.y(), fLen);
 }
 
+COrthoCamera::COrthoCamera(std::string p_entityName)
+    : CCamera(p_entityName) 
+{
+}
+
 bool COrthoCamera::Init(InitData* p_initData)
 {
     OrthInitdData* orthoInitData = dynamic_cast<OrthInitdData*>(p_initData);
     if (!orthoInitData)
+    {
+        std::cout << "dynamic_cast<OrthInitdData*>(p_initData) failed";
         return false;
+    }        
 
     m_lrbt                      = orthoInitData->lrbt;
-    m_up                        = orthoInitData->up;
+    m_up                        = c_up;
     m_lookFrom                  = nm::float4{ orthoInitData->lookFrom.xyz(), 1.0f };
     m_zNear                     = orthoInitData->nearPlane;
     m_zFar                      = orthoInitData->farPlane;
@@ -187,6 +196,9 @@ bool COrthoCamera::Init(InitData* p_initData)
     m_viewProj                  = m_projection * m_view;
 
     CCamera::Init(p_initData);
+
+    m_transform.SetRotation(0.0f, -m_pitch, m_yaw);
+    m_transform.SetTranslate(m_lookFrom);
 
     return true;
 }
@@ -202,5 +214,6 @@ void COrthoCamera::Update(UpdateData p_data)
         m_lookAt                = dir.xyz(); // (m_lookFrom - dir).xyz();
         m_view                  = LookAtRH(m_lookFrom, m_lookFrom - dir);
         m_viewProj              = m_projection * m_view;
+        m_up                    = nm::float4(m_transform.GetRotate() * nm::float4(c_up, 1.0)).xyz();
     }
 }

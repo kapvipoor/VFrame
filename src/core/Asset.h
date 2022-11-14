@@ -266,7 +266,7 @@ public:
 		, rt_Albedo					= 3
 		, rt_SSAO					= 4
 		, rt_SSAOBlur				= 5
-		, rt_LightDepth				= 6
+		, rt_DirectionalShadowDepth	= 6
 		, rt_PrimaryColor			= 7
 		, rt_DeferredRoughMetal		= 8
 		, rt_max

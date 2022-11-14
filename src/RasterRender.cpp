@@ -90,11 +90,11 @@ void CRasterRender::on_destroy()
 bool CRasterRender::on_create(HINSTANCE pInstance)
 {
 	CVulkanRHI::InitData initData{};
-	initData.winInstance = pInstance;
-	initData.winHandle = CWinCore::s_Window.handle;
-	initData.queueType = VK_QUEUE_GRAPHICS_BIT;
-	initData.swapChaineImageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-	initData.swapchainImageFormat = VK_FORMAT_B8G8R8A8_UNORM;
+	initData.winInstance							= pInstance;
+	initData.winHandle								= CWinCore::s_Window.handle;
+	initData.queueType								= VK_QUEUE_GRAPHICS_BIT;
+	initData.swapChaineImageUsage					= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	initData.swapchainImageFormat					= VK_FORMAT_B8G8R8A8_UNORM;
 
 	RETURN_FALSE_IF_FALSE(m_rhi->initialize(initData));
 
@@ -122,6 +122,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSAO);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSAOBlur);
+		
 		//m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, m_vkCmdBfr[0][0], CRenderTargets::rt_DeferredLighting);
 
 		RETURN_FALSE_IF_FALSE(m_rhi->EndCommandBuffer(m_vkCmdBfr[0][0]));
@@ -149,7 +150,10 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 
 bool CRasterRender::on_update(float delta)
 {
-	RETURN_FALSE_IF_FALSE(m_rhi->AcquireNextSwapChain(m_vkswapchainAcquireSemaphore, m_swapchainIndex))
+	RETURN_FALSE_IF_FALSE(m_rhi->AcquireNextSwapChain(m_vkswapchainAcquireSemaphore, m_swapchainIndex));
+
+	m_sceneGraph->Update();
+	UpdateCamera(delta);
 
 	// if left mouse is clicked; prepare and pick object for this frame
 	m_pickObject = false;  m_keys[LEFT_MOUSE_BUTTON].down;
@@ -195,6 +199,8 @@ bool CRasterRender::on_update(float delta)
 
 	{
 		CPass::UpdateData updateData{};
+		updateData.sceneGraph						= m_sceneGraph;
+
 		m_staticShadowPass->Update(&updateData);
 		m_skyboxForwardPass->Update(&updateData);
 		m_skyboxDeferredPass->Update(&updateData);
@@ -207,8 +213,6 @@ bool CRasterRender::on_update(float delta)
 		m_toneMapPass->Update(&updateData);
 		m_uiPass->Update(&updateData);
 	}
-
-	UpdateCamera(delta);
 
 	if (!m_rhi->WaitFence(m_vkFenceCmdBfrFree[m_swapchainIndex]))
 		return false;
@@ -281,28 +285,25 @@ void CRasterRender::on_present()
 bool CRasterRender::InitCamera()
 {
 	CPerspectiveCamera::PerpspectiveInitdData persIntData{};
-	persIntData.fov							= 45.0f;
-	persIntData.aspect						= (float)CWinCore::s_Window.screenWidth / CWinCore::s_Window.screenHeight;
-	persIntData.lookFrom					= nm::float4(0.0f, 50.0f, 0.0f, 1.0f);
-	persIntData.lookAt						= nm::float3{ 0.0f, 0.0f, 0.0f };
-	persIntData.up							= nm::float3{ 0.0f, 1.0f,  0.0f };
-	persIntData.aperture					= 0.1f;							
-	persIntData.focusDistance				= 10.0f;							
-	persIntData.yaw							= 0.0f;									
-	persIntData.pitch						= 0.0f;							
+	persIntData.fov								= 45.0f;
+	persIntData.aspect							= (float)CWinCore::s_Window.screenWidth / CWinCore::s_Window.screenHeight;
+	persIntData.lookFrom						= nm::float4(0.0f, 50.0f, 0.0f, 1.0f);
+	persIntData.lookAt							= nm::float3{ 0.0f, 0.0f, 0.0f };
+	persIntData.up								= nm::float3{ 0.0f, 1.0f,  0.0f };
+	persIntData.aperture						= 0.1f;							
+	persIntData.focusDistance					= 10.0f;							
+	persIntData.yaw								= 0.0f;									
+	persIntData.pitch							= 0.0f;							
 	RETURN_FALSE_IF_FALSE( m_primaryCamera->Init(&persIntData));
 
 	COrthoCamera::OrthInitdData orthoInit{};
-	orthoInit.lookFrom						= nm::float4(0.0f);
-	orthoInit.up							= nm::float3{ 0.0f, 1.0f, 0.0f };
-	orthoInit.lrbt							= nm::float4{ -50.0f, 50.0f, -50.0f, 50.0f };
-	orthoInit.nearPlane						= 0;
-	orthoInit.farPlane						= 50;
-	orthoInit.yaw							= 0.0f;
-	orthoInit.pitch							= 0.0f;//1.5708f/*4.71239f*//*0.714f*/;
+	orthoInit.lookFrom							= nm::float4(0.0f);
+	orthoInit.lrbt								= nm::float4{ -50.0f, 50.0f, -50.0f, 50.0f };
+	orthoInit.nearPlane							= 0;
+	orthoInit.farPlane							= 50;
+	orthoInit.yaw								= 0.0f;
+	orthoInit.pitch								= 0.0f;
 	RETURN_FALSE_IF_FALSE(m_sunLightCamera->Init(&orthoInit));
-	//m_sunLightCamera->SetTranslation(nm::float3(0.0f, 45.0f, 0.0f));
-	//m_sunLightCamera->SetRotation(nm::float3(1.5708f, 0.0f, 0.0f));
 
 	return true;
 }
@@ -433,7 +434,7 @@ bool CRasterRender::CreatePasses()
 	return true;
 }
 
-void CRasterRender::UpdateCamera(float p_delta)
+bool CRasterRender::UpdateCamera(float p_delta)
 {
 	CCamera::UpdateData cdata{};
 	cdata.moveCamera						= m_keys[MIDDLE_MOUSE_BUTTON].down;
@@ -449,9 +450,32 @@ void CRasterRender::UpdateCamera(float p_delta)
 	cdata.Shft								= (m_keys[160].down || m_keys[16].down);
 	m_primaryCamera->Update(cdata);
 
+	// if the scene bounds have changed, reinitialize the sunlight camera
+	if (m_sceneGraph->GetSceneStatus() == CSceneGraph::SceneStatus::ss_BoundsChange)
+	{
+		// shadow camera by default will always look downwards, like sun at 12 o'clock
+		const BBox* sceneBB					= m_sceneGraph->GetBoundingBox();
+		
+		COrthoCamera::OrthInitdData orthoInit{};
+		orthoInit.lookFrom = nm::float4(0.0f);
+		orthoInit.lrbt						= nm::float4{ -sceneBB->GetWidth()/2.0f, sceneBB->GetWidth() / 2.0f, -sceneBB->GetDepth() / 2.0f, sceneBB->GetDepth() / 2.0f };
+		orthoInit.nearPlane					= 0;
+		orthoInit.farPlane					= sceneBB->GetHeight();
+		orthoInit.yaw						= 0.0f;
+		orthoInit.pitch						= 0.0f;
+		RETURN_FALSE_IF_FALSE(m_sunLightCamera->Init(&orthoInit));
+
+		nm::Transform transform = m_sunLightCamera->GetTransform();
+		transform.SetRotation(0.0f, 1.57f, 0.0f);		// looking straight down on the scene
+		transform.SetTranslate(nm::float4((sceneBB->bbMin[0] + sceneBB->bbMax[0]) / 2.0f, sceneBB->bbMax[1], (sceneBB->bbMin[2] + sceneBB->bbMax[2]) / 2.0f, 1.0f));
+		m_sunLightCamera->SetTransform(transform);
+	}
+
 	cdata									= CCamera::UpdateData();
 	cdata.timeDelta							= p_delta;
 	m_sunLightCamera->Update(cdata);
+
+	return true;
 }
 
 bool CRasterRender::DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkanRHI::CommandBuffer& p_cmdBfr)
@@ -487,43 +511,46 @@ bool CRasterRender::RenderDeferred()
 	renderData.sceneGraph					= m_sceneGraph;
 	renderData.rendererType					= m_rhi->GetRendererType();
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ShadowMap];
-	RETURN_FALSE_IF_FALSE(m_staticShadowPass->Render(&renderData));
-	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+	if (!m_staticShadowPass->ReuseShadowMap())
+	{
+		renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ShadowMap];
+		RETURN_FALSE_IF_FALSE(m_staticShadowPass->Render(&renderData));
+		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+	}
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Skybox];
+	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Skybox];
 	RETURN_FALSE_IF_FALSE(m_skyboxDeferredPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Deferred_GBuf];
+	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Deferred_GBuf];
 	RETURN_FALSE_IF_FALSE(m_deferredPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO];
+	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO];
 	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO_Blur];
+	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO_Blur];
 	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Deferred_Lighting];
+	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Deferred_Lighting];
 	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
 	// placing debug draw here because I do not want the depth buffer to go through another layout barrier
 	// from depth stencil attachment to shader read used in ssao pass
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_DebugDraw];
+	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_DebugDraw];
 	if (m_debugDrawPass->Render(&renderData))
 	{
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 	}
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ToneMapping];
+	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ToneMapping];
 	RETURN_FALSE_IF_FALSE(m_toneMapPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_UI];
+	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_UI];
 	RETURN_FALSE_IF_FALSE(m_uiPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
@@ -533,45 +560,48 @@ bool CRasterRender::RenderDeferred()
 bool CRasterRender::RenderForward()
 {
 	CPass::RenderData renderData{};
-	renderData.fixedAssets = m_fixedAssets;
-	renderData.loadedAssets = m_loadableAssets;
-	renderData.primaryDescriptors = m_primaryDescriptors;
-	renderData.scIdx = m_swapchainIndex;
-	renderData.sceneGraph = m_sceneGraph;
+	renderData.fixedAssets				= m_fixedAssets;
+	renderData.loadedAssets				= m_loadableAssets;
+	renderData.primaryDescriptors		= m_primaryDescriptors;
+	renderData.scIdx					= m_swapchainIndex;
+	renderData.sceneGraph				= m_sceneGraph;
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ShadowMap];
-	RETURN_FALSE_IF_FALSE(m_staticShadowPass->Render(&renderData));
-	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+	if (!m_staticShadowPass->ReuseShadowMap())
+	{
+		renderData.cmdBfr				= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ShadowMap];
+		RETURN_FALSE_IF_FALSE(m_staticShadowPass->Render(&renderData));
+		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+	}
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Skybox];
+	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Skybox];
 	RETURN_FALSE_IF_FALSE(m_skyboxForwardPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Forward];
+	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Forward];
 	RETURN_FALSE_IF_FALSE(m_forwardPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO];
+	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO];
 	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO_Blur];
+	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO_Blur];
 	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
 	// placing debug draw here because I do not want the depth buffer to go through another layout barrier
 	// from depth stencil attachment to shader read used in ssao pass
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_DebugDraw];
+	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_DebugDraw];
 	if (m_debugDrawPass->Render(&renderData))
 	{
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 	}
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ToneMapping];
+	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ToneMapping];
 	RETURN_FALSE_IF_FALSE(m_toneMapPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_UI];
+	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_UI];
 	RETURN_FALSE_IF_FALSE(m_uiPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 

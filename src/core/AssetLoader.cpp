@@ -449,6 +449,61 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 
 BBox::BBox(Type p_type, Origin p_origin)
 {
+	Reset(p_type, p_origin);
+}
+
+BBox BBox::operator*(nm::Transform const& p_transform)
+{
+	BBox box;
+	if (!(p_transform.GetRotate() == nm::float4x4().identity()))
+	{
+		for (int i = 0; i < 8; i++)
+		{
+			box.bBox[i] = (p_transform.GetTransform() * nm::float4(this->bBox[i], 1.0)).xyz();
+
+			box.bbMin[0] = (box.bbMin[0] <= box.bBox[i][0]) ? box.bbMin[0] : box.bBox[i][0];
+			box.bbMin[1] = (box.bbMin[1] <= box.bBox[i][1]) ? box.bbMin[1] : box.bBox[i][1];
+			box.bbMin[2] = (box.bbMin[2] <= box.bBox[i][2]) ? box.bbMin[2] : box.bBox[i][2];
+
+			box.bbMax[0] = (box.bbMax[0] > box.bBox[i][0]) ? box.bbMax[0] : box.bBox[i][0];
+			box.bbMax[1] = (box.bbMax[1] > box.bBox[i][1]) ? box.bbMax[1] : box.bBox[i][1];
+			box.bbMax[2] = (box.bbMax[2] > box.bBox[i][2]) ? box.bbMax[2] : box.bBox[i][2];
+		}
+	}
+	else
+	{
+		box.bbMin = (p_transform.GetTransform()  * nm::float4(this->bbMin, 1.0)).xyz();
+		box.bbMax = (p_transform.GetTransform() * nm::float4(this->bbMax, 1.0)).xyz();
+
+		box.CalculateCorners();
+	}
+	return box;
+}
+
+bool BBox::operator==(const BBox& other)
+{
+	if (this->bbMin == other.bbMin && this->bbMax == other.bbMax)
+		return true;
+	
+	return false;
+}
+
+// merge this with that
+void BBox::Merge(const BBox& that)
+{
+	this->bbMin[0] = (this->bbMin[0] <= that.bbMin[0]) ? this->bbMin[0] : that.bbMin[0];
+	this->bbMin[1] = (this->bbMin[1] <= that.bbMin[1]) ? this->bbMin[1] : that.bbMin[1];
+	this->bbMin[2] = (this->bbMin[2] <= that.bbMin[2]) ? this->bbMin[2] : that.bbMin[2];
+
+	this->bbMax[0] = (this->bbMax[0] > that.bbMax[0]) ? this->bbMax[0] : that.bbMax[0];
+	this->bbMax[1] = (this->bbMax[1] > that.bbMax[1]) ? this->bbMax[1] : that.bbMax[1];
+	this->bbMax[2] = (this->bbMax[2] > that.bbMax[2]) ? this->bbMax[2] : that.bbMax[2];
+
+	CalculateCorners();
+}
+
+void BBox::Reset(Type p_type, Origin p_origin)
+{
 	bbMin = nm::float3{ 0.0f };
 	bbMax = nm::float3{ 0.0f };
 
@@ -464,6 +519,26 @@ BBox::BBox(Type p_type, Origin p_origin)
 		bbMax = nm::float3{ 1.0f, 1.0f, 2.0f };
 	}
 
+	CalculateCorners();
+}
+
+float BBox::GetDepth() const
+{
+	return std::abs(bbMin[2]) + std::abs(bbMax[2]);
+}
+
+float BBox::GetHeight() const
+{
+	return std::abs(bbMin[1]) + std::abs(bbMax[1]);
+}
+
+float BBox::GetWidth() const
+{
+	return std::abs(bbMin[0]) + std::abs(bbMax[0]);
+}
+
+void BBox::CalculateCorners()
+{
 	bBox[0] = nm::float3{ bbMin[0], bbMin[1], bbMin[2] };
 	bBox[1] = nm::float3{ bbMax[0], bbMin[1], bbMin[2] };
 	bBox[2] = nm::float3{ bbMax[0], bbMax[1], bbMin[2] };

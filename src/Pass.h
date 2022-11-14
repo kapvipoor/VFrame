@@ -26,6 +26,7 @@ public:
 		nm::float2					screenRes;
 		bool						leftMouseDown;
 		bool						rightMouseDown;
+		CSceneGraph*				sceneGraph;
 	};
 
 	CPass(CVulkanRHI* p_core)
