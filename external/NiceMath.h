@@ -791,6 +791,26 @@ namespace nm {
     inline constexpr S lengthsq(const vec<S, N>& v) { return dot(v, v); }
 
     /**
+     * @return The squared distance between 2 vectors
+     */
+    template <unsigned N, class S>
+    inline constexpr S distancesq(const vec<S, N>& l, const vec<S, N>& r) {
+        S result = (S)0.00f;
+        for (unsigned int i = 0; i < N; i++) {
+            result += (l[i] - r[i]) * (l[i] - r[i]);
+        }
+        return result;
+    }
+
+    /**
+     * @return The distance between 2 vectors
+     */
+    template <unsigned N, class S>
+    inline constexpr S distance(const vec<S, N>& l, const vec<S, N>& r) {
+        return (S)std::sqrt(distancesq(l, r));
+    }
+
+    /**
      * @return The magnitude of a vector.
      */
     template <unsigned N, class S>

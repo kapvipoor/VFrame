@@ -1,8 +1,8 @@
 #include "Camera.h"
 #include "AssetLoader.h"
 
-CCamera::CCamera(std::string p_name)
-    : CEntity(p_name)
+CCamera::CCamera(/*std::string p_name*/)
+//    : CEntity(p_name)
 {
     m_bInverted         = false;
     m_moveScale         = 1.0f;
@@ -10,28 +10,28 @@ CCamera::CCamera(std::string p_name)
 
 bool CCamera::Init(InitData*)
 {
-    BBox box = BBox(BBox::Unit, BBox::CameraStyle);
-    // the z values in vulkan ranges between 0-1 and not -1 and 1
-    // so, min.z = 0 and max.z = 1
-    box.bbMax[2] = 1.0f;
-    ComputeBBox(box);
-    for (int i = 0; i < 8; i++)
-    {
-        box.bBox[i] = (nm::inverse(m_viewProj) * nm::float4(box.bBox[i], 1.0)).xyz();
-    }
-    SetBoundingBox(box);
+//    BBox box = BBox(BBox::Unit, BBox::CameraStyle);
+//    // the z values in vulkan ranges between 0-1 and not -1 and 1
+//    // so, min.z = 0 and max.z = 1
+//    box.bbMax[2] = 1.0f;
+//    ComputeBBox(box);
+//    for (int i = 0; i < 8; i++)
+//    {
+//        box.bBox[i] = (nm::inverse(m_viewProj) * nm::float4(box.bBox[i], 1.0)).xyz();
+//    }
+//    SetBoundingBox(box);
     return true;
 }
 
 void CCamera::Update(UpdateData data)
 {   
-    if (m_dirty)
-    {
-        m_lookFrom      = nm::float4(m_transform.GetTranslateVector(), 1.0f);
-        m_pitch         = -m_transform.GetRotateVector().x();
-        m_yaw           = m_transform.GetRotateVector().y();
-        m_dirty         = false;
-    }
+    //if (m_dirty)
+    //{
+    //    m_lookFrom      = nm::float4(data.transform.GetTranslateVector(), 1.0f);
+    //    m_pitch         = -data.transform.GetRotateVector().x();
+    //    m_yaw           = data.transform.GetRotateVector().y();
+    //    //m_dirty         = false;
+    //}
 }
 
 nm::float4 CCamera::PolarToVector(float yaw, float pitch)
@@ -148,7 +148,8 @@ void CPerspectiveCamera::Update(UpdateData p_data)
 
     m_viewProj = m_projection * m_view;
 
-    CCamera::Update(p_data);
+    // TODO
+    //CCamera::Update(p_data);
 }
 
 void CPerspectiveCamera::LookAt(nm::float4 eyePos, nm::float4 lookAt)
@@ -167,8 +168,8 @@ void CPerspectiveCamera::LookAt(nm::float4 eyePos, nm::float4 lookAt)
     m_pitch                     = atan2f(zBasis.y(), fLen);
 }
 
-COrthoCamera::COrthoCamera(std::string p_entityName)
-    : CCamera(p_entityName) 
+COrthoCamera::COrthoCamera(/*std::string p_entityName*/)
+    //: CCamera(p_entityName) 
 {
 }
 
@@ -195,25 +196,28 @@ bool COrthoCamera::Init(InitData* p_initData)
     m_view                      = LookAtRH(m_lookFrom, m_lookFrom - dir);
     m_viewProj                  = m_projection * m_view;
 
-    CCamera::Init(p_initData);
+    //CCamera::Init(p_initData);
 
-    m_transform.SetRotation(0.0f, -m_pitch, m_yaw);
-    m_transform.SetTranslate(m_lookFrom);
+    //m_transform.SetRotation(0.0f, -m_pitch, m_yaw);
+    //m_transform.SetTranslate(m_lookFrom);
 
     return true;
 }
 
 void COrthoCamera::Update(UpdateData p_data)
 {
-    if (m_dirty)
+    //if (m_dirty)
     {
-        CCamera::Update(p_data);
-    
+        //CCamera::Update(p_data);
+        m_lookFrom = nm::float4(p_data.transform.GetTranslateVector(), 1.0f);
+        m_pitch = -p_data.transform.GetRotateVector().x();
+        m_yaw = p_data.transform.GetRotateVector().y();
+
         // recalculating view and viewproj
         nm::float4 dir          = PolarToVector(m_yaw, m_pitch) * m_dist;
         m_lookAt                = dir.xyz(); // (m_lookFrom - dir).xyz();
         m_view                  = LookAtRH(m_lookFrom, m_lookFrom - dir);
         m_viewProj              = m_projection * m_view;
-        m_up                    = nm::float4(m_transform.GetRotate() * nm::float4(c_up, 1.0)).xyz();
+        m_up                    = p_data.transform.GetRotateVector() * c_up;
     }
 }

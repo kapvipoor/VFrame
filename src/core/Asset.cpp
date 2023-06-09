@@ -778,13 +778,13 @@ void CScene::Show()
 			}
 			ImGui::TreePop();
 
-			// Assuming primary camera is object 0
-			if (doubleClickedEntity)
-			{
-				nm::Transform primaryCameraTransform = (*entities)[0]->GetTransform();
-				primaryCameraTransform.SetTranslate(m_selectedEntity->GetTransform().GetTranslate());
-				(*entities)[0]->SetTransform(primaryCameraTransform);
-			}
+			//// Assuming primary camera is object 0
+			//if (doubleClickedEntity)
+			//{
+			//	nm::Transform primaryCameraTransform = (*entities)[0]->GetTransform();
+			//	primaryCameraTransform.SetTranslate(m_selectedEntity->GetTransform().GetTranslate());
+			//	(*entities)[0]->SetTransform(primaryCameraTransform);
+			//}
 		}
 	}
 }
@@ -817,7 +817,7 @@ bool CScene::LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg
 		CVulkanRHI::Buffer stg;
 		ImageRaw tex;
 		
-		RETURN_FALSE_IF_FALSE(LoadRawImage((g_DefaultPath + "/tex_not_found.png").c_str(), tex));
+		RETURN_FALSE_IF_FALSE(LoadRawImage((g_DefaultPath / "tex_not_found.png").string().c_str(), tex));
 		RETURN_FALSE_IF_FALSE(CreateTexture(p_rhi, stg, &tex, VK_FORMAT_B8G8R8A8_SRGB,p_cmdBfr));
 		
 		FreeRawImage(tex);
@@ -831,20 +831,20 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 {
 	// Load skybox cubemap
 	{
-		std::string cubemap_path[6]{
-			g_AssetPath + "/skybox/Daylight_Box_Pieces/f.png"
-		,	g_AssetPath + "/skybox/Daylight_Box_Pieces//b.png"
-		,	g_AssetPath + "/skybox/Daylight_Box_Pieces/t.png"
-		,	g_AssetPath + "/skybox/Daylight_Box_Pieces/bt.png"
-		,	g_AssetPath + "/skybox/Daylight_Box_Pieces/l.png"
-		,	g_AssetPath + "/skybox/Daylight_Box_Pieces/r.png"
+		std::filesystem::path cubemap_path[6]{
+			g_AssetPath / "skybox/Daylight_Box_Pieces/f.png"
+		,	g_AssetPath / "skybox/Daylight_Box_Pieces//b.png"
+		,	g_AssetPath / "skybox/Daylight_Box_Pieces/t.png"
+		,	g_AssetPath / "skybox/Daylight_Box_Pieces/bt.png"
+		,	g_AssetPath / "skybox/Daylight_Box_Pieces/l.png"
+		,	g_AssetPath / "skybox/Daylight_Box_Pieces/r.png"
 		};
 
 		std::vector<ImageRaw> cubemap_raw;
 		cubemap_raw.resize(6);
 		for (int i = 0; i < 6; i++)
 		{
-			RETURN_FALSE_IF_FALSE(LoadRawImage(cubemap_path[i].c_str(), cubemap_raw[i]));
+			RETURN_FALSE_IF_FALSE(LoadRawImage(cubemap_path[i].string().c_str(), cubemap_raw[i]));
 		}
 
 		CVulkanRHI::Buffer stg;
@@ -860,8 +860,7 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 		loadData.flipUV					= false;
 		loadData.loadMeshOnly			= true;
 
-		std::string skybox_obj_path		= g_AssetPath + "/skybox/skybox.obj";
-		RETURN_FALSE_IF_FALSE(LoadObj(skybox_obj_path.c_str(), sceneraw, loadData));
+		RETURN_FALSE_IF_FALSE(LoadObj((g_AssetPath / "skybox/skybox.obj").string().c_str(), sceneraw, loadData));
 
 		MeshRaw meshraw					= sceneraw.meshList[0];
 		CRenderableMesh* mesh			= new CRenderableMesh("Skybox", MeshType::mt_Skybox, nm::float4x4::identity());
@@ -872,21 +871,26 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 	return true;
 }
 
-bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
+bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr, bool p_dumpBinaryToDisk)
 {
-	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/DragonAttenuation/glTF/DragonAttenuation.gltf");						//0
-	m_scenePaths.push_back(g_AssetPath + "/shadow_test_3.gltf");																		//1
-	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");							//2
-	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
-	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");											//4
-	m_scenePaths.push_back(g_AssetPath + "/Sponza/glTF/Sponza.gltf");																	//5
-	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");					//6
-	m_scenePaths.push_back(g_AssetPath + "/cube/cube.obj");																				//7
+	m_scenePaths.push_back(g_AssetPath/"glTFSampleModels / 2.0 / DragonAttenuation / glTF / DragonAttenuation.gltf");				//0
+	m_scenePaths.push_back(g_AssetPath/"shadow_test_3.gltf");																		//1
+	m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");							//2
+	m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
+	m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");											//4
+	m_scenePaths.push_back(g_AssetPath/"Sponza/glTF/Sponza.gltf");																	//5
+	m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");					//6
+	m_scenePaths.push_back(g_AssetPath/"cube/cube.obj");																			//7
+	m_scenePaths.push_back(g_AssetPath/"icosphere.gltf");																			//8
+	m_scenePaths.push_back(g_AssetPath/"dragon/dragon.obj");																		//9
+	m_scenePaths.push_back(g_AssetPath/"stanford_dragon_pbr/scene.gltf");															//10
+	m_scenePaths.push_back(g_AssetPath/"mitsuba/mitsuba.obj");																	//11
 
-	std::vector<std::string> paths;
-	//paths.push_back(m_scenePaths[3]);
+	std::vector<std::filesystem::path> paths;
+	//paths.push_back(m_scenePaths[7]);
 	paths.push_back(m_scenePaths[5]);
 	paths.push_back(m_scenePaths[4]);
+	paths.push_back(m_scenePaths[8]);
 
 	std::vector<bool> flipYList{ false, false, false };
 
@@ -897,7 +901,26 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 		loadData.flipUV = flipYList[i];
 		loadData.loadMeshOnly = false;
 
-		RETURN_FALSE_IF_FALSE(LoadGltf(paths[i].c_str(), sceneraw, loadData));
+		if (paths[i].extension() == ".gltf")
+		{
+			RETURN_FALSE_IF_FALSE(LoadGltf(paths[i].string().c_str(), sceneraw, loadData));
+		}
+		else if (paths[i].extension() == ".obj") 
+		{
+			RETURN_FALSE_IF_FALSE(LoadObj(paths[i].string().c_str(), sceneraw, loadData));
+		}
+		else
+		{
+			std::cerr << "Invalid file extension - " << paths[i] << std::endl;
+			return false;
+		}
+
+		if (p_dumpBinaryToDisk)
+		{
+			std::string outName = "D:/" + paths[i].stem().string();
+			WriteToDisk(std::filesystem::path(outName + "_vertex_float_p3_n3_uv2_t4.charp"), sizeof(Vertex) * sceneraw.meshList[i].vertexList.size(), (char*)sceneraw.meshList[i].vertexList.data());
+			WriteToDisk(std::filesystem::path(outName + "_index_uint32.charp"), sizeof(uint32_t) * sceneraw.meshList[i].indicesList.size(), (char*)sceneraw.meshList[i].indicesList.data());
+		}
 	}
 	
 	for (auto& meshraw : sceneraw.meshList)
@@ -950,6 +973,7 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 
 	// can binary dump in future to optimised format for faster binary loading
 	sceneraw.meshList.clear();
+
 	for(auto& tex : sceneraw.textureList)
 		FreeRawImage(tex);
 
@@ -1202,7 +1226,7 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Albedo,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAO,					VK_FORMAT_R32_SFLOAT,			fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAOBlur,				VK_FORMAT_R32_SFLOAT,			fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,	VK_FORMAT_D32_SFLOAT_S8_UINT,	4096, 4096,						VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,	VK_FORMAT_D32_SFLOAT_S8_UINT,	512, 512,						VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DeferredRoughMetal,		VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
 
@@ -1669,6 +1693,7 @@ bool CRenderableDebug::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx, const CFixed
 
 	if (p_sceneGraph->IsDebugDrawEnabled())
 	{
+		// this manages the vertices and indices for the bbox of the scene
 		const nm::float3* box = p_sceneGraph->GetBoundingBox()->bBox;
 		for (uint32_t i = 0; i < vertexTemplateSize; i++)
 		{
@@ -1678,9 +1703,10 @@ bool CRenderableDebug::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx, const CFixed
 	
 		{
 			auto indices = indexTemplate;
-			int vertexfactor = (displayingBBoxIndex * vertexTemplateSize);
+			int vertexfactor = (displayingBBoxIndex * vertexTemplateSize);	// vertex offset
 			std::transform(indices.begin(), indices.end(), indices.begin(), [=](int& c)
 			{
+				// adding each index value from the template with the vertex offset
 				return vertexfactor + c;
 			});
 	
@@ -1688,7 +1714,7 @@ bool CRenderableDebug::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx, const CFixed
 			indexData.resize((displayingBBoxIndex + 1) * (int)indexTemplate.size());
 			std::copy(indices.begin(), indices.end(), indexData.begin() + indexOffset);
 		}
-	
+
 		displayingBBoxIndex++;
 	
 		const float* transform = &nm::float4x4().identity().column[0][0];
@@ -1771,6 +1797,34 @@ bool CRenderableDebug::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx, const CFixed
 	}
 	m_indexCount = indexData.size();
 	
+	//{
+	//	// create sphere
+	//	RawSphere debugSphere;
+	//	GenerateSphere(25, 25, debugSphere, 1.0f);
+
+	//	// create indices for sphere
+	//	// let us assume vertices are 0 - 99
+
+	//	// populate m_indexCount
+	//	m_indexCount += debugSphere.lineIndices.size();
+	//	
+	//	for (int i = 0; i < debugSphere.vertices.size(); i++)
+	//	{
+	//		// populate vertexData
+	//		DebugVertex dVert{ debugSphere.vertices[i], (int)modelMatIndex };
+	//		vertexData.push_back(dVert);
+	//	}
+
+	//	// populate indexData
+	//	size_t indexOffset = indexData.size();
+	//	indexData.resize(indexOffset + debugSphere.lineIndices.size());
+	//	std::copy(debugSphere.lineIndices.begin(), debugSphere.lineIndices.end(), indexData.begin() + indexOffset);
+	//			
+	//	// populate perbBoxTransformData
+	//	const float* transform = &nm::float4x4().identity().column[0][0];
+	//	std::copy(&transform[0], &transform[16], std::back_inserter(perbBoxTransformData));
+	//}
+
 	if(!vertexData.empty())
 	{
 		// if the vertex buffer if already created from previous frame, destroy them and free the asscoiated memroy for this frame's use

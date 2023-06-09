@@ -7,7 +7,7 @@
 
 #include "external/NiceMath.h"
 
-
+class CPerspectiveCamera;
 class CEntity;
 class CSceneGraph;
 class CSelectionBroadcast;
@@ -48,15 +48,19 @@ public:
 	CDebugData();
 	~CDebugData() {};
 
-	bool IsDebugDrawEnabled() const { return m_drawBBox; }
-	void SetDebugDrawEnable(bool p_enable) { m_drawBBox = p_enable; }
+	bool IsDebugDrawEnabled() const { return m_debugDraw; }
+	void SetDebugDrawEnable(bool p_enable) { m_debugDraw = p_enable; }
 
-	bool IsSubmeshDebugDrawEnabled() { return m_drawSubmeshBBox; }
-	void SetSubmeshDebugDrawEnable(bool p_enable) { m_drawSubmeshBBox = p_enable; }
+	bool IsSubmeshDebugDrawEnabled() { return m_debugDrawSubmeshes; }
+	void SetSubmeshDebugDrawEnable(bool p_enable) { m_debugDrawSubmeshes = p_enable; }
+
+	bool IsDrawAsSpehereEnabled() { return m_drawAsSphere; }
+	void SetDrawAsSphereEnable(bool p_enable) { m_drawAsSphere = p_enable; }
 
 protected:
-	bool m_drawBBox;
-	bool m_drawSubmeshBBox;
+	bool m_debugDraw;
+	bool m_debugDrawSubmeshes;
+	bool m_drawAsSphere;
 };
  
 class CSceneGraph : public CDebugData
@@ -72,10 +76,12 @@ public:
 		,	ss_BoundsChange				// the submeshes have moved and have chnaged the bounds of the scene
 	};
 
-	CSceneGraph();
+	CSceneGraph(CPerspectiveCamera*);
 	~CSceneGraph();
 
 	bool Update();
+
+	static void RequestSceneBBoxUpdate();
 
 	static EntityList* GetEntities() { return &s_entities; };
 	void SetCurSelectEntityId(int p_id);
@@ -85,16 +91,20 @@ public:
 	nm::Transform GetTransform() const { return s_sceneTransform; }
 	SceneStatus GetSceneStatus() { return m_sceneStatus; }
 
+	CPerspectiveCamera* GetPrimaryCamera() { return m_primaryCamera; }
+
 private:
 	static EntityList			s_entities;
-	static bool					s_bShouldUpdateSceneBBox;
+	static bool					s_bShouldRecomputeSceneBBox;
 	static nm::Transform		s_sceneTransform;				// this is only used by the entity to multiply with its transform 
+	
+	CPerspectiveCamera*			m_primaryCamera;
+	
 	BBox						m_boundingBox;
 	CSelectionBroadcast*		m_selectionBroadcast;
 	SceneStatus					m_sceneStatus;
 
 	static uint32_t RegisterEntity(CEntity* p_entity);
-	static void RequestSceneBBoxUpdate();
 };
 
 class CEntity : public CDebugData
@@ -106,7 +116,7 @@ public:
 	int	GetId() { return m_id; }
 	const char* GetName() { return m_name.c_str(); }
 
-	void SetTransform(nm::Transform p_transform);
+	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox = true);
 	nm::Transform& GetTransform();
 	
 	void SetBoundingBox(BBox p_bbox, bool p_bRecomputeSceneBBox = true);
@@ -116,10 +126,13 @@ public:
 	void SetSubBoundingBox(BBox p_bbox) { m_subBoundingBoxes.push_back(p_bbox); }
 	BBox* GetSubBoundingBox(uint32_t p_id) { return &(m_subBoundingBoxes[p_id]); }
 
-	bool IsDirty() { return m_dirty; }
+	//bool IsDirty() { return m_dirty; }
 	void SetDirty(bool p_dirty) { m_dirty = p_dirty; }
 
 protected:
+	// Entity is dirty when its transform has been changed and has not been applied 
+	// to the child classes that inherit the entity class. Once the changed transform 
+	// is applied, dirty state is reverted
 	bool						m_dirty;
 	uint32_t					m_id;
 	std::string					m_name;

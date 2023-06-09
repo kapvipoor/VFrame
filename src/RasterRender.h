@@ -6,6 +6,7 @@
 #include "core/Camera.h"
 #include "core/SceneGraph.h"
 #include "core/Asset.h"
+#include "core/Light.h"
 
 #include "ShadowPass.h"
 #include "LightingPass.h"
@@ -58,7 +59,8 @@ private:
 	CVulkanRHI::CommandBufferList		m_cmdBfrsInUse;
 
 	CPerspectiveCamera*					m_primaryCamera;
-	COrthoCamera*						m_sunLightCamera;
+	//COrthoCamera*						m_sunLightCamera;
+	CDirectionaLight*					m_sunLight;
 	//CPerspectiveCamera m_sunLightCamera;
 		
 	bool								m_pickObject;
@@ -86,7 +88,9 @@ private:
 	void DestroySyncPremitives();
 	bool CreatePasses();
 
-	bool UpdateCamera(float p_delta);																																
+	void UpdateCamera(float p_delta);	
+	void UpdateSceneGraphDependencies(float p_delta);
+
 	bool DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkanRHI::CommandBuffer& p_cmdBfr);
 	bool RenderForward();
 	bool RenderDeferred();

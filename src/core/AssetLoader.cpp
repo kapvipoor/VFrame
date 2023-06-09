@@ -7,6 +7,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "external/tinygltf/tiny_gltf.h"
+#include <fstream>
 
 nm::float4 ComputeTangent(Vertex p_a, Vertex p_b, Vertex p_c)
 {
@@ -36,6 +37,76 @@ void ComputeBBox(BBox& p_bbox)
 	p_bbox.bBox[5] = nm::float3{ p_bbox.bbMax[0], p_bbox.bbMin[1], p_bbox.bbMax[2] };
 	p_bbox.bBox[6] = nm::float3{ p_bbox.bbMax[0], p_bbox.bbMax[1], p_bbox.bbMax[2] };
 	p_bbox.bBox[7] = nm::float3{ p_bbox.bbMin[0], p_bbox.bbMax[1], p_bbox.bbMax[2] };
+}
+
+void GenerateSphere(int p_stackCount, int p_sectorCount, RawSphere& p_sphere, float p_radius)
+{
+	p_sphere.vertices.clear();
+	p_sphere.indices.clear();
+	p_sphere.lineIndices.clear();
+
+	float x, y, z, xy;									// vertex position
+	
+	float sectorStep = 2 * nm::PI / p_sectorCount;
+	float stackStep = nm::PI / p_stackCount;
+	float sectorAngle, stackAngle;
+
+	// generate CCW index list of sphere triangles
+	// k1--k1+1
+	// |  / |
+	// | /  |
+	// k2--k2+1
+	int k1, k2;
+
+	for (int i = 0; i <= p_stackCount; ++i)
+	{
+		stackAngle = nm::PI / 2 - i * stackStep;        // starting from pi/2 to -pi/2
+		xy = p_radius * cosf(stackAngle);             // r * cos(u)
+		z = p_radius * sinf(stackAngle);              // r * sin(u)
+
+		k1 = i * (p_stackCount + 1);     // beginning of current stack
+		k2 = k1 + p_stackCount + 1;      // beginning of next stack
+
+
+		// add (sectorCount+1) vertices per stack
+		// the first and last vertices have same position and normal, but different tex coords
+		for (int j = 0; j <= p_sectorCount; ++j, ++k1, ++k2)
+		{
+			sectorAngle = j * sectorStep;           // starting from 0 to 2pi
+
+			// vertex position (x, y, z)
+			x = xy * cosf(sectorAngle);             // r * cos(u) * cos(v)
+			y = xy * sinf(sectorAngle);             // r * cos(u) * sin(v)
+			p_sphere.vertices.push_back(nm::float3(x, y, z));
+
+			// 2 triangles per sector excluding first and last stacks
+			// k1 => k2 => k1+1
+			if(i != 0)
+			{
+			    p_sphere.indices.push_back(k1);
+			    p_sphere.indices.push_back(k2);
+			    p_sphere.indices.push_back(k1 + 1);
+			}
+
+			// k1+1 => k2 => k2+1
+			if(i != (p_stackCount -1))
+			{
+			    p_sphere.indices.push_back(k1 + 1);
+			    p_sphere.indices.push_back(k2);
+			    p_sphere.indices.push_back(k2 + 1);
+			}
+
+			// store indices for lines
+			// vertical lines for all stacks, k1 => k2
+			p_sphere.lineIndices.push_back(k1);
+			p_sphere.lineIndices.push_back(k2);
+			if(i != 0)  // horizontal lines except 1st stack, k1 => k+1
+			{
+			    p_sphere.lineIndices.push_back(k1);
+			    p_sphere.lineIndices.push_back(k1 + 1);
+			}
+		}
+	}
 }
 
 bool LoadRawImage(const char* p_path, ImageRaw& p_data)
@@ -371,9 +442,10 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 				if (in < 0)
 					in = 0;
 
-				vertex.uv = nm::float2{
-						attrib.texcoords[2 * in + 0],
-						attrib.texcoords[2 * in + 1] };
+				if (attrib.texcoords.empty())
+					vertex.uv = nm::float2{0.0f, 0.0f};
+				else
+					vertex.uv = nm::float2{attrib.texcoords[2 * in + 0],attrib.texcoords[2 * in + 1] };
 
 				if (p_loadData.flipUV == true)
 				{
@@ -447,9 +519,35 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 	return true;
 }
 
-BBox::BBox(Type p_type, Origin p_origin)
+bool WriteToDisk(const std::filesystem::path& pPath, size_t pDataSize, char* pData)
 {
-	Reset(p_type, p_origin);
+	std::ofstream myfile(pPath.string().c_str(), std::ios::out | std::ios::binary);
+	if (myfile.is_open())
+	{
+		std::cout << "Writing to disk successful: " << pPath << std::endl;
+		myfile.write(pData, pDataSize);
+		myfile.close();
+		return true;
+	}
+	std::cout << "Writing to disk failed: " << pPath << std::endl;
+	return false;		
+}
+
+BBox::BBox(Type p_type, Origin p_origin, nm::float3 p_min, nm::float3 p_max)
+{
+	Reset(p_type, p_origin, p_min, p_max);
+}
+
+BBox BBox::operator*(nm::float4x4 const& p_transform)
+{
+	BBox box;
+
+	box.bbMin = (p_transform * nm::float4(this->bbMin, 1.0)).xyz();
+	box.bbMax = (p_transform * nm::float4(this->bbMax, 1.0)).xyz();
+
+	box.CalculateCorners();
+
+	return box;
 }
 
 BBox BBox::operator*(nm::Transform const& p_transform)
@@ -502,7 +600,21 @@ void BBox::Merge(const BBox& that)
 	CalculateCorners();
 }
 
-void BBox::Reset(Type p_type, Origin p_origin)
+// merge this with that
+void BBox::Merge(const BSphere& that)
+{
+	this->bbMin[0] = (this->bbMin[0] <= (that.bsCenter[0] - that.bsRadius)) ? this->bbMin[0] : (that.bsCenter[0] - that.bsRadius);
+	this->bbMin[1] = (this->bbMin[1] <= (that.bsCenter[1] - that.bsRadius)) ? this->bbMin[1] : (that.bsCenter[1] - that.bsRadius);
+	this->bbMin[2] = (this->bbMin[2] <= (that.bsCenter[2] - that.bsRadius)) ? this->bbMin[2] : (that.bsCenter[2] - that.bsRadius);
+
+	this->bbMax[0] = (this->bbMax[0] > (that.bsCenter[0] + that.bsRadius)) ? this->bbMax[0] : (that.bsCenter[0] + that.bsRadius);
+	this->bbMax[1] = (this->bbMax[1] > (that.bsCenter[1] + that.bsRadius)) ? this->bbMax[1] : (that.bsCenter[1] + that.bsRadius);
+	this->bbMax[2] = (this->bbMax[2] > (that.bsCenter[2] + that.bsRadius)) ? this->bbMax[2] : (that.bsCenter[2] + that.bsRadius);
+
+	CalculateCorners();
+}
+
+void BBox::Reset(Type p_type, Origin p_origin, nm::float3 p_min, nm::float3 p_max)
 {
 	bbMin = nm::float3{ 0.0f };
 	bbMax = nm::float3{ 0.0f };
@@ -518,6 +630,13 @@ void BBox::Reset(Type p_type, Origin p_origin)
 		bbMin = nm::float3{ -1.0f, -1.0f, 0.0f };
 		bbMax = nm::float3{ 1.0f, 1.0f, 2.0f };
 	}
+
+	if (p_type == Custom)
+	{
+		bbMin = p_min;
+		bbMax = p_max;
+	}
+
 
 	CalculateCorners();
 }
@@ -537,6 +656,32 @@ float BBox::GetWidth() const
 	return std::abs(bbMin[0]) + std::abs(bbMax[0]);
 }
 
+bool BBox::isVisiable(BBox p_b)
+{
+	for (int i = 0; i < 8; i++)
+	{
+		if (p_b.bBox[i].x() > this->bbMin.x() && p_b.bBox[i].x() <= this->bbMax.x() &&
+			p_b.bBox[i].x() > this->bbMin.y() && p_b.bBox[i].y() <= this->bbMax.y() &&
+			p_b.bBox[i].x() > this->bbMin.z() && p_b.bBox[i].z() <= this->bbMax.z())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool BBox::isVisiable(BSphere p_s)
+{
+	for (int i = 0; i < 8; i++)
+	{
+		if (nm::distance(p_s.bsCenter, this->bBox[i]) <= p_s.bsRadius)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void BBox::CalculateCorners()
 {
 	bBox[0] = nm::float3{ bbMin[0], bbMin[1], bbMin[2] };
@@ -547,4 +692,52 @@ void BBox::CalculateCorners()
 	bBox[5] = nm::float3{ bbMax[0], bbMin[1], bbMax[2] };
 	bBox[6] = nm::float3{ bbMax[0], bbMax[1], bbMax[2] };
 	bBox[7] = nm::float3{ bbMin[0], bbMax[1], bbMax[2] };
+}
+
+BSphere::BSphere()
+{
+	bsCenter = nm::float3(0.0f, 0.0f, 0.0f);
+	bsRadius = 1.0f;
+}
+
+BSphere BSphere::operator*(nm::Transform const& p_transform)
+{
+	BSphere bSphere;
+	if (!(p_transform.GetRotate() == nm::float4x4().identity()))
+	{
+		bSphere.bsCenter = const_cast<nm::Transform*>(&p_transform)->GetTranslateVector();
+	}
+
+	bsBox = bsBox * p_transform;
+
+	return bSphere;
+}
+
+bool BSphere::operator==(const BSphere& other)
+{
+	if (this->bsCenter == other.bsCenter && this->bsRadius == other.bsRadius)
+		return true;
+
+	return false;
+}
+
+bool BSphere::isVisiable(BBox p_b)
+{
+	for (int i = 0; i < 8; i++)
+	{
+		if (nm::distance(this->bsCenter, p_b.bBox[i]) <= this->bsRadius)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool BSphere::isVisiable(BSphere p_s)
+{
+	if (nm::distance(this->bsCenter, p_s.bsCenter) <= (this->bsRadius + p_s.bsRadius))
+	{
+		return true;
+	}
+	return true;
 }

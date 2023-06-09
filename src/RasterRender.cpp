@@ -15,7 +15,10 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 {			
 	m_rhi					= new CVulkanRHI(name, screen_width_, screen_height_);
 
-	m_sceneGraph			= new CSceneGraph();
+	m_primaryCamera			= new CPerspectiveCamera(/*"Primary Camera"*/);
+	m_sunLight				= new CDirectionaLight("Sunlight");
+
+	m_sceneGraph			= new CSceneGraph(m_primaryCamera);
 
 	m_fixedAssets			= new CFixedAssets();
 	m_loadableAssets		= new CLoadableAssets(m_sceneGraph);
@@ -32,14 +35,12 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_debugDrawPass			= new CDebugDrawPass(m_rhi);
 	m_toneMapPass			= new CToneMapPass(m_rhi);
 	m_uiPass				= new CUIPass(m_rhi);
-
-	m_primaryCamera			= new CPerspectiveCamera("Primary Camera");
-	m_sunLightCamera		= new COrthoCamera("Sunlight Camera");
 }
 
 CRasterRender::~CRasterRender() 
 {
-	delete m_sunLightCamera;
+	delete m_sunLight;
+	//delete m_sunLightCamera;
 	delete m_primaryCamera;
 
 	delete m_sceneGraph;
@@ -172,9 +173,12 @@ bool CRasterRender::on_update(float delta)
 		uniformData.mousePos						= nm::float2((float)mousepos_x, (float)mousepos_y);
 		uniformData.renderRes						= nm::float2((float)m_rhi->GetRenderWidth(), (float)m_rhi->GetRenderHeight());
 		uniformData.skyboxModelView					= m_primaryCamera->GetView();
-		uniformData.sunDirViewSpace					= (m_primaryCamera->GetView() * nm::float4(m_sunLightCamera->GetLookAt(), 1.0f)).xyz();
-		uniformData.sunDirWorldSpace				= m_sunLightCamera->GetLookAt();
-		uniformData.sunViewProj						= m_sunLightCamera->GetViewProj();
+		//uniformData.sunDirViewSpace					= (m_primaryCamera->GetView() * nm::float4(m_sunLightCamera->GetLookAt(), 1.0f)).xyz();
+		//uniformData.sunDirWorldSpace				= m_sunLightCamera->GetLookAt();
+		//uniformData.sunViewProj						= m_sunLightCamera->GetViewProj();
+		uniformData.sunDirViewSpace					= (m_primaryCamera->GetView() * nm::float4(m_sunLight->GetShadowCamera()->GetLookAt(), 1.0f)).xyz();
+		uniformData.sunDirWorldSpace				= m_sunLight->GetShadowCamera()->GetLookAt();
+		uniformData.sunViewProj						= m_sunLight->GetShadowCamera()->GetViewProj();
 		//uniformData.sunIntensity					= 10.0f; // no need for update, this is updated from the user interface
 
 		FixedUpdateData fixedUpdate{};
@@ -287,7 +291,7 @@ bool CRasterRender::InitCamera()
 	CPerspectiveCamera::PerpspectiveInitdData persIntData{};
 	persIntData.fov								= 45.0f;
 	persIntData.aspect							= (float)CWinCore::s_Window.screenWidth / CWinCore::s_Window.screenHeight;
-	persIntData.lookFrom						= nm::float4(0.0f, 50.0f, 0.0f, 1.0f);
+	persIntData.lookFrom						= nm::float4(0.0f, 0.0f, 0.0f, 1.0f);
 	persIntData.lookAt							= nm::float3{ 0.0f, 0.0f, 0.0f };
 	persIntData.up								= nm::float3{ 0.0f, 1.0f,  0.0f };
 	persIntData.aperture						= 0.1f;							
@@ -303,7 +307,7 @@ bool CRasterRender::InitCamera()
 	orthoInit.farPlane							= 50;
 	orthoInit.yaw								= 0.0f;
 	orthoInit.pitch								= 0.0f;
-	RETURN_FALSE_IF_FALSE(m_sunLightCamera->Init(&orthoInit));
+	RETURN_FALSE_IF_FALSE(m_sunLight->Init(orthoInit));
 
 	return true;
 }
@@ -434,7 +438,7 @@ bool CRasterRender::CreatePasses()
 	return true;
 }
 
-bool CRasterRender::UpdateCamera(float p_delta)
+void CRasterRender::UpdateCamera(float p_delta)
 {
 	CCamera::UpdateData cdata{};
 	cdata.moveCamera						= m_keys[MIDDLE_MOUSE_BUTTON].down;
@@ -450,32 +454,37 @@ bool CRasterRender::UpdateCamera(float p_delta)
 	cdata.Shft								= (m_keys[160].down || m_keys[16].down);
 	m_primaryCamera->Update(cdata);
 
-	// if the scene bounds have changed, reinitialize the sunlight camera
+	UpdateSceneGraphDependencies(p_delta);
+}
+
+void CRasterRender::UpdateSceneGraphDependencies(float p_delta)
+{
+	// if the scene bounds have changed (this happens when an entity moves out of scene bounds in the previous frame) 
+	// sunlight's camera is re-initialized with new scene bounding metrics. Their view and projection matrices are recalculated
 	if (m_sceneGraph->GetSceneStatus() == CSceneGraph::SceneStatus::ss_BoundsChange)
 	{
 		// shadow camera by default will always look downwards, like sun at 12 o'clock
-		const BBox* sceneBB					= m_sceneGraph->GetBoundingBox();
-		
-		COrthoCamera::OrthInitdData orthoInit{};
-		orthoInit.lookFrom = nm::float4(0.0f);
-		orthoInit.lrbt						= nm::float4{ -sceneBB->GetWidth()/2.0f, sceneBB->GetWidth() / 2.0f, -sceneBB->GetDepth() / 2.0f, sceneBB->GetDepth() / 2.0f };
-		orthoInit.nearPlane					= 0;
-		orthoInit.farPlane					= sceneBB->GetHeight();
-		orthoInit.yaw						= 0.0f;
-		orthoInit.pitch						= 0.0f;
-		RETURN_FALSE_IF_FALSE(m_sunLightCamera->Init(&orthoInit));
+		const BBox* sceneBB = m_sceneGraph->GetBoundingBox();
 
-		nm::Transform transform = m_sunLightCamera->GetTransform();
-		transform.SetRotation(0.0f, 1.57f, 0.0f);		// looking straight down on the scene
+		COrthoCamera::OrthInitdData initData{};
+		initData.lookFrom = nm::float4(0.0f);
+		initData.lrbt = nm::float4{ -sceneBB->GetWidth() / 2.0f, sceneBB->GetWidth() / 2.0f, -sceneBB->GetDepth() / 2.0f, sceneBB->GetDepth() / 2.0f };
+		initData.nearPlane = 0;
+		initData.farPlane = sceneBB->GetHeight();
+		initData.yaw = 0.0f;
+		initData.pitch = 0.0f;
+		m_sunLight->Init(initData);
+
+		// Ensures the 
+		nm::Transform transform = m_sunLight->GetTransform();
+		transform.SetRotation(0.0f, 1.57f, 0.0f);		
 		transform.SetTranslate(nm::float4((sceneBB->bbMin[0] + sceneBB->bbMax[0]) / 2.0f, sceneBB->bbMax[1], (sceneBB->bbMin[2] + sceneBB->bbMax[2]) / 2.0f, 1.0f));
-		m_sunLightCamera->SetTransform(transform);
+		m_sunLight->SetTransform(transform);
 	}
 
-	cdata									= CCamera::UpdateData();
-	cdata.timeDelta							= p_delta;
-	m_sunLightCamera->Update(cdata);
-
-	return true;
+	CCamera::UpdateData cdata;
+	cdata.timeDelta = p_delta;
+	m_sunLight->Update(cdata);
 }
 
 bool CRasterRender::DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkanRHI::CommandBuffer& p_cmdBfr)
@@ -607,3 +616,40 @@ bool CRasterRender::RenderForward()
 
 	return true;
 }
+
+// Placing the notes here until I can find the best way to place them in my read me
+/*
+Ortho Camera
+initialization:
+	1. Calculate yaw, pitch and view projection matrix
+	2. Create bounding box of camera with min.z = 0 && max.z = 1
+	3. Convert this bbox from View space to workd space by multiplying with inverse view proj matrix
+	4. Set it as the bounding box
+	5. Update the accociated tranaltion of the entity based on look from value
+	6. Update the accociated roation of the entity based on yaw and pitch values
+
+Update:
+When Scene bounds dont change
+	1. If the transform has been changed, it is labled as dirty
+	2. Update look from, yaw and pitch from trnsform
+	3. Recalculate the view and projection matrix
+	4. Eecalculate the Up vector
+
+When Scene bounds change
+	1. The camera is re-initialized with new scene bounding metrics. Their view and projection matrices are recalculated
+	2. The transform of the camera is rotated to reflect the way we want the sunlight to be initialized to; seeing downwards
+	3. Since the bbox is not cenetered in the middle but offset like a Camera's bbox, an offset tranaltion of half of the size of the scene is applied for correct for the translation caused during the rotation
+
+
+When do Scene bounds change state ?
+	1. When an entity's bounding box changes; a request to scene bounding box is made
+	2. During the next frame's update process; the scene graph is updated
+	3. Duing the scene graph's update process, the scene status is always set to SceneStatus::ss_NoChange by default
+	4. If there is a request to update scene bounding box pending from previous frame, the current bounding box is cached to temp and discarded
+	5. The entire scene graph is traversed and the new bounds are calculated. The scene status is set to SceneStatus::ss_SceneMoved now; so this can be used to recompute shadow maps
+	6. If the new scene bounds are different from the previous frame's bouds, the scene status is set to SceneStatus::ss_BoundsChange; so the shaodw camera can be re-created
+
+When are shadow maps re-computed
+	1. When the scene state is not SceneStatus::ss_NoChange	ie: when something in the world moves or
+	2. When the shadow camera moves
+*/

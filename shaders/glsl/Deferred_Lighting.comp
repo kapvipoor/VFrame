@@ -36,7 +36,7 @@ float CalculateShadow(in vec4 fragPosViewSpace, bool applyPCF)
     	    {
     	        for(int dy = -1; dy < 2; dy++)
     	        {
-    	            vec2 uv = projCoord.xy + (vec2(dx, dy)/vec2(4096, 4096));
+    	            vec2 uv = projCoord.xy + (vec2(dx, dy)/vec2(512, 512));
     	            float sampledDepth = texture(sampler2D(g_LightDepthImage, g_LinearSampler), uv).r;
     	            shadowFactor = shadowFactor + ((projCoord.z > sampledDepth) ? g_shadowFactor : 1.0f);
     	        }

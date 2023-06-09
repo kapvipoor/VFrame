@@ -73,7 +73,7 @@ bool CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	vertexAttributs.push_back(attribDesc);
 
 	CVulkanRHI::ShaderPaths shadowPassShaderpaths{};
-	shadowPassShaderpaths.shaderpath_vertex					= g_EnginePath + "/shaders/spirv/LightDepthPrepass.vert.spv";
+	shadowPassShaderpaths.shaderpath_vertex					= g_EnginePath /"shaders/spirv/LightDepthPrepass.vert.spv";
 	m_pipeline.pipeLayout									= p_Pipeline.pipeLayout;
 	m_pipeline.vertexInBinding								= vertexInputBinding;
 	m_pipeline.vertexAttributeDesc							= vertexAttributs;

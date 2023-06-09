@@ -37,8 +37,8 @@ bool CToneMapPass::CreateRenderpass(RenderData* p_renderData)
 bool CToneMapPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 {
 	CVulkanRHI::ShaderPaths uiShaderpaths{};
-	uiShaderpaths.shaderpath_vertex				= g_EnginePath + "/shaders/spirv/FulllScreenQuad.vert.spv";
-	uiShaderpaths.shaderpath_fragment			= g_EnginePath + "/shaders/spirv/ToneMap.frag.spv";
+	uiShaderpaths.shaderpath_vertex				= g_EnginePath /"shaders/spirv/FulllScreenQuad.vert.spv";
+	uiShaderpaths.shaderpath_fragment			= g_EnginePath /"shaders/spirv/ToneMap.frag.spv";
 	m_pipeline.pipeLayout						= p_Pipeline.pipeLayout;
 	m_pipeline.cullMode							= VK_CULL_MODE_FRONT_BIT;
 	m_pipeline.enableBlending					= false;
@@ -172,8 +172,8 @@ bool CUIPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	uiVertexAttributs.push_back(attribDesc);
 
 	CVulkanRHI::ShaderPaths uiShaderpaths{};
-	uiShaderpaths.shaderpath_vertex				= g_EnginePath + "/shaders/spirv/UI.vert.spv";
-	uiShaderpaths.shaderpath_fragment			= g_EnginePath + "/shaders/spirv/UI.frag.spv";
+	uiShaderpaths.shaderpath_vertex				= g_EnginePath /"shaders/spirv/UI.vert.spv";
+	uiShaderpaths.shaderpath_fragment			= g_EnginePath /"shaders/spirv/UI.frag.spv";
 	m_pipeline.pipeLayout						= p_Pipeline.pipeLayout;
 	m_pipeline.vertexInBinding					= uiVertexInputBinding;
 	m_pipeline.vertexAttributeDesc				= uiVertexAttributs;
@@ -364,8 +364,8 @@ bool CDebugDrawPass::CreatePipeline(CVulkanRHI::Pipeline p_Pipeline)
 	vertexAttributs.push_back(attribDesc);
 
 	CVulkanRHI::ShaderPaths shadowPassShaderpaths{};
-	shadowPassShaderpaths.shaderpath_vertex					= g_EnginePath + "/shaders/spirv/DebugDisplay.vert.spv";
-	shadowPassShaderpaths.shaderpath_fragment				= g_EnginePath + "/shaders/spirv/DebugDisplay.frag.spv";
+	shadowPassShaderpaths.shaderpath_vertex					= g_EnginePath /"shaders/spirv/DebugDisplay.vert.spv";
+	shadowPassShaderpaths.shaderpath_fragment				= g_EnginePath /"shaders/spirv/DebugDisplay.frag.spv";
 	m_pipeline.pipeLayout									= p_Pipeline.pipeLayout;
 	m_pipeline.vertexInBinding								= vertexInputBinding;
 	m_pipeline.vertexAttributeDesc							= vertexAttributs;

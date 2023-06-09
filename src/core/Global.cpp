@@ -1,8 +1,8 @@
 #include "Global.h"
 
-std::string g_DefaultPath	= "G:/Projects/MyPersonalProjects/VFrame/default";
-std::string g_EnginePath	= "G:/Projects/MyPersonalProjects/VFrame";
-std::string g_AssetPath		= "G:/Projects/MyPersonalProjects/assets";
+std::filesystem::path g_DefaultPath	= "D:/Projects/MyPersonalProjects/VFrame/default";
+std::filesystem::path g_EnginePath	= "D:/Projects/MyPersonalProjects/VFrame";
+std::filesystem::path g_AssetPath	= "D:/Projects/MyPersonalProjects/assets";
 
 bool GetFileExtention(const std::string fileName, std::string& pExtentionn)
 {

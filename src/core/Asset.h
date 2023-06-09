@@ -53,7 +53,7 @@ enum SamplerId
 enum BindingSet
 {
 	  bs_Primary					= 0
-	, bs_Scene						= 1		, bs_UI					= 1 ,	bs_DebugDisplay = 1
+	, bs_Scene						= 1	, bs_UI						= 1 ,	bs_DebugDisplay = 1
 };
 
 enum BindingDest
@@ -431,22 +431,22 @@ public:
 	const CRenderableMesh* GetRenderableMesh(uint32_t p_idx) const { return m_meshes[p_idx]; }
 
 private:
-	CSceneGraph*					m_sceneGraph;
-	std::vector<CRenderableMesh*>	m_meshes;						// list of all meshes required by the scene
-	std::vector<Material>			m_materialsList;
+	CSceneGraph*							m_sceneGraph;
+	std::vector<CRenderableMesh*>			m_meshes;						// list of all meshes required by the scene
+	std::vector<Material>					m_materialsList;
 
 	// todo: need to fix the current selected renderable mesh 
 	// it is used by object picker pass and is not the best way to do.
-	int								m_curSelecteRenderableMesh;		
+	int										m_curSelecteRenderableMesh;		
 
-	CVulkanRHI::Buffer				m_meshInfo_uniform;				// stores all meshes uniform data
-	CVulkanRHI::Buffer				m_material_storage;
+	CVulkanRHI::Buffer						m_meshInfo_uniform;				// stores all meshes uniform data
+	CVulkanRHI::Buffer						m_material_storage;
 		
-	std::vector<std::string>		m_scenePaths;					// list of all scene paths
+	std::vector<std::filesystem::path>		m_scenePaths;					// list of all scene paths
 
 	bool LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 	bool LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList , CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
-	bool LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
+	bool LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
 
 	bool CreateMeshUniformBuffer(CVulkanRHI* p_rhi);
 	bool CreateSceneDescriptors(CVulkanRHI* p_rhi);

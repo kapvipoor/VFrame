@@ -42,8 +42,8 @@ bool CForwardPass::CreateRenderpass(RenderData* p_renderData)
 bool CForwardPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 {
 	CVulkanRHI::ShaderPaths fwdShaderpaths{};
-	fwdShaderpaths.shaderpath_vertex						= g_EnginePath + "/shaders/spirv/Forward.vert.spv";
-	fwdShaderpaths.shaderpath_fragment						= g_EnginePath + "/shaders/spirv/Forward.frag.spv";
+	fwdShaderpaths.shaderpath_vertex						= g_EnginePath /"shaders/spirv/Forward.vert.spv";
+	fwdShaderpaths.shaderpath_fragment						= g_EnginePath /"shaders/spirv/Forward.frag.spv";
 	m_pipeline.pipeLayout									= p_pipeline.pipeLayout;
 	m_pipeline.vertexInBinding								= p_pipeline.vertexInBinding;
 	m_pipeline.vertexAttributeDesc							= p_pipeline.vertexAttributeDesc;
@@ -159,8 +159,8 @@ bool CSkyboxPass::CreateRenderpass(RenderData* p_renderData)
 bool CSkyboxPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 {
 	CVulkanRHI::ShaderPaths skyBoxShaderpaths{};
-	skyBoxShaderpaths.shaderpath_vertex						= g_EnginePath + "/shaders/spirv/Skybox.vert.spv";
-	skyBoxShaderpaths.shaderpath_fragment					= g_EnginePath + "/shaders/spirv/Skybox.frag.spv";
+	skyBoxShaderpaths.shaderpath_vertex						= g_EnginePath /"shaders/spirv/Skybox.vert.spv";
+	skyBoxShaderpaths.shaderpath_fragment					= g_EnginePath /"shaders/spirv/Skybox.frag.spv";
 	m_pipeline.vertexInBinding								= p_pipeline.vertexInBinding;
 	m_pipeline.vertexAttributeDesc							= p_pipeline.vertexAttributeDesc;
 	m_pipeline.pipeLayout									= p_pipeline.pipeLayout;
@@ -277,8 +277,8 @@ bool CDeferredPass::CreateRenderpass(RenderData* p_renderData)
 bool CDeferredPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 {
 	CVulkanRHI::ShaderPaths dfrdShaderpaths{};
-	dfrdShaderpaths.shaderpath_vertex						= g_EnginePath + "/shaders/spirv/Deferred_Gbuffer.vert.spv";
-	dfrdShaderpaths.shaderpath_fragment						= g_EnginePath + "/shaders/spirv/Deferred_Gbuffer.frag.spv";
+	dfrdShaderpaths.shaderpath_vertex						= g_EnginePath /"shaders/spirv/Deferred_Gbuffer.vert.spv";
+	dfrdShaderpaths.shaderpath_fragment						= g_EnginePath /"shaders/spirv/Deferred_Gbuffer.frag.spv";
 	m_pipeline.vertexInBinding								= p_pipeline.vertexInBinding;
 	m_pipeline.vertexAttributeDesc							= p_pipeline.vertexAttributeDesc;
 	m_pipeline.cullMode										= VK_CULL_MODE_BACK_BIT;
@@ -382,7 +382,7 @@ bool CDeferredLightingPass::CreateRenderpass(RenderData* p_renderData)
 bool CDeferredLightingPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 {
 	CVulkanRHI::ShaderPaths dfrdLightingShaderpaths{};
-	dfrdLightingShaderpaths.shaderpath_compute					= g_EnginePath + "/shaders/spirv/Deferred_Lighting.comp.spv";
+	dfrdLightingShaderpaths.shaderpath_compute					= g_EnginePath /"shaders/spirv/Deferred_Lighting.comp.spv";
 	m_pipeline.pipeLayout										= p_pipeline.pipeLayout;
 
 	RETURN_FALSE_IF_FALSE(m_rhi->CreateComputePipeline(dfrdLightingShaderpaths, m_pipeline));
@@ -469,8 +469,8 @@ bool CSkyboxDeferredPass::CreateRenderpass(RenderData* p_renderData)
 bool CSkyboxDeferredPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 {
 	CVulkanRHI::ShaderPaths skyBoxShaderpaths{};
-	skyBoxShaderpaths.shaderpath_vertex						= g_EnginePath + "/shaders/spirv/Skybox.vert.spv";
-	skyBoxShaderpaths.shaderpath_fragment					= g_EnginePath + "/shaders/spirv/Skybox.frag.spv";
+	skyBoxShaderpaths.shaderpath_vertex						= g_EnginePath /"shaders/spirv/Skybox.vert.spv";
+	skyBoxShaderpaths.shaderpath_fragment					= g_EnginePath /"shaders/spirv/Skybox.frag.spv";
 	m_pipeline.vertexInBinding								= p_pipeline.vertexInBinding;
 	m_pipeline.vertexAttributeDesc							= p_pipeline.vertexAttributeDesc;
 	m_pipeline.pipeLayout									= p_pipeline.pipeLayout;

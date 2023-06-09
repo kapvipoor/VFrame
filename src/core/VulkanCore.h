@@ -21,6 +21,7 @@
 #include <iostream>
 #include <vector>
 #include <vulkan/vulkan.h>
+#include <filesystem>
 
 // fwd dclr
 #if	VULKAN_DEBUG == 1
@@ -128,9 +129,9 @@ public:
 
 	struct ShaderPaths
 	{
-		std::string											shaderpath_vertex;
-		std::string											shaderpath_fragment;
-		std::string											shaderpath_compute;
+		std::filesystem::path								shaderpath_vertex;
+		std::filesystem::path								shaderpath_fragment;
+		std::filesystem::path								shaderpath_compute;
 	};
 
 	struct Pipeline

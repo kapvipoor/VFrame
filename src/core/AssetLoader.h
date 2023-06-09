@@ -44,6 +44,14 @@ struct Vertex
 	nm::float2					uv;
 	nm::float4					tangent;
 
+	Vertex()
+	{
+		pos = nm::float3(0.0f, 0.0f, 0.0f);
+		normal = nm::float3(0.0f, 0.0f, 0.0f);
+		uv = nm::float2(0.0f, 0.0f);
+		tangent = nm::float4(0.0f, 0.0f, 0.0f, 0.0f);
+	}
+
 	bool operator==(const Vertex& other) const
 	{
 		return (pos == other.pos &&
@@ -62,12 +70,24 @@ namespace std
 	};
 }
 
-struct BBox
+struct BSphere;
+
+struct BVolume
+{
+	enum Type
+	{
+			Box					= 0
+		,	Sphere				= 1
+	};
+};
+
+struct BBox : BVolume
 {
 	enum Type
 	{
 			Null				= 0
 		,	Unit				= 1
+		,	Custom				= 2
 	};
 
 	enum Origin
@@ -80,20 +100,43 @@ struct BBox
 	nm::float3					bbMin;
 	nm::float3					bbMax;
 	nm::float3					bBox[8];
-	BBox(Type p_type = Null, Origin p_origin = Auto);
+	BBox(Type p_type = Null, Origin p_origin = Auto, nm::float3 p_min = nm::float3(), nm::float3 p_max = nm::float3());
 	
+	BBox operator* (nm::float4x4 const& p_transform);
 	BBox operator* (nm::Transform const& p_transform);
 	bool operator==(const BBox& other);
 	
 	void Merge(const BBox&);
-	void Reset(Type p_type = Null, Origin p_origin = Auto);
+	void Merge(const BSphere&);
+	void Reset(Type p_type = Null, Origin p_origin = Auto, nm::float3 p_min = nm::float3(), nm::float3 p_max = nm::float3());
 
 	float GetDepth() const;		// along Z
 	float GetHeight() const;	// along Y
 	float GetWidth() const;		// along X
 
+	bool isVisiable(BBox);
+	bool isVisiable(BSphere);
+
 private:
 	void CalculateCorners();
+};
+
+struct BSphere : BVolume
+{
+	nm::float3					bsCenter;
+	float						bsRadius;
+	BSphere();
+
+	BSphere operator* (nm::Transform const& p_transform);
+	bool operator==(const BSphere& other);
+
+	bool isVisiable(BBox);
+	bool isVisiable(BSphere);
+
+	BBox GetBbox() { return bsBox; }
+
+private:
+	BBox						bsBox;
 };
 
 struct SubMesh
@@ -131,8 +174,18 @@ struct ObjLoadData
 nm::float4 ComputeTangent(Vertex p_a, Vertex p_b, Vertex p_c);
 void ComputeBBox(BBox& p_bbox);
 
+struct RawSphere
+{
+	std::vector<nm::float3> vertices;
+	std::vector<int> indices;
+	std::vector<int> lineIndices;
+};
+void GenerateSphere(int p_stackCount, int p_sectorCount, RawSphere& p_sphere, float p_radius = 1.0f);
+
 bool LoadRawImage(const char* p_path, ImageRaw& p_data);
 void FreeRawImage(ImageRaw& p_data);
 
 bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loadData);
 bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loadData);
+
+bool WriteToDisk(const std::filesystem::path& pPath, size_t pDataSize, char* pData);
