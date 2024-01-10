@@ -3,9 +3,11 @@
 #include "VulkanRHI.h"
 #include "SceneGraph.h"
 #include "AssetLoader.h"
+#include "Camera.h"
 #include "external/NiceMath.h"
-#include <src/core/Asset.h>
 #include <list>
+
+#define INSTANCED_DEBUG_DRAW
 
 class CCircularList
 {
@@ -13,6 +15,7 @@ public:
 	CCircularList(size_t p_size)
 		: m_size(p_size)
 		, m_list(m_size, 0.0f)
+		, m_average(0.0f)
 	{}
 
 	~CCircularList()
@@ -30,18 +33,24 @@ public:
 
 	void Data(float* p_data) 
 	{ 
+		m_average = 0.0f;
 		uint32_t i = 0;
 		for (auto& it : m_list)
 		{
-			p_data[i] = (1.0f / it);// *1000.0f;
+			p_data[i] = it * 1000.0f;	// (1.0f / it);// *1000.0f;
+			m_average += p_data[i];
 			i++;
 		}
+		m_average /= m_list.size();
 	}
+	
 	size_t Size() { return m_size; }
+	float Average() { return m_average; }
 
 private:
 	size_t m_size;
 	std::list<float> m_list;
+	float m_average;
 };
 
 enum SamplerId
@@ -61,10 +70,10 @@ enum BindingDest
 	  bd_Gloabl_Uniform				= 0	, bd_Scene_MeshInfo_Uniform	= 0	, bd_UI_TexArray	= 0 , bd_Debug_Transforms_Uniform = 0
 	, bd_Linear_Sampler				= 1	, bd_CubeMap_Texture		= 1	, bd_UI_max
 	, bd_ObjPicker_Storage			= 2	, bd_Material_Storage		= 2
-	, bd_Depth_Image				= 3	, bd_SceneRead_TexArray		= 3
-	, bd_PosGBuf_Image				= 4	, bd_Scene_max				= 4
-	, bd_NormGBuf_Image				= 5
-	, bd_AlbedoGBuf_Image			= 6
+	, bd_Depth_Image				= 3	, bd_Scene_Lights			= 3
+	, bd_PosGBuf_Image				= 4	, bd_SceneRead_TexArray		= 4
+	, bd_NormGBuf_Image				= 5 , bd_Scene_max				= 5
+	, bd_AlbedoGBuf_Image			= 6 
 	, bd_SSAO_Image					= 7
 	, bd_SSAOBlur_Image				= 8
 	, bd_SSAOKernel_Storage			= 9
@@ -85,42 +94,9 @@ struct LoadedUpdateData
 	nm::float2							curMousePos;
 	bool								isLeftMouseDown;
 	bool								isRightMouseDown;
-};
+	VkCommandPool						commandPool;
+	CCamera::UpdateData					cameraData;
 
-class CUIParticipant
-{
-public:
-	CUIParticipant();
-	~CUIParticipant();
-
-	virtual void Show() = 0;
-protected:
-
-	bool m_updated;
-
-	bool Header(const char* caption);
-	bool CheckBox(const char* caption, bool* value);
-	bool CheckBox(const char* caption, int32_t* value);
-	bool RadioButton(const char* caption, bool value);
-	//bool InputFloat(const char* caption, float* value, float step, uint32_t precision);
-	bool SliderFloat(const char* caption, float* value, float min, float max);
-	bool SliderInt(const char* caption, int32_t* value, int32_t min, int32_t max);
-	bool ComboBox(const char* caption, int32_t* itemindex, std::vector<std::string> items);
-	bool Button(const char* caption);
-	void Text(const char* formatstr, ...);
-};
-
-class CUIParticipantManager
-{
-	friend class CUIParticipant;
-public:
-	CUIParticipantManager();
-	~CUIParticipantManager();
-
-	void Show();
-
-private:
-	static std::vector<CUIParticipant*> m_uiParticipants;
 };
 
 class CDescriptor
@@ -133,7 +109,7 @@ public:
 		VkDescriptorSet					descSet;
 	};
 
-	// by deault the number of descriptor sets created is 1
+	// by default the number of descriptor sets created is 1
 	// but there can be more than 1 descDataList and descriptor set pairs
 	// provided they are based on the same descriptor set layout and 
 	// created from the same Descriptor pool
@@ -154,7 +130,7 @@ protected:
 class CBuffers
 {
 public:
-	// rezerving a default size of 1 if the buffer list is expected to group at runtime
+	// reserving a default size of 1 if the buffer list is expected to group at runtime
 	CBuffers(int p_maxSize = 0);
 	~CBuffers() {};
 
@@ -172,7 +148,7 @@ protected:
 class CTextures
 {
 public:
-	// rezerving a default size of 1 if the texture list is expected to group at runtime
+	// reserving a default size of 1 if the texture list is expected to group at runtime
 	CTextures(int p_maxSize = 0);
 	~CTextures() {};
 
@@ -180,15 +156,21 @@ public:
 	bool CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& stg, const ImageRaw*, VkFormat p_format, CVulkanRHI::CommandBuffer& p_cmdBfr, int p_id = -1);
 	bool CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const std::vector<ImageRaw>&, const CVulkanRHI::SamplerList& p_samplers, CVulkanRHI::CommandBuffer& p_cmdBfr, int p_id = -1);
 
+	// Pushes a specific texture index into list to repeat the usage of the texture
+	// Note: this does not reload the texture, but simply makes the texture handle available 
+	// at this index that is referenced by the mesh
+	void PushBackPreLoadedTexture(uint32_t p_texIndex);
+
+	void DestroyTextures(CVulkanRHI* p_rhi);
+
 	void IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id);
 
 	const CVulkanRHI::Image& GetTexture(uint32_t p_id) { return m_textures[p_id]; }
 	const CVulkanRHI::Image GetTexture(uint32_t p_id) const { return m_textures[p_id]; }
+	const CVulkanRHI::ImageList& GetTextures() { return m_textures; };
 
 protected:
 	CVulkanRHI::ImageList			m_textures;
-	
-	void DestroyTextures(CVulkanRHI* p_rhi);
 };
 
 class CFixedBuffers : public CBuffers, public CUIParticipant
@@ -278,9 +260,9 @@ public:
 	bool Create(CVulkanRHI*);
 	void Destroy(CVulkanRHI*);
 
-	// temporary hack - to create the primary descriptor set, the rendertargets need to be in a specific layout
-	// as some of them are reqused in compute shaders as shader resources. Once the primary descriptors are created
-	// all the layout of the render targets are reset to default ie: LAYOUT_UNDEFINED
+	// temporary hack - to create the primary descriptor set, the render targets need to be in a specific layout
+	// as some of them are required in compute shaders as shader resources. Once the primary descriptors are created
+	// all the layout of the render targets are reset to default IE: LAYOUT_UNDEFINED
 	void SetLayout(RenderTargetId, VkImageLayout);
 
 private:
@@ -292,7 +274,7 @@ public:
 	CRenderable(uint32_t p_BufferCount = 0);
 	~CRenderable() {};
 
-	// This is a aclear operation performed between frames
+	// This is a clear operation performed between frames
 	// For now called for UI only
 	void Clear(CVulkanRHI* p_rhi, uint32_t p_idx);
 
@@ -307,9 +289,12 @@ public:
 	const CVulkanRHI::Buffer* GetVertexBuffer(uint32_t p_idx = 0) const { return &m_vertexBuffers[p_idx]; };
 	const CVulkanRHI::Buffer* GetIndexBuffer(uint32_t p_idx = 0) const { return &m_indexBuffers[p_idx]; };
 
+	uint32_t GetInstanceCount() { return m_instanceCount; }
+
 protected:
 	CVulkanRHI::BufferList			m_vertexBuffers;
 	CVulkanRHI::BufferList			m_indexBuffers;
+	uint32_t						m_instanceCount;
 };
 
 class CRenderableUI : public CRenderable, public CTextures, public CDescriptor, public CSelectionListener
@@ -362,6 +347,8 @@ public:
 	CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::float4x4 p_modelMat);
 	~CRenderableMesh() {};
 	
+	//virtual void Show();
+
 	uint32_t GetMeshId() const { return m_mesh_id; }
 	uint32_t GetSubmeshCount() const { return (uint32_t)m_submeshes.size(); }
 	const SubMesh* GetSubmesh(uint32_t p_idx) const { return &m_submeshes[p_idx]; }
@@ -381,21 +368,37 @@ public:
 		int			id;
 	};
 
+	struct DebugDrawDetails
+	{
+		uint32_t indexCount;
+		uint32_t indexOffset;
+		uint32_t vertexOffset;
+		uint32_t instanceOffset;
+		uint32_t instanceCount;
+	};
+	typedef std::vector<DebugDrawDetails> DebugDrawDetailsList;
+
 	CRenderableDebug();
 	~CRenderableDebug() {};
 
-	bool Create(CVulkanRHI* p_rhi, const CFixedBuffers*);
+	bool Create(CVulkanRHI* p_rhi, const CFixedBuffers*, const CVulkanRHI::CommandPool&);
 	bool Update();
 	void Destroy(CVulkanRHI* p_rhi);
 	bool PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx, const CFixedBuffers*, const CSceneGraph*);
-	size_t GetIndexBufferCount() { return m_indexCount; }
+	bool PreDrawInstanced(CVulkanRHI* p_rhi, uint32_t p_scIdx, const CFixedBuffers*, const CSceneGraph*, CVulkanRHI::CommandBuffer&);
+
+	DebugDrawDetails GetBBoxDrawDetails() { return m_bBoxDetails; }
+	DebugDrawDetails GetBSphereDrawDetails() { return m_bSphereDetails; }
 
 private: 
-	size_t m_indexCount;
+	DebugDrawDetails			m_bBoxDetails;
+	DebugDrawDetails			m_bSphereDetails;
+
 	bool CreateDebugDescriptors(CVulkanRHI*, const CFixedBuffers*);
+	bool CreateGPUBuffers(CVulkanRHI*, CVulkanRHI::BufferList&, CVulkanRHI::CommandBuffer&);
 };
 
-class CScene : public CTextures, public CDescriptor, public CUIParticipant, public CSelectionListener
+class CScene : public CDescriptor, public CUIParticipant, public CSelectionListener
 {
 public:
 	enum MeshType
@@ -418,7 +421,7 @@ public:
 	};
 
 	CScene(CSceneGraph*);
-	~CScene() {};
+	~CScene();
 
 	bool Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, const CVulkanRHI::CommandPool& p_cmdPool);
 	void Destroy(CVulkanRHI* p_rhi);
@@ -433,20 +436,25 @@ public:
 private:
 	CSceneGraph*							m_sceneGraph;
 	std::vector<CRenderableMesh*>			m_meshes;						// list of all meshes required by the scene
+	CTextures*                              m_sceneTextures;				// list of all the textures used by the scene
+	CLights*								m_sceneLights;					// List of all the lights in use by the scene (Does not include primary directional light - Sun Light)
 	std::vector<Material>					m_materialsList;
-
-	// todo: need to fix the current selected renderable mesh 
+	
+	// TODO: need to fix the current selected render-able mesh 
 	// it is used by object picker pass and is not the best way to do.
 	int										m_curSelecteRenderableMesh;		
 
 	CVulkanRHI::Buffer						m_meshInfo_uniform;				// stores all meshes uniform data
 	CVulkanRHI::Buffer						m_material_storage;
+	CVulkanRHI::Buffer						m_light_storage;				// buffer for holding light count, raw light list data
+
 		
 	std::vector<std::filesystem::path>		m_scenePaths;					// list of all scene paths
 
 	bool LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 	bool LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList , CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 	bool LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
+	bool LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
 
 	bool CreateMeshUniformBuffer(CVulkanRHI* p_rhi);
 	bool CreateSceneDescriptors(CVulkanRHI* p_rhi);
@@ -539,7 +547,7 @@ public:
 	CFixedAssets() {};
 	~CFixedAssets() {};
 
-	bool Create(CVulkanRHI*);
+	bool Create(CVulkanRHI*, const CVulkanRHI::CommandPool&);
 	void Destroy(CVulkanRHI*);
 	bool Update(CVulkanRHI*, const FixedUpdateData&);
 
@@ -555,4 +563,6 @@ private:
 	CRenderTargets					m_renderTargets;
 	CVulkanRHI::SamplerList			m_samplers;
 	CRenderableDebug				m_renderableDebug;
+	
+	bool CreateSamplers(CVulkanRHI*);
 };

@@ -148,6 +148,8 @@ void CPerspectiveCamera::Update(UpdateData p_data)
 
     m_viewProj = m_projection * m_view;
 
+    //std::cout << "Printing View: " << m_view.column[3][0] << ", " << m_view.column[3][1] << ", " << m_view.column[3][2] << std::endl;
+
     // TODO
     //CCamera::Update(p_data);
 }

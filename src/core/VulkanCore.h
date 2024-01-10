@@ -164,6 +164,12 @@ public:
 		VkDeviceMemory										devMem;
 		VkMemoryAllocateFlags								memPropFlags;
 		size_t												reqMemSize;
+
+		Buffer():
+				devMem(VK_NULL_HANDLE)
+			,	reqMemSize(0)
+			,	descInfo(VkDescriptorBufferInfo{VK_NULL_HANDLE, 0, 0})
+		{}
 	};
 
 	struct Image

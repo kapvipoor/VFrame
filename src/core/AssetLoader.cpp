@@ -11,11 +11,19 @@
 
 nm::float4 ComputeTangent(Vertex p_a, Vertex p_b, Vertex p_c)
 {
-	nm::float3 edge1 = p_b.pos - p_a.pos;
-	nm::float3 edge2 = p_c.pos - p_a.pos;
+	float* pos_a = p_a.GetAttribute(Vertex::AttributeFlag::position);
+	float* pos_b = p_b.GetAttribute(Vertex::AttributeFlag::position);
+	float* pos_c = p_c.GetAttribute(Vertex::AttributeFlag::position);
+	
+	nm::float3 edge1 = nm::float3(pos_b[0] - pos_a[0], pos_b[1] - pos_a[1], pos_b[2] - pos_a[2]); //p_b.position - p_a.position;
+	nm::float3 edge2 = nm::float3(pos_c[0] - pos_a[0], pos_c[1] - pos_a[1], pos_c[2] - pos_a[2]); //p_c.position - p_a.position;
 
-	nm::float2 deltaUV1 = p_b.uv - p_a.uv;
-	nm::float2 deltaUV2 = p_c.uv - p_a.uv;
+	float* uv_a = p_a.GetAttribute(Vertex::AttributeFlag::uv);
+	float* uv_b = p_b.GetAttribute(Vertex::AttributeFlag::uv);
+	float* uv_c = p_c.GetAttribute(Vertex::AttributeFlag::uv);
+
+	nm::float2 deltaUV1 = nm::float2(uv_b[0] - uv_a[0], uv_b[1] - uv_a[1]); //p_b.attributes[1].uv - p_a.attributes[1].uv;
+	nm::float2 deltaUV2 = nm::float2(uv_c[0] - uv_a[0], uv_c[1] - uv_a[1]); //p_c.attributes[1].uv - p_a.attributes[1].uv;
 
 	float f = 1.0f / ((deltaUV1.x() * deltaUV2.y()) - (deltaUV2.x() * deltaUV1.y()));
 
@@ -41,7 +49,6 @@ void ComputeBBox(BBox& p_bbox)
 
 void GenerateSphere(int p_stackCount, int p_sectorCount, RawSphere& p_sphere, float p_radius)
 {
-	p_sphere.vertices.clear();
 	p_sphere.indices.clear();
 	p_sphere.lineIndices.clear();
 
@@ -69,7 +76,7 @@ void GenerateSphere(int p_stackCount, int p_sectorCount, RawSphere& p_sphere, fl
 
 
 		// add (sectorCount+1) vertices per stack
-		// the first and last vertices have same position and normal, but different tex coords
+		// the first and last vertices have same position and normal, but different texture coordinates
 		for (int j = 0; j <= p_sectorCount; ++j, ++k1, ++k2)
 		{
 			sectorAngle = j * sectorStep;           // starting from 0 to 2pi
@@ -77,7 +84,8 @@ void GenerateSphere(int p_stackCount, int p_sectorCount, RawSphere& p_sphere, fl
 			// vertex position (x, y, z)
 			x = xy * cosf(sectorAngle);             // r * cos(u) * cos(v)
 			y = xy * sinf(sectorAngle);             // r * cos(u) * sin(v)
-			p_sphere.vertices.push_back(nm::float3(x, y, z));
+			//p_sphere.vertices.push_back(nm::float3(x, y, z));
+			p_sphere.vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{ x, y, z }[0]);
 
 			// 2 triangles per sector excluding first and last stacks
 			// k1 => k2 => k1+1
@@ -113,7 +121,7 @@ bool LoadRawImage(const char* p_path, ImageRaw& p_data)
 {
 	p_data.raw = stbi_load(p_path, &p_data.width, &p_data.height, &p_data.channels, STBI_rgb_alpha);
 	
-	// forcing this for now; as STBI Image returns the number of available channels in the image and not in laoded raw data; whcih is irrelevant for now
+	// forcing this for now; as STBI Image returns the number of available channels in the image and not in loaded raw data; which is irrelevant for now
 	p_data.channels = STBI_rgb_alpha;
 		
 	if (p_data.raw == nullptr)
@@ -156,8 +164,9 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 	uint32_t texture_offset = (uint32_t)p_objScene.textureList.size();
 
 	MeshRaw objMesh;
-	bool fileNmae = GetFileName(p_path, objMesh.name);
-	if (!fileNmae)
+	objMesh.vertexList = VertexList(Vertex::AttributeFlag::position | Vertex::AttributeFlag::normal | Vertex::AttributeFlag::uv | Vertex::AttributeFlag::tangent);
+	bool fileName = GetFileName(p_path, objMesh.name);
+	if (!fileName)
 	{
 		std::cout << "Failed to Get Filename - " << p_path << std::endl;
 		return false;
@@ -169,24 +178,24 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 		const tinygltf::Node node = input.nodes[scene.nodes[n_id]];
 
 		objMesh.transform = nm::float4x4().identity();
-		if (node.translation.size() == 3) {
-			objMesh.transform = objMesh.transform * nm::translation(nm::float3((float)node.translation[0], (float)node.translation[1], (float)node.translation[2]));
-		}
-		if (node.rotation.size() == 4) {
-			nm::quatf  q((float)node.rotation[0], (float)node.rotation[1], (float)node.rotation[2], (float)node.rotation[3]);
-			nm::float4x4 q_mat = nm::quat2mat(q);
-			objMesh.transform = objMesh.transform * q_mat;
-		}
-		if (node.scale.size() == 3) {
-			objMesh.transform = objMesh.transform * nm::scale(nm::float4((float)node.scale[0], (float)node.scale[1], (float)node.scale[2], 1.0));
-		}
-		if (node.matrix.size() == 16) {
-			objMesh.transform.from_rows(
-				nm::float4((float)node.matrix[0], (float)node.matrix[1], (float)node.matrix[2], (float)node.matrix[3])
-				, nm::float4((float)node.matrix[4], (float)node.matrix[5], (float)node.matrix[6], (float)node.matrix[7])
-				, nm::float4((float)node.matrix[8], (float)node.matrix[9], (float)node.matrix[10], (float)node.matrix[11])
-				, nm::float4((float)node.matrix[12], (float)node.matrix[13], (float)node.matrix[14], (float)node.matrix[15]));
-		}
+		//if (node.translation.size() == 3) {
+		//	objMesh.transform = objMesh.transform * nm::translation(nm::float3((float)node.translation[0], (float)node.translation[1], (float)node.translation[2]));
+		//}
+		//if (node.rotation.size() == 4) {
+		//	nm::quatf  q((float)node.rotation[0], (float)node.rotation[1], (float)node.rotation[2], (float)node.rotation[3]);
+		//	nm::float4x4 q_mat = nm::quat2mat(q);
+		//	objMesh.transform = objMesh.transform * q_mat;
+		//}
+		////if (node.scale.size() == 3) {
+		////	objMesh.transform = objMesh.transform * nm::scale(nm::float4((float)node.scale[0], (float)node.scale[1], (float)node.scale[2], 1.0));
+		////}
+		//if (node.matrix.size() == 16) {
+		//	objMesh.transform.from_rows(
+		//		nm::float4((float)node.matrix[0], (float)node.matrix[1], (float)node.matrix[2], (float)node.matrix[3])
+		//		, nm::float4((float)node.matrix[4], (float)node.matrix[5], (float)node.matrix[6], (float)node.matrix[7])
+		//		, nm::float4((float)node.matrix[8], (float)node.matrix[9], (float)node.matrix[10], (float)node.matrix[11])
+		//		, nm::float4((float)node.matrix[12], (float)node.matrix[13], (float)node.matrix[14], (float)node.matrix[15]));
+		//}
 
 		nm::float4x4 translation = (node.translation.size() == 3) ? nm::translation(nm::float3((float)node.translation[0], (float)node.translation[1], (float)node.translation[2])) : nm::translation(nm::float3(1.0f));
 		nm::float4x4 scale = (node.scale.size() == 3) ? nm::scale(nm::float4((float)node.scale[0], (float)node.scale[1], (float)node.scale[2], 1.0f)) : nm::scale(nm::float4(1.0f));
@@ -199,7 +208,7 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 			{
 				const tinygltf::Primitive& glTFPrimitive = mesh.primitives[i];
 				uint32_t firstIndex = static_cast<uint32_t>(objMesh.indicesList.size());
-				uint32_t vertexStart = static_cast<uint32_t>(objMesh.vertexList.size());
+				uint32_t vertexStart = static_cast<uint32_t>(objMesh.vertexList.size()/objMesh.vertexList.GetVertexSize());
 				uint32_t indexCount = 0;
 				nm::float3 bbMin{ 0, 0, 0 };
 				nm::float3 bbMax{ 0, 0, 0 };
@@ -239,27 +248,28 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 						tangentsBuffer = reinterpret_cast<const float*>(&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
 					}
 
-					// Append data to model's vertex buffer
 					for (size_t v = 0; v < vertexCount; v++) {
-						Vertex vert{};
-						vert.pos = (transform * nm::float4(positionBuffer[(v * 3) + 0], positionBuffer[(v * 3) + 1], positionBuffer[(v * 3) + 2], 1.0f)).xyz();
-						vert.normal = nm::float3(normalsBuffer ? nm::float3(normalsBuffer[(v * 3) + 0], normalsBuffer[(v * 3) + 1], normalsBuffer[(v * 3) + 2]) : nm::float3(0.0f));
-						vert.uv = texCoordsBuffer ? nm::float2(texCoordsBuffer[(v * 2) + 0], texCoordsBuffer[(v * 2) + 1]) : nm::float2(0.0f);
-						vert.tangent = tangentsBuffer ? nm::float4(tangentsBuffer[(v * 4) + 0], tangentsBuffer[(v * 4) + 1], tangentsBuffer[(v * 4) + 2], tangentsBuffer[(v * 4) + 3]) : nm::float4(0.0);
+						Vertex vert = objMesh.vertexList.CreateVertex();
+						vert.AddAttribute(Vertex::AttributeFlag::position, &((transform * nm::float4(positionBuffer[(v * 3) + 0], positionBuffer[(v * 3) + 1], positionBuffer[(v * 3) + 2], 1.0f)).xyz())[0]);
+						vert.AddAttribute(Vertex::AttributeFlag::normal, &nm::float3(normalsBuffer ? nm::float3(normalsBuffer[(v * 3) + 0], normalsBuffer[(v * 3) + 1], normalsBuffer[(v * 3) + 2]) : nm::float3(0.0f))[0]);
+						vert.AddAttribute(Vertex::AttributeFlag::uv, &(texCoordsBuffer ? nm::float2(texCoordsBuffer[(v * 2) + 0], texCoordsBuffer[(v * 2) + 1]) : nm::float2(0.0f))[0]);
+						vert.AddAttribute(Vertex::AttributeFlag::tangent, &(tangentsBuffer ? nm::float4(tangentsBuffer[(v * 4) + 0], tangentsBuffer[(v * 4) + 1], tangentsBuffer[(v * 4) + 2], tangentsBuffer[(v * 4) + 3]) : nm::float4(0.0))[0]);
 						if (p_loadData.flipUV == true)
 						{
-							vert.uv[1] = 1.0f - vert.uv[1];
+							float* uv = vert.GetAttribute(Vertex::AttributeFlag::uv);
+							uv[1] = 1.0f - uv[1];
 						}
 
-						bbMin[0] = std::min(bbMin[0], vert.pos[0]);
-						bbMin[1] = std::min(bbMin[1], vert.pos[1]);
-						bbMin[2] = std::min(bbMin[2], vert.pos[2]);
+						float* position = vert.GetAttribute(Vertex::AttributeFlag::position);
+						bbMin[0] = std::min(bbMin[0], position[0]);
+						bbMin[1] = std::min(bbMin[1], position[1]);
+						bbMin[2] = std::min(bbMin[2], position[2]);
 
-						bbMax[0] = std::max(bbMax[0], vert.pos[0]);
-						bbMax[1] = std::max(bbMax[1], vert.pos[1]);
-						bbMax[2] = std::max(bbMax[2], vert.pos[2]);
+						bbMax[0] = std::max(bbMax[0], position[0]);
+						bbMax[1] = std::max(bbMax[1], position[1]);
+						bbMax[2] = std::max(bbMax[2], position[2]);
 
-						objMesh.vertexList.push_back(vert);
+						objMesh.vertexList.AddVertex(vert);
 					}
 				}
 
@@ -306,9 +316,7 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 				submesh.materialId	= material_offset + glTFPrimitive.material;
 				objMesh.submeshes.push_back(submesh);
 
-				BBox meshbox;
-				meshbox.bbMin		= bbMin;
-				meshbox.bbMax		= bbMax;
+				BBox meshbox(BBox::Type::Custom, BBox::Origin::Center, bbMin, bbMax);
 				ComputeBBox(meshbox);
 				objMesh.submeshesBbox.push_back(meshbox);
 				
@@ -316,20 +324,30 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 		}
 	}
 
-	BBox* scenebox = &objMesh.bbox;
-	scenebox->bbMin = nm::float3{ 0.0f, 0.0f, 0.0f };
-	scenebox->bbMax = nm::float3{ 0.0f, 0.0f, 0.0f };
+	nm::float3 bbMin = nm::float3{ 0.0f, 0.0f, 0.0f };
+	nm::float3 bbMax = nm::float3{ 0.0f, 0.0f, 0.0f };
 	for(int i = 0; i < objMesh.submeshesBbox.size(); i++)
 	{		
-		scenebox->bbMin[0] = std::min(objMesh.bbox.bbMin[0], objMesh.submeshesBbox[i].bbMin[0]);
-		scenebox->bbMin[1] = std::min(objMesh.bbox.bbMin[1], objMesh.submeshesBbox[i].bbMin[1]);
-		scenebox->bbMin[2] = std::min(objMesh.bbox.bbMin[2], objMesh.submeshesBbox[i].bbMin[2]);
+		bbMin[0] = std::min(bbMin[0], objMesh.submeshesBbox[i].bbMin[0]);
+		bbMin[1] = std::min(bbMin[1], objMesh.submeshesBbox[i].bbMin[1]);
+		bbMin[2] = std::min(bbMin[2], objMesh.submeshesBbox[i].bbMin[2]);
 															 
-		scenebox->bbMax[0] = std::max(objMesh.bbox.bbMax[0], objMesh.submeshesBbox[i].bbMax[0]);
-		scenebox->bbMax[1] = std::max(objMesh.bbox.bbMax[1], objMesh.submeshesBbox[i].bbMax[1]);
-		scenebox->bbMax[2] = std::max(objMesh.bbox.bbMax[2], objMesh.submeshesBbox[i].bbMax[2]);
+		bbMax[0] = std::max(bbMax[0], objMesh.submeshesBbox[i].bbMax[0]);
+		bbMax[1] = std::max(bbMax[1], objMesh.submeshesBbox[i].bbMax[1]);
+		bbMax[2] = std::max(bbMax[2], objMesh.submeshesBbox[i].bbMax[2]);
 	}	
-	ComputeBBox(*scenebox);
+
+	objMesh.bbox = BBox(BBox::Type::Custom, BBox::Origin::Center, bbMin, bbMax);
+	BBox* meshBBox = &objMesh.bbox;
+	ComputeBBox(*meshBBox);
+
+	
+	{
+		// correcting the translation of the mesh based on its min and max 
+		nm::float3 translationFactor = -(objMesh.bbox.bbMin + objMesh.bbox.bbMax) / 2.0f;
+		objMesh.transform = nm::translation(translationFactor);
+		
+	}
 
 	p_objScene.meshList.push_back(objMesh);
 
@@ -412,8 +430,12 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 	auto& shapes = objReader.GetShapes();
 
 	MeshRaw objMesh;
-	auto vertList = &objMesh.vertexList;
-	auto indList = &objMesh.indicesList;
+	objMesh.vertexList	= VertexList(Vertex::AttributeFlag::position | Vertex::AttributeFlag::normal | Vertex::AttributeFlag::uv | Vertex::AttributeFlag::tangent);
+	
+	auto vertList		= &objMesh.vertexList;
+	auto indList		= &objMesh.indicesList;
+
+	float emptyUV[2]	= {0.0f, 0.0f};
 
 	std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 	int meshCount = 0;
@@ -424,32 +446,23 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 			int valid_i = 0;
 			for (const auto& index : shape.mesh.indices)
 			{
-				Vertex vertex;
-
-				vertex.pos = nm::float3{
-					attrib.vertices[3 * index.vertex_index + 0],
-					attrib.vertices[3 * index.vertex_index + 1],
-					attrib.vertices[3 * index.vertex_index + 2]
-				};
-
-				vertex.normal = nm::float3{
-					attrib.normals[3 * index.normal_index + 0],
-					attrib.normals[3 * index.normal_index + 1],
-					attrib.normals[3 * index.normal_index + 2]
-				};
+				Vertex vertex = objMesh.vertexList.CreateVertex();
+				vertex.AddAttribute(Vertex::AttributeFlag::position, &attrib.vertices[3 * index.vertex_index]);
+				vertex.AddAttribute(Vertex::AttributeFlag::normal, &attrib.normals[3 * index.normal_index]);
 
 				int in = index.texcoord_index;
 				if (in < 0)
 					in = 0;
 
 				if (attrib.texcoords.empty())
-					vertex.uv = nm::float2{0.0f, 0.0f};
+					vertex.AddAttribute(Vertex::AttributeFlag::uv, &emptyUV[0]);
 				else
-					vertex.uv = nm::float2{attrib.texcoords[2 * in + 0],attrib.texcoords[2 * in + 1] };
+					vertex.AddAttribute(Vertex::AttributeFlag::uv, &attrib.texcoords[2 * in + 0]);
 
 				if (p_loadData.flipUV == true)
 				{
-					vertex.uv[1] = 1.0f - vertex.uv[1];
+					float* uv = vertex.GetAttribute(Vertex::AttributeFlag::uv);
+					uv[1] = 1.0f - uv[1];
 				}
 
 				//vertex.color = nm::float3{1.0f, 1.0f, 1.0f
@@ -460,8 +473,8 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 
 				if (uniqueVertices.count(vertex) == 0)
 				{
-					uniqueVertices[vertex] = static_cast<uint32_t>(vertList->size());
-					vertList->push_back(vertex);
+					uniqueVertices[vertex] = static_cast<uint32_t>(vertList->size() / vertList->GetVertexSize());
+					vertList->AddVertex(vertex);
 				}
 
 				indList->push_back(uniqueVertices[vertex]);
@@ -481,7 +494,7 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 		int width, height, channels;
 		// loading diffuse textures
 		{
-			ImageRaw diffuse{ nullptr, 0, 0, 0 };		// initilizing diffuse raw tex
+			ImageRaw diffuse{ nullptr, 0, 0, 0 };		// initializing diffuse raw texture
 			if (!material.diffuse_texname.empty())
 			{
 				std::string diffusePath = folderPath + "/" + material.diffuse_texname.c_str();
@@ -496,7 +509,7 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 			p_objScene.textureList.push_back(diffuse);
 		}
 		{
-			ImageRaw normal{ nullptr, 0, 0, 0 };	// initilizind normal raw tex
+			ImageRaw normal{ nullptr, 0, 0, 0 };	// initialized normal raw texture
 			if (!material.bump_texname.empty())
 			{
 				std::string normalPath = folderPath + "/" + material.bump_texname.c_str();
@@ -507,13 +520,11 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 			}
 			else
 			{
-				std::cout << "Nomal Mat Not Found: " << material.name << std::endl;
+				std::cout << "Normal Mat Not Found: " << material.name << std::endl;
 			}
 
 			p_objScene.textureList.push_back(normal);
 		}
-
-
 	}
 
 	return true;
@@ -533,7 +544,28 @@ bool WriteToDisk(const std::filesystem::path& pPath, size_t pDataSize, char* pDa
 	return false;		
 }
 
+std::vector<uint32_t> BBox::GetIndexTemplate()
+{
+	std::vector<uint32_t> indexTemplate{ 0, 1, 2, 3, 4, 5, 6, 7, 0, 4, 1, 5, 2, 6, 3, 7, 1, 2, 3, 0, 5, 6, 7, 4 };
+	return indexTemplate;
+}
+
+VertexList BBox::GetVertexTempate()
+{
+	VertexList vertices(Vertex::AttributeFlag::position);
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{ -1, -1, -1 } [0] );
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{  1, -1, -1 } [0] );
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{  1,  1, -1 } [0] );
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{ -1,  1, -1 } [0] );
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{ -1, -1, 1  } [0] );
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{  1, -1, 1  } [0] );
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{  1,  1, 1  } [0] );
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{ -1,  1, 1  } [0] );
+	return vertices;
+}
+
 BBox::BBox(Type p_type, Origin p_origin, nm::float3 p_min, nm::float3 p_max)
+	:unitBBoxTransform()
 {
 	Reset(p_type, p_origin, p_min, p_max);
 }
@@ -546,6 +578,7 @@ BBox BBox::operator*(nm::float4x4 const& p_transform)
 	box.bbMax = (p_transform * nm::float4(this->bbMax, 1.0)).xyz();
 
 	box.CalculateCorners();
+	box.CalculateUnitBBoxTransform();
 
 	return box;
 }
@@ -574,7 +607,9 @@ BBox BBox::operator*(nm::Transform const& p_transform)
 		box.bbMax = (p_transform.GetTransform() * nm::float4(this->bbMax, 1.0)).xyz();
 
 		box.CalculateCorners();
+		box.CalculateUnitBBoxTransform();
 	}
+
 	return box;
 }
 
@@ -598,6 +633,7 @@ void BBox::Merge(const BBox& that)
 	this->bbMax[2] = (this->bbMax[2] > that.bbMax[2]) ? this->bbMax[2] : that.bbMax[2];
 
 	CalculateCorners();
+	CalculateUnitBBoxTransform();
 }
 
 // merge this with that
@@ -612,6 +648,7 @@ void BBox::Merge(const BSphere& that)
 	this->bbMax[2] = (this->bbMax[2] > (that.bsCenter[2] + that.bsRadius)) ? this->bbMax[2] : (that.bsCenter[2] + that.bsRadius);
 
 	CalculateCorners();
+	CalculateUnitBBoxTransform();
 }
 
 void BBox::Reset(Type p_type, Origin p_origin, nm::float3 p_min, nm::float3 p_max)
@@ -637,8 +674,8 @@ void BBox::Reset(Type p_type, Origin p_origin, nm::float3 p_min, nm::float3 p_ma
 		bbMax = p_max;
 	}
 
-
 	CalculateCorners();
+	CalculateUnitBBoxTransform();
 }
 
 float BBox::GetDepth() const
@@ -680,6 +717,27 @@ bool BBox::isVisiable(BSphere p_s)
 		}
 	}
 	return false;
+}
+
+nm::Transform BBox::GetUnitBBoxTransform() const
+{
+	return unitBBoxTransform;
+}
+
+void BBox::CalculateUnitBBoxTransform()
+{
+	// This function assumes the bounding-box to be of unit size
+	// and calculates scaling and translation factor of this
+	// box with min and max values. 
+	nm::float4x4 scale = nm::float4x4::identity();
+	scale.column[0][0] = (bbMax.x() - bbMin.x())/2.0f;
+	scale.column[1][1] = (bbMax.y() - bbMin.y())/2.0f;
+	scale.column[2][2] = (bbMax.z() - bbMin.z())/2.0f;
+	scale.column[3][3] = 1.0f;
+	unitBBoxTransform.SetScale(scale);
+	
+	nm::float4 translate = (nm::float4(bbMax, 1.0f) + nm::float4(bbMin, 1.0f))/2.0f;
+	unitBBoxTransform.SetTranslate(translate);
 }
 
 void BBox::CalculateCorners()

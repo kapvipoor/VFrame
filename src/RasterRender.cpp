@@ -15,8 +15,8 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 {			
 	m_rhi					= new CVulkanRHI(name, screen_width_, screen_height_);
 
-	m_primaryCamera			= new CPerspectiveCamera(/*"Primary Camera"*/);
-	m_sunLight				= new CDirectionaLight("Sunlight");
+	m_primaryCamera			= new CPerspectiveCamera();
+	m_sunLight				= new CDirectionaLight("Sunlight", true, nm::float3(0.0f, 1.0f, 0.0f));
 
 	m_sceneGraph			= new CSceneGraph(m_primaryCamera);
 
@@ -100,7 +100,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 	RETURN_FALSE_IF_FALSE(m_rhi->initialize(initData));
 
 	// Will create command pool for Compute Queue Family only 
-	// (might be gfx compatible as well)
+	// (might be graphics compatible as well)
 	RETURN_FALSE_IF_FALSE(m_rhi->CreateCommandPool(m_rhi->GetQueueFamiliyIndex(), m_vkCmdPool));
 
 	for (int i = 0; i < FRAME_BUFFER_COUNT; i++)
@@ -110,7 +110,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 
 	RETURN_FALSE_IF_FALSE(CreateSyncPremitives());
 
-	RETURN_FALSE_IF_FALSE(m_fixedAssets->Create(m_rhi));
+	RETURN_FALSE_IF_FALSE(m_fixedAssets->Create(m_rhi, m_vkCmdPool));
 
 	RETURN_FALSE_IF_FALSE(m_loadableAssets->Create(m_rhi, *m_fixedAssets, m_vkCmdPool));
 	
@@ -119,7 +119,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 	RETURN_FALSE_IF_FALSE(CreatePasses());
 
 	{
-		RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(m_vkCmdBfr[0][0], "Init Barriers"));
+		RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(m_vkCmdBfr[0][0], "Initialize Barriers"));
 
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSAO);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSAOBlur);
@@ -152,9 +152,17 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 bool CRasterRender::on_update(float delta)
 {
 	RETURN_FALSE_IF_FALSE(m_rhi->AcquireNextSwapChain(m_vkswapchainAcquireSemaphore, m_swapchainIndex));
+	if (!m_rhi->WaitFence(m_vkFenceCmdBfrFree[m_swapchainIndex]))
+		return false;
+
+	if (!m_rhi->ResetFence(m_vkFenceCmdBfrFree[m_swapchainIndex]))
+		return false;
 
 	m_sceneGraph->Update();
-	UpdateCamera(delta);
+
+	CCamera::UpdateData camUpdateData{};
+	camUpdateData.timeDelta = delta;
+	UpdateCamera(camUpdateData);
 
 	// if left mouse is clicked; prepare and pick object for this frame
 	m_pickObject = false;  m_keys[LEFT_MOUSE_BUTTON].down;
@@ -173,9 +181,6 @@ bool CRasterRender::on_update(float delta)
 		uniformData.mousePos						= nm::float2((float)mousepos_x, (float)mousepos_y);
 		uniformData.renderRes						= nm::float2((float)m_rhi->GetRenderWidth(), (float)m_rhi->GetRenderHeight());
 		uniformData.skyboxModelView					= m_primaryCamera->GetView();
-		//uniformData.sunDirViewSpace					= (m_primaryCamera->GetView() * nm::float4(m_sunLightCamera->GetLookAt(), 1.0f)).xyz();
-		//uniformData.sunDirWorldSpace				= m_sunLightCamera->GetLookAt();
-		//uniformData.sunViewProj						= m_sunLightCamera->GetViewProj();
 		uniformData.sunDirViewSpace					= (m_primaryCamera->GetView() * nm::float4(m_sunLight->GetShadowCamera()->GetLookAt(), 1.0f)).xyz();
 		uniformData.sunDirWorldSpace				= m_sunLight->GetShadowCamera()->GetLookAt();
 		uniformData.sunViewProj						= m_sunLight->GetShadowCamera()->GetViewProj();
@@ -197,6 +202,8 @@ bool CRasterRender::on_update(float delta)
 		loadedUpdate.swapchainIndex					= m_swapchainIndex;
 		loadedUpdate.timeElapsed					= delta;
 		loadedUpdate.viewMatrix						= m_primaryCamera->GetView();
+		loadedUpdate.commandPool					= m_vkCmdPool;
+		loadedUpdate.cameraData						= camUpdateData;
 
 		RETURN_FALSE_IF_FALSE(m_loadableAssets->Update(m_rhi, loadedUpdate, m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData()));
 	}
@@ -217,12 +224,6 @@ bool CRasterRender::on_update(float delta)
 		m_toneMapPass->Update(&updateData);
 		m_uiPass->Update(&updateData);
 	}
-
-	if (!m_rhi->WaitFence(m_vkFenceCmdBfrFree[m_swapchainIndex]))
-		return false;
-
-	if (!m_rhi->ResetFence(m_vkFenceCmdBfrFree[m_swapchainIndex]))
-		return false;
 
 	if (m_rhi->GetRendererType() == CVulkanRHI::RendererType::Forward)
 	{
@@ -338,7 +339,7 @@ bool CRasterRender::CreatePasses()
 	// Push Constants for G Buffers
 	VkPushConstantRange meshPushrange{};
 	meshPushrange.offset					= 0;
-	meshPushrange.size						= sizeof(CScene::MeshPushConst);	// pushing mesh and submesh ID
+	meshPushrange.size						= sizeof(CScene::MeshPushConst);	// pushing mesh and sub-mesh ID
 	meshPushrange.stageFlags				= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	// Push constants for UI
@@ -346,6 +347,12 @@ bool CRasterRender::CreatePasses()
 	uiPushrange.offset						= 0;
 	uiPushrange.size						= sizeof(CRenderableUI::UIPushConstant);
 	uiPushrange.stageFlags					= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	// Push constants for debug draw
+	VkPushConstantRange debugDrawPushrange{};
+	debugDrawPushrange.offset				= 0;
+	debugDrawPushrange.size					= sizeof(uint32_t);
+	debugDrawPushrange.stageFlags			= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	VkPipelineLayout primaryAndSceneLayout;
 	std::vector<VkDescriptorSetLayout> descLayouts;
@@ -368,7 +375,7 @@ bool CRasterRender::CreatePasses()
 	descLayouts.clear();
 	descLayouts.push_back(m_primaryDescriptors->GetDescriptorSetLayout(0));					// Set 0 - BindingSet::Primary
 	descLayouts.push_back(m_fixedAssets->GetDebugRenderer()->GetDescriptorSetLayout());		// Set 1 - BindingSet::Debug
-	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(nullptr, 0, descLayouts.data(), (uint32_t)descLayouts.size(), debugLayout));
+	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&debugDrawPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), debugLayout));
 
 
 	CPass::RenderData renderData{};
@@ -378,7 +385,7 @@ bool CRasterRender::CreatePasses()
 
 	CVulkanRHI::Pipeline pipeline;
 	pipeline.pipeLayout						= primaryAndSceneLayout;
-	pipeline.cullMode						= VK_CULL_MODE_BACK_BIT;		// to fix peterpanning issue
+	pipeline.cullMode						= VK_CULL_MODE_BACK_BIT;		// to fix peter-panning issue
 	pipeline.enableDepthTest				= true;
 	pipeline.enableDepthWrite				= true;
 	RETURN_FALSE_IF_FALSE(m_staticShadowPass->Initalize(&renderData, pipeline));
@@ -392,7 +399,7 @@ bool CRasterRender::CreatePasses()
 	RETURN_FALSE_IF_FALSE(m_forwardPass->Initalize(&renderData, pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
-	pipeline.renderpassData					= m_forwardPass->GetRenderpass();			// reusing renderpass from forward pass
+	pipeline.renderpassData					= m_forwardPass->GetRenderpass();			// reusing render-pass from forward pass
 	pipeline.pipeLayout						= primaryAndSceneLayout;
 	pipeline.vertexInBinding				= vertexBindinginUse.bindingDescription;
 	pipeline.vertexAttributeDesc			= vertexBindinginUse.attributeDescription;
@@ -438,23 +445,21 @@ bool CRasterRender::CreatePasses()
 	return true;
 }
 
-void CRasterRender::UpdateCamera(float p_delta)
+void CRasterRender::UpdateCamera(CCamera::UpdateData& p_updateData)
 {
-	CCamera::UpdateData cdata{};
-	cdata.moveCamera						= m_keys[MIDDLE_MOUSE_BUTTON].down;
-	cdata.timeDelta							= p_delta;
-	cdata.mouseDelta[0]						= mouse_delta[0];
-	cdata.mouseDelta[1]						= mouse_delta[1];
-	cdata.A									= m_keys[(int)char('A')].down;
-	cdata.S									= m_keys[(int)char('S')].down;
-	cdata.D									= m_keys[(int)char('D')].down;
-	cdata.W									= m_keys[(int)char('W')].down;
-	cdata.Q									= m_keys[(int)char('Q')].down;
-	cdata.E									= m_keys[(int)char('E')].down;
-	cdata.Shft								= (m_keys[160].down || m_keys[16].down);
-	m_primaryCamera->Update(cdata);
+	p_updateData.moveCamera						= m_keys[MIDDLE_MOUSE_BUTTON].down;
+	p_updateData.mouseDelta[0]						= mouse_delta[0];
+	p_updateData.mouseDelta[1]						= mouse_delta[1];
+	p_updateData.A									= m_keys[(int)char('A')].down;
+	p_updateData.S									= m_keys[(int)char('S')].down;
+	p_updateData.D									= m_keys[(int)char('D')].down;
+	p_updateData.W									= m_keys[(int)char('W')].down;
+	p_updateData.Q									= m_keys[(int)char('Q')].down;
+	p_updateData.E									= m_keys[(int)char('E')].down;
+	p_updateData.Shft								= (m_keys[160].down || m_keys[16].down);
+	m_primaryCamera->Update(p_updateData);
 
-	UpdateSceneGraphDependencies(p_delta);
+	UpdateSceneGraphDependencies(p_updateData.timeDelta);
 }
 
 void CRasterRender::UpdateSceneGraphDependencies(float p_delta)
@@ -475,9 +480,10 @@ void CRasterRender::UpdateSceneGraphDependencies(float p_delta)
 		initData.pitch = 0.0f;
 		m_sunLight->Init(initData);
 
-		// Ensures the 
+		nm::float3 sunLightDirection = m_sunLight->GetDirection();
+		
 		nm::Transform transform = m_sunLight->GetTransform();
-		transform.SetRotation(0.0f, 1.57f, 0.0f);		
+		transform.SetRotation(atan2(sunLightDirection.x(), sunLightDirection.z()), asin(sunLightDirection.y()), 0.0f);
 		transform.SetTranslate(nm::float4((sceneBB->bbMin[0] + sceneBB->bbMax[0]) / 2.0f, sceneBB->bbMax[1], (sceneBB->bbMin[2] + sceneBB->bbMax[2]) / 2.0f, 1.0f));
 		m_sunLight->SetTransform(transform);
 	}

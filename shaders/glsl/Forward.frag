@@ -63,7 +63,6 @@ float CalculateShadow(vec4 L, vec3 N, bool applyPCF)
     	            shadowFactor 		= shadowFactor + (((lightPositionNDC.z) > sampledDepth) ? 1.0f : 0.0f);
     	        }
     	    }
-
     	    return (shadowFactor / 9.0f);
     	}
     	else
@@ -90,19 +89,48 @@ void main()
 	vec3 Lo 								= vec3(0.0);
 
 	// for each light source
+	for(int i = 0; i < g_lights.count; i++)
 	{
-		// As light color is over 1, the result will be over 1, hence will need tonemapping
-		vec3 lightColor 					= vec3(1.0, 1.0, 0.9) * g_Info.sunLightIntensity;
-		//vec3 lightDir 					= g_Info.sunLightDirWorld.xyz - inWorldPosition.xyz;
-		// this needs to be inverse transpose so as to negate the scaling in the matrix before multipling with Light vector. But this isn't working and I do not know why !
-		vec3 L 								= normalize(g_Info.camView * vec4(g_Info.sunLightDirWorld, 0.0f)).xyz;											// L in View Space
+		Light light = g_lights.lights[i];
+		
+		// Unpacking light type
+		uint lightType = light.type_castShadow >> 16;
+
+		// As light color is over 1, the result will be over 1, hence will need tone mapping
+		vec3 lightColor 					= vec3(light.color[0], light.color[1], light.color[2]) * light.intensity; //vec3(1.0, 1.0, 0.9) * g_Info.sunLightIntensity;
+		vec3 L 								= vec3(0.0f, 0.0f, 0.0f);
+
+		if(lightType == DIRECTIONAL_LIGHT_TYPE)
+		{
+			//vec3 lightDir 				= g_Info.sunLightDirWorld.xyz - inWorldPosition.xyz;
+			// this needs to be inverse transpose so as to negate the scaling in the matrix before multipling with Light vector. But this isn't working and I do not know why!
+			L 								= normalize(g_Info.camView * vec4(light.vector3[0], light.vector3[1], light.vector3[2], 0.0f)).xyz; // L in View Space
+
+			// Light color is directly impacted by the intensity
+			lightColor						= lightColor *  light.intensity;
+
+		}
+		else if (lightType == POINT_LIGHT_TYPE)
+		{
+			// light.vector3 is a position of the point light here.
+			// the light vector is going to be inPosinViewSpace - (view matrix * light position)
+			L 								= ((g_Info.camView * vec4(light.vector3[0], light.vector3[1], light.vector3[2], 1.0f)) - inPosinViewSpace).xyz; // L in View Space
+			
+			// checking to make sure the distance between the light source 
+			// and position is proportional supported intensity range of this point light
+			// for now intensity linearly reduces as the distance of light to poition
+			// increases.
+			lightColor						= lightColor * max(0.0f, light.intensity - length(L));
+			L 								= normalize(L);
+		}
+		
 		vec3 H 								= normalize(V+L);
 
 		// before we calculate anything related to light, we want to make sure
 		// the position is not in shadow
 		float shadow 						= CalculateShadow(inPosinLightSpace, N, g_Info.enableShadowPCF);
 		// if not in shadow
-		if(shadow != 1.0f)
+		if(any(greaterThan(lightColor, vec3(0.0f))))
 		{
 			// as we do not want to calculate light attenuation on directional light
 			// commenting this part of code

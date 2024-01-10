@@ -6,7 +6,6 @@
 #include "core/Camera.h"
 #include "core/SceneGraph.h"
 #include "core/Asset.h"
-#include "core/Light.h"
 
 #include "ShadowPass.h"
 #include "LightingPass.h"
@@ -88,7 +87,7 @@ private:
 	void DestroySyncPremitives();
 	bool CreatePasses();
 
-	void UpdateCamera(float p_delta);	
+	void UpdateCamera(CCamera::UpdateData&);
 	void UpdateSceneGraphDependencies(float p_delta);
 
 	bool DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkanRHI::CommandBuffer& p_cmdBfr);

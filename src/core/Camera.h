@@ -2,7 +2,7 @@
 
 #define M_PI 3.141592653589793238
 
-#include "SceneGraph.h"
+//#include "SceneGraph.h"
 #include "external/NiceMath.h"
 
 class CCamera// : public CEntity

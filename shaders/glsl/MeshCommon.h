@@ -1,3 +1,6 @@
+#define DIRECTIONAL_LIGHT_TYPE 0
+#define POINT_LIGHT_TYPE 1
+
 layout(push_constant) uniform MeshID
 {
 	uint mesh_id;
@@ -32,8 +35,21 @@ layout(set = 1, binding = 2) buffer Material_Storage
 	Material data[1];			// list of all material
 } g_materials;
 
-layout(set = 1, binding = 3) uniform texture2D g_textures[];
+struct Light
+{
+	uint						type_castShadow;
+	float						color[3];
+	float						intensity;
+	float						vector3[3];
+};
 
+layout(set = 1, binding = 3) buffer Light_Storage
+{
+	uint						count;
+	Light						lights[];
+} g_lights;
+
+layout(set = 1, binding = 4) uniform texture2D g_textures[];
 
 vec4 GetColor(uint color_id, vec2 uv)
 {

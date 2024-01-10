@@ -95,10 +95,10 @@ bool CForwardPass::Render(RenderData* p_renderData)
 		for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
 		{
 			const SubMesh* submesh							= mesh->GetSubmesh(j);
-			VkPipelineStageFlags vertex_frag				= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+			VkPipelineStageFlags pipelineStage				= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 			CScene::MeshPushConst pc{ mesh->GetMeshId(), submesh->materialId};
 			
-			vkCmdPushConstants(cmdBfr, m_pipeline.pipeLayout, vertex_frag, 0, sizeof(CScene::MeshPushConst), (void*)&pc);
+			vkCmdPushConstants(cmdBfr, m_pipeline.pipeLayout, pipelineStage, 0, sizeof(CScene::MeshPushConst), (void*)&pc);
 			vkCmdDrawIndexed(cmdBfr, submesh->indexCount, 1, submesh->firstIndex, 0, 1);
 		}
 	}

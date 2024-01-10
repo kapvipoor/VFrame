@@ -1729,6 +1729,15 @@ namespace nm {
              transform = scale * rotate * translate;
          }
 
+         void SetScale(nm::float3 p_scale)
+         {
+             scaleVec = p_scale;
+             scale.column[0][0] = scaleVec[0];
+             scale.column[1][1] = scaleVec[1];
+             scale.column[2][2] = scaleVec[2];
+             transform = scale * rotate * translate;
+         }
+
          void SetTranslate(nm::float4x4 p_translate)
          {
              translate = p_translate;
