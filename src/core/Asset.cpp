@@ -624,10 +624,14 @@ CRenderableMesh::CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::floa
 	CEntity::m_transform.SetTransform(p_modelMat);
 }
 
-//void CRenderableMesh::Show()
-//{
-//	CEntity::Show();
-//}
+void CRenderableMesh::SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox)
+{
+	m_dirty						= true;
+	m_transform					= p_transform;
+
+	if(p_bRecomputeSceneBBox)
+		CSceneGraph::RequestSceneBBoxUpdate();
+}
 
 CScene::CScene(CSceneGraph* p_sceneGraph)
 	: CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame)
@@ -949,53 +953,56 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 
 bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr, bool p_dumpBinaryToDisk)
 {
-	m_scenePaths.push_back(g_AssetPath/"glTFSampleModels / 2.0 / DragonAttenuation / glTF / DragonAttenuation.gltf");				//0
-	m_scenePaths.push_back(g_AssetPath/"shadow_test_3.gltf");																		//1
-	m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");							//2
-	m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
+	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels / 2.0 / DragonAttenuation / glTF / DragonAttenuation.gltf");				//0
+	//m_scenePaths.push_back(g_AssetPath/"shadow_test_3.gltf");																		//1
+	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");						//2
+	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
 	m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");											//4
 	m_scenePaths.push_back(g_AssetPath/"Sponza/glTF/Sponza.gltf");																	//5
-	m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");					//6
-	m_scenePaths.push_back(g_AssetPath/"cube/cube.obj");																			//7
-	m_scenePaths.push_back(g_AssetPath/"icosphere.gltf");																			//8
-	m_scenePaths.push_back(g_AssetPath/"dragon/dragon.obj");																		//9
-	m_scenePaths.push_back(g_AssetPath/"stanford_dragon_pbr/scene.gltf");															//10
-	m_scenePaths.push_back(g_AssetPath/"mitsuba/mitsuba.obj");																	//11
+	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");				//6
+	//m_scenePaths.push_back(g_AssetPath/"cube/cube.obj");																			//7
+	//m_scenePaths.push_back(g_AssetPath/"icosphere.gltf");																			//8
+	//m_scenePaths.push_back(g_AssetPath/"dragon/dragon.obj");																		//9
+	//m_scenePaths.push_back(g_AssetPath/"stanford_dragon_pbr/scene.gltf");															//10
+	//m_scenePaths.push_back(g_AssetPath/"mitsuba/mitsuba.obj");																	//11
+	//m_scenePaths.push_back(g_AssetPath/"wall_and_floor/wall_and_floor.gltf");														//12
+	//m_scenePaths.push_back(g_AssetPath/"main_sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");									//13
+	//m_scenePaths.push_back(g_AssetPath / "main_sponza/PKG_A_Curtains/NewSponza_Curtains_glTF.gltf");									//13
 
-	std::vector<std::filesystem::path> paths;
-	//paths.push_back(m_scenePaths[5]);
-	//paths.push_back(m_scenePaths[2]);
-	paths.push_back(m_scenePaths[4]);
-	//paths.push_back(m_scenePaths[8]);
+	//std::vector<std::filesystem::path> paths;
+	////paths.push_back(m_scenePaths[5]);
+	////paths.push_back(m_scenePaths[2]);
+	//paths.push_back(m_scenePaths[12]);
+	////paths.push_back(m_scenePaths[8]);
 
 	std::vector<bool> flipYList{ false, false, false };
 
 	SceneRaw sceneraw;
-	for (unsigned int i = 0; i < paths.size(); i++)
+	for (unsigned int i = 0; i < m_scenePaths.size(); i++)
 	{
-		std::cout << "Loading Scene Resources - " << paths[i] << std::endl;
+		std::cout << "Loading Scene Resources - " << m_scenePaths[i] << std::endl;
 
 		ObjLoadData loadData{};
 		loadData.flipUV = flipYList[i];
 		loadData.loadMeshOnly = false;
 
-		if (paths[i].extension() == ".gltf")
+		if (m_scenePaths[i].extension() == ".gltf")
 		{
-			RETURN_FALSE_IF_FALSE(LoadGltf(paths[i].string().c_str(), sceneraw, loadData));
+			RETURN_FALSE_IF_FALSE(LoadGltf(m_scenePaths[i].string().c_str(), sceneraw, loadData));
 		}
-		else if (paths[i].extension() == ".obj") 
+		else if (m_scenePaths[i].extension() == ".obj")
 		{
-			RETURN_FALSE_IF_FALSE(LoadObj(paths[i].string().c_str(), sceneraw, loadData));
+			RETURN_FALSE_IF_FALSE(LoadObj(m_scenePaths[i].string().c_str(), sceneraw, loadData));
 		}
 		else
 		{
-			std::cerr << "Invalid file extension - " << paths[i] << std::endl;
+			std::cerr << "Invalid file extension - " << m_scenePaths[i] << std::endl;
 			return false;
 		}
 
 		if (p_dumpBinaryToDisk)
 		{
-			std::string outName = "D:/" + paths[i].stem().string();
+			std::string outName = "D:/" + m_scenePaths[i].stem().string();
 			WriteToDisk(std::filesystem::path(outName + "_vertex_float_p3_n3_uv2_t4.charp"), sizeof(Vertex) * sceneraw.meshList[i].vertexList.size(), (char*)sceneraw.meshList[i].vertexList.data());
 			WriteToDisk(std::filesystem::path(outName + "_index_uint32.charp"), sizeof(uint32_t) * sceneraw.meshList[i].indicesList.size(), (char*)sceneraw.meshList[i].indicesList.data());
 		}
@@ -1366,7 +1373,7 @@ CFixedBuffers::CFixedBuffers()
 	m_primaryUniformData.ssaoRadius				= 0.5f;
 	m_primaryUniformData.enableShadowPCF		= 0;
 	m_primaryUniformData.sunIntensity			= 20.0f;
-	m_primaryUniformData.pbrAmbientFactor		= 0.03f;
+	m_primaryUniformData.pbrAmbientFactor		= 0.5f;
 	m_primaryUniformData.enableSSAO				= 1;
 	m_primaryUniformData.biasSSAO				= 0.015f;
 	m_primaryUniformData.unassigned_1			= 0.0f;
@@ -1759,7 +1766,7 @@ bool CRenderableDebug::PreDrawInstanced(CVulkanRHI* p_rhi, uint32_t p_scIdx, con
 			// Append the entity's bounding sphere to raw CPU buffer if selected
 			if (entity->GetDebugDataType() == CDebugData::DebugType::Sphere)
 			{
-				const float* transform = &(entityTransform * entity->GetTransform().GetTransform()).column[0][0];
+				const float* transform = &(entityTransform).column[0][0];// *entity->GetTransform().GetTransform()).column[0][0];
 				std::copy(&transform[0], &transform[16], std::back_inserter(selectedSphereTransformData));
 				++m_bSphereDetails.instanceCount;
 			}

@@ -170,7 +170,7 @@ public:
 	int	GetId() { return m_id; }
 	const char* GetName() { return m_name.c_str(); }
 
-	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox = true);
+	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox = true) = 0;
 	nm::Transform& GetTransform();
 	
 	void SetBoundingBox(BBox p_bbox, bool p_bRecomputeSceneBBox = true);
@@ -249,7 +249,7 @@ public:
 
 	virtual bool Init(const CCamera::InitData&) = 0;
 	virtual bool Update(const CCamera::UpdateData&) = 0;
-	virtual void SetTransform(nm::Transform p_transform) = 0;
+	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox = true) = 0;
 
 	virtual void Show(); //CUIParticipant virtual override
 
@@ -278,7 +278,7 @@ public:
 
 	virtual bool Init(const CCamera::InitData&) override;
 	virtual bool Update(const CCamera::UpdateData&) override;
-	virtual void SetTransform(nm::Transform p_transform);
+	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox = true) override;
 
 	virtual void Show(); //CUIParticipant virtual override
 
@@ -300,7 +300,7 @@ public:
 	virtual bool Init(const CCamera::InitData&) override;
 	virtual bool Update(const CCamera::UpdateData&) override;
 
-	virtual void SetTransform(nm::Transform p_transform) override;
+	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox) override;
 
 	virtual void Show(); //CUIParticipant virtual override
 

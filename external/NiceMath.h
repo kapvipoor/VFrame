@@ -1669,7 +1669,7 @@ namespace nm {
          {
              rotate = p_rotate;
              Decompose2Rotation(p_rotate, rotateVec);
-             transform = scale * rotate * translate;
+             transform = translate * rotate * scale;
          }
 
          void SetRotation(float p_roll, float p_pitch, float p_yaw)
@@ -1719,14 +1719,14 @@ namespace nm {
              }
 
              Decompose2Rotation(rotate, rotateVec);
-             transform = scale * rotate * translate;
+             transform = translate * rotate * scale;
          }
 
          void SetScale(nm::float4x4 p_scale)
          {
              scale = p_scale;
              Decompose2Scaling(p_scale, scaleVec);
-             transform = scale * rotate * translate;
+             transform = translate * rotate * scale;
          }
 
          void SetScale(nm::float3 p_scale)
@@ -1735,7 +1735,7 @@ namespace nm {
              scale.column[0][0] = scaleVec[0];
              scale.column[1][1] = scaleVec[1];
              scale.column[2][2] = scaleVec[2];
-             transform = scale * rotate * translate;
+             transform = translate * rotate * scale;
          }
 
          void SetTranslate(nm::float4x4 p_translate)

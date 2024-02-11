@@ -347,7 +347,7 @@ public:
 	CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::float4x4 p_modelMat);
 	~CRenderableMesh() {};
 	
-	//virtual void Show();
+	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox) override;
 
 	uint32_t GetMeshId() const { return m_mesh_id; }
 	uint32_t GetSubmeshCount() const { return (uint32_t)m_submeshes.size(); }

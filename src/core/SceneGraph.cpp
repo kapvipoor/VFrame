@@ -262,14 +262,14 @@ void CEntity::Show()
 	ImGui::Unindent();
 }
 
-void CEntity::SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox)
-{
-	m_dirty						= true;
-	m_transform					= p_transform;
-
-	if(p_bRecomputeSceneBBox)
-		CSceneGraph::RequestSceneBBoxUpdate();
-}
+//void CEntity::SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox)
+//{
+//	m_dirty						= true;
+//	m_transform					= p_transform;
+//
+//	if(p_bRecomputeSceneBBox)
+//		CSceneGraph::RequestSceneBBoxUpdate();
+//}
 
 nm::Transform& CEntity::GetTransform()
 {
@@ -394,11 +394,17 @@ bool CDirectionaLight::Update(const CCamera::UpdateData& p_data)
 	return true;
 }
 
-void CDirectionaLight::SetTransform(nm::Transform p_transform)
+void CDirectionaLight::SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox)
 {
 	// we do not expect directional light to trigger
 	// re-computation of scene bounding box
-	CEntity::SetTransform(p_transform, false);
+	p_bRecomputeSceneBBox	= false;
+	
+	m_dirty					= true;
+	m_transform				= p_transform;
+	
+	if(p_bRecomputeSceneBBox)
+		CSceneGraph::RequestSceneBBoxUpdate();
 }
 
 void CDirectionaLight::Show()
@@ -453,7 +459,9 @@ bool CPointLight::Update(const CCamera::UpdateData&)
 	if (CEntity::m_dirty)
 	{
 		m_position = m_transform.GetTranslateVector();
-		m_intensity = m_transform.GetScaleVector()[0];  // assuming uniform scaling on all axis
+		
+		// assuming uniform scaling on all axis.
+		m_intensity = m_transform.GetScaleVector()[1];
 
 		CEntity::m_dirty = false;
 	}
@@ -461,11 +469,29 @@ bool CPointLight::Update(const CCamera::UpdateData&)
 	return true;
 }
 
-void CPointLight::SetTransform(nm::Transform p_transform)
+void CPointLight::SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox)
 {
+	// assuming uniform scaling on all axis.
+	// We are applying the scaling on the axis that has changed from
+	// last update to all the axises
+	float oldIntensity = m_intensity;
+	nm::float3 scale = p_transform.GetScaleVector();
+	m_intensity = (scale[0] != m_intensity) ? scale[0] :
+		(scale[1] != m_intensity) ? scale[1] :
+		(scale[2] != m_intensity) ? scale[2] : m_intensity;
+
+	if (oldIntensity != m_intensity)
+	{
+		// updating the transform to reflect that
+		p_transform.SetScale(nm::float3(m_intensity));
+	}
+
+	m_dirty = true;
+	m_transform = p_transform;
+	
 	// we expect point light to trigger re-computation of scene 
 	// bounding box if it goes out of scene bounds
-	CEntity::SetTransform(p_transform);
+	CSceneGraph::RequestSceneBBoxUpdate();
 }
 
 void CPointLight::Show()
@@ -481,9 +507,9 @@ CLights::CLights()
 	: m_isDirty(false)
 {
 	//CreateLight(CLight::Type::Directional, "Sunlight", false, nm::float3(1.0f, 1.0f, 0.99f), 10.0f, nm::float3(0.0f, 1.0f, 0.0f));
-	CreateLight(CLight::Type::Point, "PointLight_A", false, nm::float3(1.0f, 1.0f, 0.0f), 2.0f, nm::float3(0.0f, 0.0f, 0.0f));
-	//CreateLight(CLight::Type::Point, "PointLight_B", false, nm::float3(0.0f, 1.0f, 1.0f), 2.0f, nm::float3(1.0f, 0.0f, 0.0f));
-	//CreateLight(CLight::Type::Point, "PointLight_C", false, nm::float3(1.0f, 0.0f, 1.0f), 2.0f, nm::float3(0.0f, 0.0f, 1.0f));
+	CreateLight(CLight::Type::Point, "PointLight_A", false, nm::float3(1.0f, 1.0f, 0.0f), 1.0f, nm::float3(0.0f, 0.0f, 0.0f));
+	CreateLight(CLight::Type::Point, "PointLight_B", false, nm::float3(0.0f, 1.0f, 1.0f), 1.0f, nm::float3(1.0f, 0.0f, 0.0f));
+	CreateLight(CLight::Type::Point, "PointLight_C", false, nm::float3(1.0f, 0.0f, 1.0f), 1.0f, nm::float3(0.0f, 0.0f, 1.0f));
 }
 
 void CLights::Update(const CCamera::UpdateData& p_updateData)
