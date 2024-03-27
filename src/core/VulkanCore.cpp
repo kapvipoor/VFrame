@@ -304,9 +304,9 @@ bool CVulkanCore::CreateSurface(HINSTANCE p_hnstns, HWND p_Hwnd)
 
 bool CVulkanCore::CreateSwapChain(VkFormat p_format, VkImageUsageFlags p_imageUsage)
 {
-	// Bruteforcing swapchain count to 2 without querying for capabilities
-	// Forcing presentaiton mode to FIFO without querying for support
-	VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
+	// Brute-forcing swapchain count to 2 without querying for capabilities
+	// Forcing presentation mode to immediate without querying for support
+	VkPresentModeKHR presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
 
 	VkSwapchainCreateInfoKHR swapChainCreateInfo{};
 	swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -706,13 +706,13 @@ void CVulkanCore::SetScissors(VkCommandBuffer p_cmdBfr, uint32_t p_offX, uint32_
 bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipeline& pData)
 {
 	pData.vertexShader = VK_NULL_HANDLE;
-	if (p_shaderPaths.shaderpath_vertex == "" || !LoadShader(p_shaderPaths.shaderpath_vertex.c_str(), pData.vertexShader))
+	if (p_shaderPaths.shaderpath_vertex == "" || !LoadShader(p_shaderPaths.shaderpath_vertex.string().c_str(), pData.vertexShader))
 		return false;
 
 	pData.fragmentShader = VK_NULL_HANDLE;
 	if (p_shaderPaths.shaderpath_fragment != "")
 	{
-		if (!LoadShader(p_shaderPaths.shaderpath_fragment.c_str(), pData.fragmentShader))
+		if (!LoadShader(p_shaderPaths.shaderpath_fragment.string().c_str(), pData.fragmentShader))
 			return false;
 	}
 
@@ -881,7 +881,7 @@ bool CVulkanCore::CreateComputePipeline(const ShaderPaths& p_shaderPaths, Pipeli
 {
 	// load shader and get shader module
 	p_pData.computeShader = VK_NULL_HANDLE;
-	if (!LoadShader(p_shaderPaths.shaderpath_compute.c_str(), p_pData.computeShader))
+	if (!LoadShader(p_shaderPaths.shaderpath_compute.string().c_str(), p_pData.computeShader))
 		return false;
 
 	VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo{};
@@ -945,7 +945,7 @@ bool CVulkanCore::CreateFence(VkFenceCreateFlags p_flags, VkFence& p_fence)
 {
 	VkFenceCreateInfo fenceinfo{};
 	fenceinfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fenceinfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+	fenceinfo.flags = p_flags;
 	VkResult res = vkCreateFence(m_vkDevice, &fenceinfo, nullptr, &p_fence);
 	if (res != VK_SUCCESS)
 	{

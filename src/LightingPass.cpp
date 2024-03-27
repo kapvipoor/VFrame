@@ -42,8 +42,8 @@ bool CForwardPass::CreateRenderpass(RenderData* p_renderData)
 bool CForwardPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 {
 	CVulkanRHI::ShaderPaths fwdShaderpaths{};
-	fwdShaderpaths.shaderpath_vertex						= g_EnginePath + "/shaders/spirv/Forward.vert.spv";
-	fwdShaderpaths.shaderpath_fragment						= g_EnginePath + "/shaders/spirv/Forward.frag.spv";
+	fwdShaderpaths.shaderpath_vertex						= g_EnginePath /"shaders/spirv/Forward.vert.spv";
+	fwdShaderpaths.shaderpath_fragment						= g_EnginePath /"shaders/spirv/Forward.frag.spv";
 	m_pipeline.pipeLayout									= p_pipeline.pipeLayout;
 	m_pipeline.vertexInBinding								= p_pipeline.vertexInBinding;
 	m_pipeline.vertexAttributeDesc							= p_pipeline.vertexAttributeDesc;
@@ -80,8 +80,8 @@ bool CForwardPass::Render(RenderData* p_renderData)
 
 	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
 
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(), 0, nullptr);
+	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(0), 0, nullptr);
+	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
 
 	// Bind Index and Vertices buffers
 	VkDeviceSize offsets[1] = { 0 };
@@ -95,10 +95,10 @@ bool CForwardPass::Render(RenderData* p_renderData)
 		for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
 		{
 			const SubMesh* submesh							= mesh->GetSubmesh(j);
-			VkPipelineStageFlags vertex_frag				= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+			VkPipelineStageFlags pipelineStage				= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 			CScene::MeshPushConst pc{ mesh->GetMeshId(), submesh->materialId};
 			
-			vkCmdPushConstants(cmdBfr, m_pipeline.pipeLayout, vertex_frag, 0, sizeof(CScene::MeshPushConst), (void*)&pc);
+			vkCmdPushConstants(cmdBfr, m_pipeline.pipeLayout, pipelineStage, 0, sizeof(CScene::MeshPushConst), (void*)&pc);
 			vkCmdDrawIndexed(cmdBfr, submesh->indexCount, 1, submesh->firstIndex, 0, 1);
 		}
 	}
@@ -139,8 +139,8 @@ bool CSkyboxPass::CreateRenderpass(RenderData* p_renderData)
 	CVulkanRHI::Image primaryColorRT				= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
 	CVulkanRHI::Image primaryDepthRT				= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
 
-	renderPass->AttachColor(primaryColorRT.format, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachDepth(primaryDepthRT.format, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+	renderPass->AttachColor(primaryColorRT.format, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	renderPass->AttachDepth(primaryDepthRT.format, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
 	if (!m_rhi->CreateRenderpass(*renderPass))
 		return false;
@@ -159,8 +159,8 @@ bool CSkyboxPass::CreateRenderpass(RenderData* p_renderData)
 bool CSkyboxPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 {
 	CVulkanRHI::ShaderPaths skyBoxShaderpaths{};
-	skyBoxShaderpaths.shaderpath_vertex						= g_EnginePath + "/shaders/spirv/Skybox.vert.spv";
-	skyBoxShaderpaths.shaderpath_fragment					= g_EnginePath + "/shaders/spirv/Skybox.frag.spv";
+	skyBoxShaderpaths.shaderpath_vertex						= g_EnginePath /"shaders/spirv/Skybox.vert.spv";
+	skyBoxShaderpaths.shaderpath_fragment					= g_EnginePath /"shaders/spirv/Skybox.frag.spv";
 	m_pipeline.vertexInBinding								= p_pipeline.vertexInBinding;
 	m_pipeline.vertexAttributeDesc							= p_pipeline.vertexAttributeDesc;
 	m_pipeline.pipeLayout									= p_pipeline.pipeLayout;
@@ -201,7 +201,7 @@ bool CSkyboxPass::Render(RenderData* p_renderData)
 	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
 
 	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(), 0, nullptr);
+	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
 
 	VkDeviceSize offsets[1]									= { 0 };
 	const CRenderableMesh* mesh								= scene->GetRenderableMesh(CScene::MeshType::mt_Skybox);
@@ -277,8 +277,8 @@ bool CDeferredPass::CreateRenderpass(RenderData* p_renderData)
 bool CDeferredPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 {
 	CVulkanRHI::ShaderPaths dfrdShaderpaths{};
-	dfrdShaderpaths.shaderpath_vertex						= g_EnginePath + "/shaders/spirv/Deferred_Gbuffer.vert.spv";
-	dfrdShaderpaths.shaderpath_fragment						= g_EnginePath + "/shaders/spirv/Deferred_Gbuffer.frag.spv";
+	dfrdShaderpaths.shaderpath_vertex						= g_EnginePath /"shaders/spirv/Deferred_Gbuffer.vert.spv";
+	dfrdShaderpaths.shaderpath_fragment						= g_EnginePath /"shaders/spirv/Deferred_Gbuffer.frag.spv";
 	m_pipeline.vertexInBinding								= p_pipeline.vertexInBinding;
 	m_pipeline.vertexAttributeDesc							= p_pipeline.vertexAttributeDesc;
 	m_pipeline.cullMode										= VK_CULL_MODE_BACK_BIT;
@@ -319,7 +319,7 @@ bool CDeferredPass::Render(RenderData* p_renderData)
 	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
 
 	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(), 0, nullptr);
+	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
 
 	// Bind Index and Vertices buffers
 	VkDeviceSize offsets[1] = { 0 };
@@ -382,7 +382,7 @@ bool CDeferredLightingPass::CreateRenderpass(RenderData* p_renderData)
 bool CDeferredLightingPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 {
 	CVulkanRHI::ShaderPaths dfrdLightingShaderpaths{};
-	dfrdLightingShaderpaths.shaderpath_compute					= g_EnginePath + "/shaders/spirv/Deferred_Lighting.comp.spv";
+	dfrdLightingShaderpaths.shaderpath_compute					= g_EnginePath /"shaders/spirv/Deferred_Lighting.comp.spv";
 	m_pipeline.pipeLayout										= p_pipeline.pipeLayout;
 
 	RETURN_FALSE_IF_FALSE(m_rhi->CreateComputePipeline(dfrdLightingShaderpaths, m_pipeline));
@@ -469,8 +469,8 @@ bool CSkyboxDeferredPass::CreateRenderpass(RenderData* p_renderData)
 bool CSkyboxDeferredPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 {
 	CVulkanRHI::ShaderPaths skyBoxShaderpaths{};
-	skyBoxShaderpaths.shaderpath_vertex						= g_EnginePath + "/shaders/spirv/Skybox.vert.spv";
-	skyBoxShaderpaths.shaderpath_fragment					= g_EnginePath + "/shaders/spirv/Skybox.frag.spv";
+	skyBoxShaderpaths.shaderpath_vertex						= g_EnginePath /"shaders/spirv/Skybox.vert.spv";
+	skyBoxShaderpaths.shaderpath_fragment					= g_EnginePath /"shaders/spirv/Skybox.frag.spv";
 	m_pipeline.vertexInBinding								= p_pipeline.vertexInBinding;
 	m_pipeline.vertexAttributeDesc							= p_pipeline.vertexAttributeDesc;
 	m_pipeline.pipeLayout									= p_pipeline.pipeLayout;
@@ -511,7 +511,7 @@ bool CSkyboxDeferredPass::Render(RenderData* p_renderData)
 	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
 
 	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(), 0, nullptr);
+	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
 
 	VkDeviceSize offsets[1]									= { 0 };
 	const CRenderableMesh* mesh								= scene->GetRenderableMesh(CScene::MeshType::mt_Skybox);

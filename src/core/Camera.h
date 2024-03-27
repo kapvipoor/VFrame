@@ -2,10 +2,10 @@
 
 #define M_PI 3.141592653589793238
 
-#include "SceneGraph.h"
+//#include "SceneGraph.h"
 #include "external/NiceMath.h"
 
-class CCamera : public CEntity
+class CCamera// : public CEntity
 {
 public:
     struct InitData
@@ -31,9 +31,13 @@ public:
         bool                        Q;
         bool                        E;
         bool                        Shft;
+        nm::Transform               transform;   // if attached to a light source
+        float                       yaw;
+        float                       pitch;
+        float                       roll;
     };
 
-    CCamera(std::string p_name);
+    CCamera(/*std::string p_name*/);
     ~CCamera() {};
 
     virtual bool Init(InitData*);
@@ -42,8 +46,10 @@ public:
     const nm::float4x4 GetViewProj() const { return m_viewProj; }
     const nm::float4x4 GetView() const { return m_view; }
     const nm::float4x4 GetProjection() const { return m_projection; }
-    const nm::float3 GetLookFrom() const { return m_lookFrom.xyz(); }
+    nm::float3 GetLookFrom() const { return m_lookFrom.xyz(); }
     const nm::float3 GetLookAt() const { return m_lookAt; }
+    const float GetPitch() const { return m_pitch; }
+    const float GetYaw() const { return m_yaw; }
 
 protected:
     bool                            m_bInverted;
@@ -83,7 +89,8 @@ public:
         virtual void Pure() override {};
     };
 
-    CPerspectiveCamera(std::string p_entityName) : CCamera(p_entityName) {};
+    //CPerspectiveCamera(std::string p_entityName) : CCamera(p_entityName) {};
+    CPerspectiveCamera() {};
     ~CPerspectiveCamera() {};
 
     const float GetLensRadius() const { return m_lensRadius; }
@@ -128,7 +135,7 @@ public:
         virtual void Pure() override {};
     };
 
-    COrthoCamera(std::string p_entityName);
+    COrthoCamera(/*std::string p_entityName*/);
     ~COrthoCamera() {}
 
     virtual bool Init(InitData* p_initData) override;

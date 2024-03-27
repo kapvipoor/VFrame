@@ -33,6 +33,7 @@ void CDescriptor::DestroyDescriptors(CVulkanRHI* p_rhi)
 }
 
 CRenderable::CRenderable(uint32_t p_BufferCount)
+	:m_instanceCount(0)
 {
 	if (p_BufferCount > 0)
 	{
@@ -66,11 +67,11 @@ void CRenderable::DestroyRenderable(CVulkanRHI* p_rhi)
 	}
 }
 
-bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr)
+bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, int32_t p_id)
 {
 	{
 		CVulkanRHI::Buffer vertexStg;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(Vertex) * p_meshRaw->vertexList.size(), vertexStg, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(float) * p_meshRaw->vertexList.size(), vertexStg, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)p_meshRaw->vertexList.data(), vertexStg));
 		p_stgList.push_back(vertexStg);
@@ -79,7 +80,17 @@ bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferL
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(vertexStg.descInfo.range, vertexBuffer, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(vertexStg, vertexBuffer, p_cmdBfr));
-		m_vertexBuffers.push_back(vertexBuffer);
+		
+		// An index (p_id) is passed in situations where we want to track the
+		// specific buffer later in the frame This is useful in cases when you
+		// want to access this buffer during the application's lifetime to
+		// specially draw it with some conditions. Eg: The debug frustum vertex
+		// buffer needs to be destroyed and recreated multiple time during the
+		// application's lifetime.
+		if (p_id >= 0)
+			m_vertexBuffers[p_id] = vertexBuffer;
+		else
+			m_vertexBuffers.push_back(vertexBuffer);
 	}
 
 	{
@@ -93,7 +104,19 @@ bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferL
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(indxStg.descInfo.range, indexBuffer, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(indxStg, indexBuffer, p_cmdBfr));
-		m_indexBuffers.push_back(indexBuffer);
+		
+		// An index (p_id) is passed in situations where we want to track the
+		// specific buffer later in the frame This is useful in cases when you
+		// want to access this buffer during the application's lifetime to
+		// specially draw it with some conditions. Eg: The debug frustum index
+		// buffer needs to be destroyed and recreated multiple time during the
+		// application's lifetime.
+		if (p_id >= 0)
+			m_indexBuffers[p_id] = indexBuffer;
+		else
+			m_indexBuffers.push_back(indexBuffer);
+
+
 	}
 
 	return true;
@@ -126,7 +149,7 @@ bool CBuffers::CreateBuffer(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, void* 
 
 	RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(p_stg, buffer, p_cmdBfr));
 
-	// Doing this because; if the id is set to -1, then the intent is to grouw the buffer at runtime and not a fixed size
+	// Doing this because; if the id is set to -1, then the intent is to grow the buffer at runtime and not a fixed size
 	if (p_id == -1)
 	{
 		m_buffers.push_back(buffer);
@@ -189,7 +212,7 @@ bool CTextures::CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateTexture(p_stg, img, imgCrtInfo, p_cmdBfr))
 
-		// Doing this because; if the id is set to -1, then the intent is to grouw the image list at runtime and not a fixed size
+		// Doing this because; if the id is set to -1, then the intent is to grow the image list at runtime and not a fixed size
 		if (p_id == -1)
 		{
 			m_textures.push_back(img);
@@ -209,7 +232,7 @@ bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 {
 	if (p_rawList.size() != 6)
 	{
-		std::cout << "Error: Cannot create cubemeap because raw data has slices less/more than 6" << std::endl;
+		std::cout << "Error: Cannot create cube map because raw data has slices less/more than 6" << std::endl;
 		return false;
 	}
 
@@ -234,15 +257,15 @@ bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 	cubemap.viewType								= VK_IMAGE_VIEW_TYPE_CUBE;
 
 	VkImageCreateInfo imgInfo						= CVulkanCore::ImageCreateInfo();
-	imgInfo.extent.width							= p_rawList[0].width;					// assuming all the loaded cubemap images have same width
-	imgInfo.extent.height							= p_rawList[0].height;					// assuming all the loaded cubemap images have same height
+	imgInfo.extent.width							= p_rawList[0].width;					// assuming all the loaded cube map images have same width
+	imgInfo.extent.height							= p_rawList[0].height;					// assuming all the loaded cube map images have same height
 	imgInfo.arrayLayers								= 6;
 	imgInfo.flags									= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 	imgInfo.usage									= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 	imgInfo.format									= VK_FORMAT_R8G8B8A8_UNORM;
 
 	RETURN_FALSE_IF_FALSE(p_rhi->CreateTexture(p_stg, cubemap, imgInfo, p_cmdBfr));
-	// Doing this because; if the id is set to -1, then the intent is to grouw the texture list at runtime and not a fixed size
+	// Doing this because; if the id is set to -1, then the intent is to grow the texture list at runtime and not a fixed size
 	if (p_id == -1)
 	{
 		m_textures.push_back(cubemap);
@@ -260,6 +283,14 @@ void CTextures::IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_
 	p_rhi->IssueLayoutBarrier(p_imageLayout, m_textures[p_id], p_cmdBfr);
 }
 
+void CTextures::PushBackPreLoadedTexture(uint32_t p_texIndex)
+{
+	if (p_texIndex < 0 || p_texIndex > m_textures.size() - 1)
+		return;
+
+	m_textures.push_back(m_textures[p_texIndex]);
+}
+
 void CTextures::DestroyTextures(CVulkanRHI* p_rhi)
 {
 	for (auto& tex : m_textures)
@@ -271,11 +302,13 @@ void CTextures::DestroyTextures(CVulkanRHI* p_rhi)
 	m_textures.clear();
 }
 
+uint32_t CRenderableUI::fontID;
 CRenderableUI::CRenderableUI()
 	: CRenderable(FRAME_BUFFER_COUNT)
+	, CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_new, "VFrame Interface")
 	, CSelectionListener()
 	, m_showImguiDemo(false)
-	, m_latestFPS(5)
+	, m_latestFPS(100)
 {
 	m_participantManager = new CUIParticipantManager();
 }
@@ -283,6 +316,57 @@ CRenderableUI::CRenderableUI()
 CRenderableUI::~CRenderableUI()
 {
 	delete m_participantManager;
+}
+
+void CRenderableUI::Show()
+{
+	ImGui::TextUnformatted("VFrame Analysis");
+	{
+		int rtype = (int)m_curRenderType;
+		ImGui::RadioButton("Forward ", &rtype, 0); ImGui::SameLine(); ImGui::RadioButton("Deferred ", &rtype, 1);
+		m_curRenderType = (CVulkanRHI::RendererType)rtype;
+		
+	}
+	ImGui::Separator();
+
+	ImGui::TableNextColumn(); ImGui::Checkbox("Show imGui Demo", &m_showImguiDemo);
+	if (m_showImguiDemo)
+	{
+		bool showDemo = true;
+		ImGui::ShowDemoWindow(&showDemo);
+	}
+	ImGui::Separator();
+		
+	ImGui::TextUnformatted("VFrame Performance");
+	{
+		std::vector<float> data;
+		data.resize(m_latestFPS.Size());
+		m_latestFPS.Data(data.data());
+		//ImGui::PlotLines("Frame Time", data, (float)m_latestFPS.Size());
+		// some math magic, will look at this later
+		{
+			// Fill an array of contiguous float values to plot
+			// Tip: If your float aren't contiguous but part of a structure, you can pass a pointer to your first float
+			// and the sizeof() of your structure in the "stride" parameter.
+			static float values[90] = {};
+			static int values_offset = 0;
+			static double refresh_time = 0.0;
+			if (refresh_time == 0.0)
+				refresh_time = ImGui::GetTime();
+			while (refresh_time < ImGui::GetTime()) // Create data at fixed 60 Hz rate for the demo
+			{
+				static float phase = 0.0f;
+				values[values_offset] = cosf(phase);
+				values_offset = (values_offset + 1) % IM_ARRAYSIZE(values);
+				phase += 0.10f * values_offset;
+				refresh_time += 1.0f / 60.0f;
+			}
+			char overlay[32];
+			sprintf(overlay, "avg %f", m_latestFPS.Average());
+			ImGui::PlotLines("cpu (ms)", data.data(), (int)data.size(), values_offset, overlay, 0.0f, 32.0f, ImVec2(0, 60.0f));
+		}
+	}
+	ImGui::Separator();
 }
 
 bool CRenderableUI::Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool)
@@ -308,31 +392,23 @@ bool CRenderableUI::Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_c
 
 	RETURN_FALSE_IF_FALSE(p_rhi->EndCommandBuffer(cmdBfr));
 
-	CVulkanRHI::Queue queue					= p_rhi->GetQueue(0);
-	VkPipelineStageFlags waitstage{ VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType						= VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount			= 1;
-	submitInfo.pCommandBuffers				= &cmdBfr;
-	submitInfo.pSignalSemaphores			= nullptr;
-	submitInfo.signalSemaphoreCount			= 0;
-	submitInfo.pWaitSemaphores				= nullptr;
-	submitInfo.waitSemaphoreCount			= 0;
-	submitInfo.pWaitDstStageMask			= &waitstage;
-	RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandbuffer(queue, &submitInfo, 1));
-
-	RETURN_FALSE_IF_FALSE(p_rhi->WaitToFinish(queue));
+	CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
+	CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
+	bool waitForFinish = true;
+	RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish));
 
 	for (auto& stg : stgList)
 		p_rhi->FreeMemoryDestroyBuffer(stg);
 
 	if (!CreateUIDescriptors(p_rhi))
 	{
-		std::cout << "Error: Failed to create UI Desriptors" << std::endl;
+		std::cout << "Error: Failed to create UI Descriptors" << std::endl;
 		return false;
 	}
 
-	ImGui::GetIO().Fonts->SetTexID(*GetDescriptorSet());
+	// binding is 1 followed by font buffer index;
+	CRenderableUI::fontID = (1 << 16) | 0;
+	ImGui::GetIO().Fonts->SetTexID(&CRenderableUI::fontID);
 
 	return true;
 }
@@ -366,8 +442,9 @@ bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUp
 
 bool CRenderableUI::LoadFonts(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
+	std::cout << "Loading UI Resources" << std::endl;
+
 	ImGuiIO& imguiIO						= ImGui::GetIO();
-	
 	ImageRaw tex;
 	imguiIO.Fonts->GetTexDataAsRGBA32(&tex.raw, &tex.width, &tex.height, &tex.channels);
 	size_t texSize							= tex.width * tex.height * tex.channels * sizeof(char); 
@@ -399,7 +476,7 @@ bool CRenderableUI::CreateUIDescriptors(CVulkanRHI* p_rhi)
 
 bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
 {
-	// Gizmo Type Selection
+	// ImGuizmo Type Selection
 	{
 		ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
 		{
@@ -415,7 +492,7 @@ bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
 			ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, window_pos_pivot);
 			window_flags |= ImGuiWindowFlags_NoMove;
 		}
-		ImGui::SetNextWindowBgAlpha(0.35f); // Transparent background
+		ImGui::SetNextWindowBgAlpha(0.15f); // Transparent background
 		if (ImGui::Begin("Gizmo Type", nullptr, window_flags))
 		{
 			int guizmoType = (int)m_guizmo.type;
@@ -432,14 +509,14 @@ bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
 		ImGuizmo::SetOrthographic(false);
 		ImGuizmo::SetRect(0.0f, 0.0f, (float)p_rhi->GetScreenWidth(), (float)p_rhi->GetScreenHeight());
 
-		nm::float4x4 invPrimCamView		= m_primUniforms.cameraView;
-		nm::float4x4 primCamProj		= m_primUniforms.cameraProj;
-		nm::Transform transform			= m_selectedEntity->GetTransform();
+		nm::float4x4 camView		= m_primUniforms.cameraView;
+		nm::float4x4 camProj		= m_primUniforms.cameraProj;
+		nm::Transform transform		= m_selectedEntity->GetTransform();
 
 		if (m_guizmo.type == Guizmo::Translation)
 		{
 			nm::float4x4 translation = transform.GetTranslate();
-			if (ImGuizmo::Manipulate(&invPrimCamView.column[0][0], &primCamProj.column[0][0], ImGuizmo::OPERATION::TRANSLATE, ImGuizmo::LOCAL, &translation.column[0][0]))
+			if (ImGuizmo::Manipulate(&camView.column[0][0], &camProj.column[0][0], ImGuizmo::OPERATION::TRANSLATE, ImGuizmo::LOCAL, &translation.column[0][0]))
 			{
 				if (!(transform.GetTranslate() == translation))
 				{
@@ -450,26 +527,38 @@ bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
 		}
 		else if (m_guizmo.type == Guizmo::Rotation)
 		{
-			nm::float4x4 rotation = transform.GetTransform();
-			if (ImGuizmo::Manipulate(&invPrimCamView.column[0][0], &primCamProj.column[0][0], ImGuizmo::OPERATION::ROTATE, ImGuizmo::LOCAL, &rotation.column[0][0]))
+			nm::float4x4 guizmoTransform = transform.GetTranslate() * transform.GetRotate();
+			if (ImGuizmo::Manipulate(&camView.column[0][0], &camProj.column[0][0], ImGuizmo::OPERATION::ROTATE, ImGuizmo::LOCAL, &guizmoTransform.column[0][0]))
 			{
-				if (!(transform.GetTransform() == rotation))
-				{
-					transform.SetTransform(rotation);
-					m_selectedEntity->SetTransform(transform);
-				}
+				nm::float4x4 rotate = nm::float4x4::identity();
+				rotate.column[0][0] = guizmoTransform.column[0][0];
+				rotate.column[0][1] = guizmoTransform.column[0][1];
+				rotate.column[0][2] = guizmoTransform.column[0][2];
+
+				rotate.column[1][0] = guizmoTransform.column[1][0];
+				rotate.column[1][1] = guizmoTransform.column[1][1];
+				rotate.column[1][2] = guizmoTransform.column[1][2];
+
+				rotate.column[2][0] = guizmoTransform.column[2][0];
+				rotate.column[2][1] = guizmoTransform.column[2][1];
+				rotate.column[2][2] = guizmoTransform.column[2][2];
+			
+				transform.SetRotation(rotate);
+				m_selectedEntity->SetTransform(transform);
 			}
 		}
 		else if (m_guizmo.type == Guizmo::Scale)
 		{
-			nm::float4x4 scaling = transform.GetTransform();
-			if (ImGuizmo::Manipulate(&invPrimCamView.column[0][0], &primCamProj.column[0][0], ImGuizmo::OPERATION::SCALE, ImGuizmo::LOCAL, &scaling.column[0][0]))
+			nm::float4x4 guizmoTransform = transform.GetTranslate() * transform.GetScale();
+			if (ImGuizmo::Manipulate(&camView.column[0][0], &camProj.column[0][0], ImGuizmo::OPERATION::SCALE, ImGuizmo::LOCAL, &guizmoTransform.column[0][0]))
 			{
-				if (!(transform.GetScale() == scaling))
-				{
-					transform.SetTransform(scaling);
-					m_selectedEntity->SetTransform(transform);
-				}
+				nm::float4x4 scaling = nm::float4x4::identity();
+				scaling.column[0][0] = guizmoTransform.column[0][0];
+				scaling.column[1][1] = guizmoTransform.column[1][1];
+				scaling.column[2][2] = guizmoTransform.column[2][2];
+
+				transform.SetScale(scaling);
+				m_selectedEntity->SetTransform(transform);
 			}
 		}
 	}
@@ -479,45 +568,9 @@ bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
 
 bool CRenderableUI::ShowUI(CVulkanRHI* p_rhi)
 {
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-	ImGui::SetNextWindowPos(ImVec2(10, 25));
-	ImGui::SetNextWindowSize(ImVec2(0, 0), ImGuiCond_::ImGuiCond_FirstUseEver);
-	ImGui::Begin("VFrame Interface", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
-	{
-		ImGui::TextUnformatted("VFrame Analysis");
-		{
-			int rtype = (int)p_rhi->GetRendererType();
-			ImGui::RadioButton("Forward ", &rtype, 0); ImGui::SameLine(); ImGui::RadioButton("Deferred ", &rtype, 1);
-			p_rhi->SetRenderType((CVulkanRHI::RendererType)rtype);
-		}
-		ImGui::Separator();
+	p_rhi->SetRenderType(m_curRenderType);
 
-		ImGui::TableNextColumn(); ImGui::Checkbox("Show imGui Demo", &m_showImguiDemo);
-		if (m_showImguiDemo)
-		{
-			bool showDemo = true;
-			ImGui::ShowDemoWindow(&showDemo);
-		}
-		ImGui::Separator();
-	}
-
-	{
-		ImGui::TextUnformatted("VFrame Analysis");
-		{
-			float data[5];
-			m_latestFPS.Data(data);
-			ImGui::PlotLines("Frame Times", data, (int)m_latestFPS.Size());
-		}
-		ImGui::Separator();
-	}
-
-	ImGui::TextUnformatted("VFrame Settings");
-	ImGui::PushItemWidth(110.0f * 1.0f);
 	m_participantManager->Show();
-	ImGui::PopItemWidth();
-	ImGui::End();
-	ImGui::PopStyleVar();
-
 	return true;
 }
 
@@ -541,13 +594,13 @@ bool CRenderableUI::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx)
 			size_t verteSize				= drawData->TotalVtxCount * sizeof(ImDrawVert);
 			size_t indexSize				= drawData->TotalIdxCount * sizeof(ImDrawIdx);
 
-			// if the vertex buffer if already created from previous frame, destroy them and free the asscoiated memroy for this frame's use
+			// if the vertex buffer if already created from previous frame, destroy them and free the associated memory for this frame's use
 			if (m_vertexBuffers[p_scIdx].descInfo.buffer != VK_NULL_HANDLE)
 			{
 				Clear(p_rhi, p_scIdx);
 			}
 
-			// Creating vertex and index buffers and upload all data to single contigeous GPU buffers respectively
+			// Creating vertex and index buffers and upload all data to single continuous GPU buffers respectively
 			{
 				p_rhi->CreateAllocateBindBuffer(verteSize, m_vertexBuffers[p_scIdx], VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 				p_rhi->CreateAllocateBindBuffer(indexSize, m_indexBuffers[p_scIdx], VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
@@ -585,15 +638,86 @@ bool CRenderableUI::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx)
 	return true;
 }
 
-CRenderableMesh::CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::float4x4 p_modelMat)
+CRenderableMesh::CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat)
 	: CEntity(p_name)
 	, m_mesh_id(p_meshId)
+	, m_selectedSubMeshId(-1)
 {
+	CEntity::m_transform = p_modelMat;
+}
+
+CRenderableMesh::~CRenderableMesh()
+{
+	if (m_boundingVolume)
+		delete m_boundingVolume;
+}
+
+void CRenderableMesh::Show()
+{
+	CEntity::Show();
+
+	ImGui::Indent();
+
+	bool drawSubBBox = IsSubmeshDebugDrawEnabled();
+	ImGui::Checkbox(" ", &drawSubBBox);
+	SetSubmeshDebugDrawEnable(drawSubBBox);
+	ImGui::SameLine(75);
+
+	std::string treeNodeName = "Sub-meshes (" + std::to_string(GetSubmeshCount()) + ")";
+	if (ImGui::TreeNode(treeNodeName.c_str()))
+	{
+		for (uint32_t i = 0; i < GetSubmeshCount(); i++)
+		{
+			if (ImGui::Selectable(GetSubmesh(i)->name.c_str(), m_selectedSubMeshId == i, ImGuiSelectableFlags_AllowDoubleClick))
+			{
+				m_selectedSubMeshId = i;
+			}
+
+			//if (m_selectedSubMeshIndex == i)
+			//{
+			//	ImGui::Indent();
+
+			//	int matId = GetSubmesh(i)->materialId;
+			//	Material mat = m_materialsList[matId];
+			//	ImGui::Text("Albedo Id %d", mat.color_id);
+			//	ImGui::Text("Normal Id %d", mat.normal_id);
+			//	ImGui::Text("Metal/Rough Id %d", mat.roughMetal_id);
+			//	ImGui::InputFloat("Metallic ", &mat.metallic);
+			//	ImGui::InputFloat("Roughness ", &mat.roughness);
+			//	ImGui::InputFloat3("Color ", &mat.color[0]);
+			//	ImGui::InputFloat3("PBR Color ", &mat.pbr_color[0]);
+
+			//	ImGui::Unindent();
+			//}
+		}
+		ImGui::TreePop();
+	}
+
+	ImGui::Unindent();
+}
+
+void CRenderableMesh::SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox)
+{
+	m_dirty						= true;
+	m_transform					= p_transform;
+
+	if(p_bRecomputeSceneBBox)
+		CSceneGraph::RequestSceneBBoxUpdate();
 }
 
 CScene::CScene(CSceneGraph* p_sceneGraph)
-	: m_sceneGraph(p_sceneGraph)
+	: CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_new, "Scene")
+	, CDescriptor(FRAME_BUFFER_COUNT)
+	, m_sceneGraph(p_sceneGraph)
 {
+	m_sceneTextures = new CTextures();
+	m_sceneLights = new CLights();
+}
+
+CScene::~CScene()
+{
+	delete m_sceneLights;
+	delete m_sceneTextures;
 }
 
 bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, const CVulkanRHI::CommandPool& p_cmdPool)
@@ -613,7 +737,7 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 
 	if (!LoadSkybox(p_rhi, p_samplerList, stgList, cmdBfr))
 	{
-		std::cout << "Error: Failed to Load Skybox" << std::endl;
+		std::cout << "Error: Failed to Load Sky box" << std::endl;
 		return false;
 	}
 
@@ -623,23 +747,19 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 		return false;
 	}
 
+	if (!LoadLights(p_rhi, stgList, cmdBfr))
+	{
+		std::cout << "Error: Failed to Load Lights" << std::endl;
+		return false;
+	}
+
 	if (!p_rhi->EndCommandBuffer(cmdBfr))
 		return false;
 
-	VkQueue queue							= p_rhi->GetQueue(0);
-	VkPipelineStageFlags waitstage{ VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType						= VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount			= 1;
-	submitInfo.pCommandBuffers				= &cmdBfr;
-	submitInfo.pSignalSemaphores			= nullptr;
-	submitInfo.signalSemaphoreCount			= 0;
-	submitInfo.pWaitSemaphores				= nullptr;
-	submitInfo.waitSemaphoreCount			= 0;
-	submitInfo.pWaitDstStageMask			= &waitstage;
-	RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandbuffer(queue, &submitInfo, 1));
-
-	RETURN_FALSE_IF_FALSE(p_rhi->WaitToFinish(queue));
+	CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
+	CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
+	bool waitForFinish = true;
+	RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish));
 
 	for (auto& stg : stgList)
 		p_rhi->FreeMemoryDestroyBuffer(stg);
@@ -654,7 +774,7 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 void CScene::Destroy(CVulkanRHI* p_rhi)
 {
 	DestroyDescriptors(p_rhi);
-	DestroyTextures(p_rhi);
+	m_sceneTextures->DestroyTextures(p_rhi);
 
 	for (auto& mesh : m_meshes)
 	{
@@ -664,15 +784,16 @@ void CScene::Destroy(CVulkanRHI* p_rhi)
 	m_meshes.clear();
 
 	p_rhi->FreeMemoryDestroyBuffer(m_material_storage);
-	p_rhi->FreeMemoryDestroyBuffer(m_meshInfo_uniform);
+
+	for(int i =0; i< FRAME_BUFFER_COUNT; i++)
+		p_rhi->FreeMemoryDestroyBuffer(m_meshInfo_uniform[i]);
 }
 
-bool draw[5] = { false, true, true, false, false };
 void CScene::Show()
 {
 	bool doubleClickedEntity = false;
 	int32_t sceneIndex = 0;
-	if(Header("Scene Settings"))
+	if(Header("Entity Settings"))
 	{
 		bool drawSGBBox = m_sceneGraph->IsDebugDrawEnabled();
 		ImGui::Checkbox(" ", &drawSGBBox);
@@ -684,12 +805,17 @@ void CScene::Show()
 			for (int i = 0; i < entities->size(); i++)
 			{
 				CEntity* entity = (*entities)[i];
+				CLight* light = dynamic_cast<CLight*>(entity);
+				CRenderableMesh* mesh = dynamic_cast<CRenderableMesh*>(entity);
 				{
-					bool drawBBox = entity->IsDebugDrawEnabled();
-					std::string str = std::to_string(i) + ". ";
-					ImGui::Checkbox(str.c_str(), &drawBBox);
-					entity->SetDebugDrawEnable(drawBBox);
-					ImGui::SameLine(65);
+					if (mesh || light)
+					{
+						bool drawBBox = entity->IsDebugDrawEnabled();
+						std::string str = std::to_string(i) + ". ";
+						ImGui::Checkbox(str.c_str(), &drawBBox);
+						entity->SetDebugDrawEnable(drawBBox);
+						ImGui::SameLine(65);
+					}
 				}
 
 				if (ImGui::Selectable(entity->GetName(), m_selectedEntity == entity, ImGuiSelectableFlags_AllowDoubleClick))
@@ -703,122 +829,91 @@ void CScene::Show()
 
 				if (m_selectedEntity == entity)
 				{
-					ImGui::Indent();
-
-					nm::float4x4 transform = (*entities)[i]->GetTransform().GetTransform();
-					float matrixTranslation[3], matrixRotation[3], matrixScale[3];
-					ImGuizmo::DecomposeMatrixToComponents(&transform.column[0][0], matrixTranslation, matrixRotation, matrixScale);										
-					{
-						ImGui::Text("Translation "); 
-						ImGui::PushItemWidth(45);
-						ImGui::SameLine(150); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.5f, 0.0f, 0.0f)); ImGui::InputFloat("", &matrixTranslation[0]);
-						ImGui::SameLine(200); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.0f, 0.5f, 0.0f)); ImGui::InputFloat("", &matrixTranslation[1]);
-						ImGui::SameLine(250); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.0f, 0.0f, 0.5f)); ImGui::InputFloat("", &matrixTranslation[2]);
-						ImGui::PopStyleColor(3);
-						ImGui::PopItemWidth();
-					}
-
-					{
-						ImGui::Text("Rotation ");
-						ImGui::PushItemWidth(45);
-						ImGui::SameLine(150); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.5f, 0.0f, 0.0f)); ImGui::InputFloat("", &matrixRotation[0]);
-						ImGui::SameLine(200); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.0f, 0.5f, 0.0f)); ImGui::InputFloat("", &matrixRotation[1]);
-						ImGui::SameLine(250); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.0f, 0.0f, 0.5f)); ImGui::InputFloat("", &matrixRotation[2]);
-						ImGui::PopStyleColor(3);
-						ImGui::PopItemWidth();
-					}
-
-					{
-						ImGui::Text("Scale ");
-						ImGui::PushItemWidth(45);
-						ImGui::SameLine(150); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.5f, 0.0f, 0.0f)); ImGui::InputFloat("", &matrixScale[0]);
-						ImGui::SameLine(200); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.0f, 0.5f, 0.0f)); ImGui::InputFloat("", &matrixScale[1]);
-						ImGui::SameLine(250); ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor(0.0f, 0.0f, 0.5f)); ImGui::InputFloat("", &matrixScale[2]);
-						ImGui::PopStyleColor(3);
-						ImGui::PopItemWidth();
-					}
-
-					// Display submesh data
-					CRenderableMesh* mesh = dynamic_cast<CRenderableMesh*>(m_selectedEntity);
+					entity->Show();
 					if (mesh)
-					{									
-						bool drawSubBBox = m_selectedEntity->IsSubmeshDebugDrawEnabled();
-						ImGui::Checkbox(" ", &drawSubBBox);
-						m_selectedEntity->SetSubmeshDebugDrawEnable(drawSubBBox);
-						ImGui::SameLine(75);
-
-						std::string treeNodeName = "Submeshes (" + std::to_string(mesh->GetSubmeshCount()) + ")";
-						if (ImGui::TreeNode(treeNodeName.c_str()))
-						{
-							for (uint32_t i = 0; i < mesh->GetSubmeshCount(); i++)
-							{
-								if (ImGui::Selectable(mesh->GetSubmesh(i)->name.c_str(), m_selectedSubMeshIndex == i, ImGuiSelectableFlags_AllowDoubleClick))
-								{
-									m_selectedSubMeshIndex = i;
-								}
-
-								if (m_selectedSubMeshIndex == i)
-								{
-									int matId = mesh->GetSubmesh(i)->materialId;
-									Material mat = m_materialsList[matId];
-									ImGui::Text("Albedo Id %d", mat.color_id);
-									ImGui::Text("Normal Id %d", mat.normal_id);
-									ImGui::Text("Metal/Rough Id %d", mat.roughMetal_id);
-									ImGui::InputFloat("Metallic ", &mat.metallic);
-									ImGui::InputFloat("Roughness ", &mat.roughness);
-									ImGui::InputFloat3("Color ", &mat.color[0]);
-									ImGui::InputFloat3("PBR Color ", &mat.pbr_color[0]);
-								}
-							}
-							ImGui::TreePop();
-						}
+					{
+						m_sceneGraph->SetCurSelectedSubMeshId(mesh->GetSelectedSubMeshId());
 					}
-					ImGui::Unindent();
 				}
 			}
 			ImGui::TreePop();
 
-			// Assuming primary camera is object 0
-			if (doubleClickedEntity)
-			{
-				nm::Transform primaryCameraTransform = (*entities)[0]->GetTransform();
-				primaryCameraTransform.SetTranslate(m_selectedEntity->GetTransform().GetTranslate());
-				(*entities)[0]->SetTransform(primaryCameraTransform);
-			}
+			//// Assuming primary camera is object 0
+			//if (doubleClickedEntity)
+			//{
+			//	nm::Transform primaryCameraTransform = (*entities)[0]->GetTransform();
+			//	primaryCameraTransform.SetTranslate(m_selectedEntity->GetTransform().GetTranslate());
+			//	(*entities)[0]->SetTransform(primaryCameraTransform);
+			//}
 		}
 	}
 }
 
 bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 {
+	m_sceneLights->Update(p_loadedUpdate.cameraData, m_sceneGraph);
+	if (m_sceneLights->IsDirty())
+	{
+		CVulkanRHI::CommandBuffer cmdBfr;
+		CVulkanRHI::BufferList stgList;
+
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_loadedUpdate.commandPool, &cmdBfr, 1));
+
+		RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, "Scene Loading"));
+
+		// Every time any light is dirty(has change in transform, color or intensity), 
+		// the raw data is updated and the entire GPU resource is reloaded
+		if (!LoadLights(p_rhi, stgList, cmdBfr))
+		{
+			std::cout << "Error: Failed to Load Lights" << std::endl;
+			return false;
+		}		
+
+		if (!p_rhi->EndCommandBuffer(cmdBfr))
+			return false;
+
+		CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
+		CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
+		bool waitForFinish = true;
+		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish));
+
+		for (auto& stg : stgList)
+			p_rhi->FreeMemoryDestroyBuffer(stg);
+
+		m_sceneLights->SetDirty(false);
+	}
+
 	std::vector<float> perMeshUniformData;
 	for (auto& mesh : m_meshes)
 	{
 		mesh->SetDirty(false);
 		mesh->m_viewNormalTransform					= (p_loadedUpdate.viewMatrix * mesh->GetTransform().GetTransform());	// nm::inverse(nm::transpose(p_loadedUpdate.viewMatrix * mesh->GetTransform().GetTransform()));
 
-		const float* modelMat						= &(m_sceneGraph->GetTransform().GetTransform() * mesh->GetTransform().GetTransform()).column[0][0];
-		const float* trn_inv_model					= &mesh->m_viewNormalTransform.column[0][0];							// this needs to be inverse transpose so as to negate the scaling in the matrix before multipling with nomral. But this isn't working and I do not know why !
+		const float* modelMat						= &(mesh->GetTransform().GetTransform()).column[0][0];
+
+		const float* trn_inv_model					= &mesh->m_viewNormalTransform.column[0][0];							// this needs to be inverse transpose so as to negate the scaling in the matrix before multiplying with normal. But this isn't working and I do not know why !
 
 		std::copy(&modelMat[0], &modelMat[16], std::back_inserter(perMeshUniformData));										// model matrix for this mesh
-		std::copy(&trn_inv_model[0], &trn_inv_model[16], std::back_inserter(perMeshUniformData));							// Tranpose(inverse(view * model)) for transforming normal to view space
+		std::copy(&trn_inv_model[0], &trn_inv_model[16], std::back_inserter(perMeshUniformData));							// Transpose(inverse(view * model)) for transforming normal to view space
 	}
 
 	uint8_t* data = (uint8_t*)(perMeshUniformData.data());
-	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, m_meshInfo_uniform));
+	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, m_meshInfo_uniform[p_loadedUpdate.swapchainIndex], false));
 
 	return true;
 }
 
 bool CScene::LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
+	std::cout << "Loading Default resources" << std::endl;
+
 	// load default texture to compensate for bad textures
 	{
 		CVulkanRHI::Buffer stg;
 		ImageRaw tex;
 		
-		RETURN_FALSE_IF_FALSE(LoadRawImage((g_DefaultPath + "/tex_not_found.png").c_str(), tex));
-		RETURN_FALSE_IF_FALSE(CreateTexture(p_rhi, stg, &tex, VK_FORMAT_B8G8R8A8_SRGB,p_cmdBfr));
+		RETURN_FALSE_IF_FALSE(LoadRawImage((g_DefaultPath / "tex_not_found.png").string().c_str(), tex));
+		RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateTexture(p_rhi, stg, &tex, VK_FORMAT_B8G8R8A8_SRGB,p_cmdBfr));
 		
 		FreeRawImage(tex);
 		p_stgList.push_back(stg);
@@ -829,26 +924,28 @@ bool CScene::LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg
 
 bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	// Load skybox cubemap
+	std::cout << "Loading Skybox Resources" << std::endl;
+
+	// Load sky box cube map
 	{
-		std::string cubemap_path[6]{
-			g_AssetPath + "/skybox/Daylight_Box_Pieces/f.png"
-		,	g_AssetPath + "/skybox/Daylight_Box_Pieces//b.png"
-		,	g_AssetPath + "/skybox/Daylight_Box_Pieces/t.png"
-		,	g_AssetPath + "/skybox/Daylight_Box_Pieces/bt.png"
-		,	g_AssetPath + "/skybox/Daylight_Box_Pieces/l.png"
-		,	g_AssetPath + "/skybox/Daylight_Box_Pieces/r.png"
+		std::filesystem::path cubemap_path[6]{
+			g_AssetPath / "skybox/Daylight_Box_Pieces/f.png"
+		,	g_AssetPath / "skybox/Daylight_Box_Pieces//b.png"
+		,	g_AssetPath / "skybox/Daylight_Box_Pieces/t.png"
+		,	g_AssetPath / "skybox/Daylight_Box_Pieces/bt.png"
+		,	g_AssetPath / "skybox/Daylight_Box_Pieces/l.png"
+		,	g_AssetPath / "skybox/Daylight_Box_Pieces/r.png"
 		};
 
 		std::vector<ImageRaw> cubemap_raw;
 		cubemap_raw.resize(6);
 		for (int i = 0; i < 6; i++)
 		{
-			RETURN_FALSE_IF_FALSE(LoadRawImage(cubemap_path[i].c_str(), cubemap_raw[i]));
+			RETURN_FALSE_IF_FALSE(LoadRawImage(cubemap_path[i].string().c_str(), cubemap_raw[i]));
 		}
 
 		CVulkanRHI::Buffer stg;
-		RETURN_FALSE_IF_FALSE(CreateCubemap(p_rhi, stg, cubemap_raw, *p_samplerList, p_cmdBfr));
+		RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateCubemap(p_rhi, stg, cubemap_raw, *p_samplerList, p_cmdBfr));
 
 		p_stgList.push_back(stg);
 	}
@@ -860,11 +957,10 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 		loadData.flipUV					= false;
 		loadData.loadMeshOnly			= true;
 
-		std::string skybox_obj_path		= g_AssetPath + "/skybox/skybox.obj";
-		RETURN_FALSE_IF_FALSE(LoadObj(skybox_obj_path.c_str(), sceneraw, loadData));
+		RETURN_FALSE_IF_FALSE(LoadObj((g_AssetPath / "skybox/skybox.obj").string().c_str(), sceneraw, loadData));
 
 		MeshRaw meshraw					= sceneraw.meshList[0];
-		CRenderableMesh* mesh			= new CRenderableMesh("Skybox", MeshType::mt_Skybox, nm::float4x4::identity());
+		CRenderableMesh* mesh			= new CRenderableMesh("Skybox", MeshType::mt_Skybox, nm::Transform());
 		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr));
 		m_meshes.push_back(mesh);
 	}
@@ -872,32 +968,61 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 	return true;
 }
 
-bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
+bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr, bool p_dumpBinaryToDisk)
 {
-	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/DragonAttenuation/glTF/DragonAttenuation.gltf");						//0
-	m_scenePaths.push_back(g_AssetPath + "/shadow_test_3.gltf");																		//1
-	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");							//2
-	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
-	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");											//4
-	m_scenePaths.push_back(g_AssetPath + "/Sponza/glTF/Sponza.gltf");																	//5
-	m_scenePaths.push_back(g_AssetPath + "/glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");					//6
-	m_scenePaths.push_back(g_AssetPath + "/cube/cube.obj");																				//7
+	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels / 2.0 / DragonAttenuation / glTF / DragonAttenuation.gltf");				//0
+	//m_scenePaths.push_back(g_AssetPath/"shadow_test_3.gltf");																		//1
+	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");						//2
+	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
+	m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");											//4
+	m_scenePaths.push_back(g_AssetPath/"Sponza/glTF/Sponza.gltf");																//5
+	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");				//6
+	//m_scenePaths.push_back(g_AssetPath/"cube/cube.obj");																			//7
+	//m_scenePaths.push_back(g_AssetPath/"icosphere.gltf");																			//8
+	//m_scenePaths.push_back(g_AssetPath/"dragon/dragon.obj");																		//9
+	//m_scenePaths.push_back(g_AssetPath/"stanford_dragon_pbr/scene.gltf");															//10
+	//m_scenePaths.push_back(g_AssetPath/"mitsuba/mitsuba.obj");																	//11
+	//m_scenePaths.push_back(g_AssetPath/"wall_and_floor/wall_and_floor.gltf");														//12
+	//m_scenePaths.push_back(g_AssetPath/"main_sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");									//13
+	//m_scenePaths.push_back(g_AssetPath / "main_sponza/PKG_A_Curtains/NewSponza_Curtains_glTF.gltf");								//14
 
-	std::vector<std::string> paths;
-	//paths.push_back(m_scenePaths[3]);
-	paths.push_back(m_scenePaths[5]);
-	paths.push_back(m_scenePaths[4]);
+	//std::vector<std::filesystem::path> paths;
+	////paths.push_back(m_scenePaths[5]);
+	////paths.push_back(m_scenePaths[2]);
+	//paths.push_back(m_scenePaths[12]);
+	////paths.push_back(m_scenePaths[8]);
 
 	std::vector<bool> flipYList{ false, false, false };
 
 	SceneRaw sceneraw;
-	for (unsigned int i = 0; i < paths.size(); i++)
+	for (unsigned int i = 0; i < m_scenePaths.size(); i++)
 	{
+		std::cout << "Loading Scene Resources - " << m_scenePaths[i] << std::endl;
+
 		ObjLoadData loadData{};
 		loadData.flipUV = flipYList[i];
 		loadData.loadMeshOnly = false;
 
-		RETURN_FALSE_IF_FALSE(LoadGltf(paths[i].c_str(), sceneraw, loadData));
+		if (m_scenePaths[i].extension() == ".gltf")
+		{
+			RETURN_FALSE_IF_FALSE(LoadGltf(m_scenePaths[i].string().c_str(), sceneraw, loadData));
+		}
+		else if (m_scenePaths[i].extension() == ".obj")
+		{
+			RETURN_FALSE_IF_FALSE(LoadObj(m_scenePaths[i].string().c_str(), sceneraw, loadData));
+		}
+		else
+		{
+			std::cerr << "Invalid file extension - " << m_scenePaths[i] << std::endl;
+			return false;
+		}
+
+		if (p_dumpBinaryToDisk)
+		{
+			std::string outName = "D:/" + m_scenePaths[i].stem().string();
+			WriteToDisk(std::filesystem::path(outName + "_vertex_float_p3_n3_uv2_t4.charp"), sizeof(Vertex) * sceneraw.meshList[i].vertexList.size(), (char*)sceneraw.meshList[i].vertexList.data());
+			WriteToDisk(std::filesystem::path(outName + "_index_uint32.charp"), sizeof(uint32_t) * sceneraw.meshList[i].indicesList.size(), (char*)sceneraw.meshList[i].indicesList.data());
+		}
 	}
 	
 	for (auto& meshraw : sceneraw.meshList)
@@ -905,7 +1030,9 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 		CRenderableMesh* mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform);
 		mesh->m_submeshes = meshraw.submeshes;
 
-		mesh->SetBoundingBox(meshraw.bbox);
+		BVolume* bVol = new BBox(meshraw.bbox);
+		mesh->SetBoundingVolume(bVol);
+		
 		for (auto& bbox : meshraw.submeshesBbox)
 		{
 			mesh->SetSubBoundingBox(bbox);
@@ -922,13 +1049,12 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 			if (tex.raw != nullptr)
 			{
 				CVulkanRHI::Buffer stg;
-				RETURN_FALSE_IF_FALSE(CreateTexture(p_rhi, stg, &tex, VK_FORMAT_R8G8B8A8_UNORM, p_cmdBfr));
+				RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateTexture(p_rhi, stg, &tex, VK_FORMAT_R8G8B8A8_UNORM, p_cmdBfr));
 				p_stgList.push_back(stg);
 			}
 			else
 			{
-				m_textures.push_back(m_textures[TextureType::tt_default]);
-
+				m_sceneTextures->PushBackPreLoadedTexture(TextureType::tt_default);
 			}
 		}
 	}
@@ -948,8 +1074,9 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(matStg, m_material_storage, p_cmdBfr));
 	}
 
-	// can binary dump in future to optimised format for faster binary loading
+	// can binary dump in future to optimized format for faster binary loading
 	sceneraw.meshList.clear();
+
 	for(auto& tex : sceneraw.textureList)
 		FreeRawImage(tex);
 
@@ -958,14 +1085,53 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 	return true;
 }
 
+bool CScene::LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer& p_cmdBfr, bool p_dumpBinaryToDisk)
+{
+	std::cout << "Loading Light resources" << std::endl;
+
+	// storage buffer for Lights
+	{
+		std::vector<CLights::LightGPUData> rawLightList = m_sceneLights->GetLightsGPUData();
+		uint32_t rawLightCount = (uint32_t)rawLightList.size();
+
+		size_t bufferSize = sizeof(uint32_t); // number of lights in use
+		bufferSize += sizeof(CLights::LightGPUData) * rawLightList.size(); // raw data of all the lights
+
+		char* rawData = new char[bufferSize];
+		memcpy(rawData, &rawLightCount, sizeof(uint32_t)); // copying light count into the buffer
+		memcpy(rawData + sizeof(uint32_t), rawLightList.data(), rawLightList.size() * sizeof(CLights::LightGPUData)); // copying light raw data into buffer
+
+		CVulkanRHI::Buffer lightStg;
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(bufferSize, lightStg, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+
+		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(rawData, lightStg));
+
+		p_stgbufferList.push_back(lightStg);
+
+		if (m_light_storage.descInfo.buffer == VK_NULL_HANDLE) 
+		{
+			RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(lightStg.descInfo.range, m_light_storage, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+		}
+
+		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(lightStg, m_light_storage, p_cmdBfr));
+
+		delete[] rawData;
+	}
+
+	return true;
+}
+
 bool CScene::CreateMeshUniformBuffer(CVulkanRHI* p_rhi)
 {
 	size_t uniBufize = m_meshes.size() * (
 		(sizeof(float) * 16)	// model matrix
-	+	(sizeof(float) * 16)	// tranpose(inverse(model)) for transforming normal to world space
+	+	(sizeof(float) * 16)	// transpose(inverse(model)) for transforming normal to world space
 		);
 
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(uniBufize, m_meshInfo_uniform, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+	for (int i = 0; i < FRAME_BUFFER_COUNT; i++)
+	{
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(uniBufize, m_meshInfo_uniform[i], VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+	}
 
 	return true;
 }
@@ -973,21 +1139,40 @@ bool CScene::CreateMeshUniformBuffer(CVulkanRHI* p_rhi)
 bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
 {
 	std::vector<VkDescriptorImageInfo> imageInfoList;
+	CVulkanRHI::ImageList sceneTexturesList = m_sceneTextures->GetTextures();
 	uint32_t texturesCount = 0;
-	for (int i = TextureType::tt_scene; i < m_textures.size(); i++)
+	for (int i = TextureType::tt_scene; i < sceneTexturesList.size(); i++)
 	{
-		imageInfoList.push_back(m_textures[i].descInfo);
+		imageInfoList.push_back(sceneTexturesList[i].descInfo);
 		texturesCount++;
 	}
 
 	VkShaderStageFlags vertex_frag = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	
+	// We do this because we have 2 frames in flights. And during 
+	// that process we need to update 1 uniform buffer while the 
+	// other is getting updated. Not doing this leads to undefined
+	// behavior.
+	
+	// Creating descriptor set for swap chain utility 0
+	{
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_MeshInfo_Uniform,	1,				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag,					&m_meshInfo_uniform[0].descInfo,	VK_NULL_HANDLE},										0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_CubeMap_Texture,			1,				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,						&sceneTexturesList[TextureType::tt_skybox].descInfo},	0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Material_Storage,			1,				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			VK_SHADER_STAGE_FRAGMENT_BIT,	&m_material_storage.descInfo,		VK_NULL_HANDLE},										0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_Lights,				1,				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vertex_frag,					&m_light_storage.descInfo,			VK_NULL_HANDLE},										0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SceneRead_TexArray,		texturesCount,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,						imageInfoList.data()},									0);
+		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, texturesCount, BindingDest::bd_SceneRead_TexArray, 0));
+	}
 
-	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_MeshInfo_Uniform,	1,				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag,					&m_meshInfo_uniform.descInfo,	VK_NULL_HANDLE });
-	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_CubeMap_Texture,			1,				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,					&m_textures[TextureType::tt_skybox].descInfo });
-	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Material_Storage,			1,				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			VK_SHADER_STAGE_FRAGMENT_BIT,	&m_material_storage.descInfo,	VK_NULL_HANDLE });
-	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SceneRead_TexArray,		texturesCount,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,					imageInfoList.data() });
-
-	RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, texturesCount, BindingDest::bd_SceneRead_TexArray));
+	// Creating descriptor set for swap chain utility 1
+	{
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_MeshInfo_Uniform,	1,				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag,					&m_meshInfo_uniform[1].descInfo,	VK_NULL_HANDLE},										1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_CubeMap_Texture,			1,				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,						&sceneTexturesList[TextureType::tt_skybox].descInfo},	1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Material_Storage,			1,				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			VK_SHADER_STAGE_FRAGMENT_BIT,	&m_material_storage.descInfo,		VK_NULL_HANDLE},										1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_Lights,				1,				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vertex_frag,					&m_light_storage.descInfo,			VK_NULL_HANDLE},										1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SceneRead_TexArray,		texturesCount,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,						imageInfoList.data()},									1);
+		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, texturesCount, BindingDest::bd_SceneRead_TexArray, 1));
+	}
 
 	return true;
 }
@@ -1004,7 +1189,7 @@ bool CReadOnlyTextures::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers,
 
 	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_commandPool, &cmdBfr, 1));
 
-	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, "Loading Readonly Textures"));
+	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, "Loading Read-only Textures"));
 
 	CFixedBuffers::PrimaryUniformData& priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
 	RETURN_FALSE_IF_FALSE(CreateSSAOKernelTexture(p_rhi, stgList, priUnidata, cmdBfr));
@@ -1013,20 +1198,10 @@ bool CReadOnlyTextures::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers,
 	if (!p_rhi->EndCommandBuffer(cmdBfr))
 		return false;
 
-	VkQueue queue										= p_rhi->GetQueue(0);
-	VkPipelineStageFlags waitstage{ VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType									= VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount						= 1;
-	submitInfo.pCommandBuffers							= &cmdBfr;
-	submitInfo.pSignalSemaphores						= nullptr;
-	submitInfo.signalSemaphoreCount						= 0;
-	submitInfo.pWaitSemaphores							= nullptr;
-	submitInfo.waitSemaphoreCount						= 0;
-	submitInfo.pWaitDstStageMask						= &waitstage;
-	RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandbuffer(queue, &submitInfo, 1));
-
-	RETURN_FALSE_IF_FALSE(p_rhi->WaitToFinish(queue));
+	CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
+	CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
+	bool waitForFinish = true;
+	RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish));
 
 	for (auto& stg : stgList)
 		p_rhi->FreeMemoryDestroyBuffer(stg);
@@ -1051,7 +1226,7 @@ bool CReadOnlyTextures::CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::B
 		ssaoNoise.push_back((unsigned char)(randf() * 255.0f));
 		ssaoNoise.push_back((unsigned char)(randf() * 255.0f));
 		ssaoNoise.push_back((unsigned char)0);
-		ssaoNoise.push_back((unsigned char)0);// making sure the roation happens along the z axis only
+		ssaoNoise.push_back((unsigned char)0);// making sure the rotation happens along the z axis only
 	}
 	
 	CVulkanRHI::Buffer staging;
@@ -1076,7 +1251,7 @@ bool CReadOnlyBuffers::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers, 
 
 	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_commandPool, &cmdBfr, 1));
 
-	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, "Loading Readonly Buffers"));
+	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, "Loading Read-only Buffers"));
 
 	CFixedBuffers::PrimaryUniformData& priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
 	RETURN_FALSE_IF_FALSE(CreateSSAONoiseBuffer(p_rhi, stgList, priUnidata, cmdBfr));
@@ -1085,20 +1260,10 @@ bool CReadOnlyBuffers::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers, 
 	if (!p_rhi->EndCommandBuffer(cmdBfr))
 		return false;
 
-	VkQueue queue										= p_rhi->GetQueue(0);
-	VkPipelineStageFlags waitstage{ VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType									= VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount						= 1;
-	submitInfo.pCommandBuffers							= &cmdBfr;
-	submitInfo.pSignalSemaphores						= nullptr;
-	submitInfo.signalSemaphoreCount						= 0;
-	submitInfo.pWaitSemaphores							= nullptr;
-	submitInfo.waitSemaphoreCount						= 0;
-	submitInfo.pWaitDstStageMask						= &waitstage;
-	RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandbuffer(queue, &submitInfo, 1));
-
-	RETURN_FALSE_IF_FALSE(p_rhi->WaitToFinish(queue));
+	CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
+	CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
+	bool waitForFinish = true;
+	RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish));
 
 	for (auto& stg : stgList)
 		p_rhi->FreeMemoryDestroyBuffer(stg);
@@ -1183,8 +1348,10 @@ bool CLoadableAssets::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_update
 }
 
 CRenderTargets::CRenderTargets()
-	:CTextures(CRenderTargets::RenderTargetId::rt_max)
+	: CTextures(CRenderTargets::RenderTargetId::rt_max)
+	, CUIParticipant(CUIParticipant::ParticipationType::pt_onSelect, CUIParticipant::UIDPanelType::uipt_same)
 {
+	m_rtID.resize(CRenderTargets::RenderTargetId::rt_max);
 }
 
 CRenderTargets::~CRenderTargets()
@@ -1214,19 +1381,74 @@ void CRenderTargets::Destroy(CVulkanRHI* p_rhi)
 	DestroyTextures(p_rhi);
 }
 
+void CRenderTargets::Show()
+{
+	CVulkanRHI::ImageList rendTargetList = GetTextures();
+	ImGui::Indent();
+	for (int i = 0; i < CRenderTargets::RenderTargetId::rt_max; i++)
+	{
+		std::string rtName = GetRenderTargetIDinString((CRenderTargets::RenderTargetId)i);
+		CVulkanCore::Image renderTarget = rendTargetList[i];
+		if (ImGui::TreeNode(rtName.c_str()))
+		{
+			// binding is 0 followed by render target id;
+			m_rtID[i] = (0 << 16) | i;
+			ImTextureID my_tex_id = &m_rtID[i];
+			float my_tex_w = (float)480; // renderTarget.width;
+			float my_tex_h = (float)270; // renderTarget.height;
+			{
+				ImGui::Text("%.0fx%.0f", (float)renderTarget.width, (float)renderTarget.height);
+				ImVec2 pos = ImGui::GetCursorScreenPos();
+				ImVec2 uv_min = ImVec2(0.0f, 0.0f);                 // Top-left
+				ImVec2 uv_max = ImVec2(1.0f, 1.0f);                 // Lower-right
+				ImVec4 tint_col = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);   // No tint
+				ImVec4 border_col = ImVec4(1.0f, 1.0f, 1.0f, 0.5f); // 50% opaque white
+				ImGui::Image(my_tex_id, ImVec2(my_tex_w, my_tex_h), uv_min, uv_max, tint_col, border_col);
+			}
+			ImGui::TreePop();
+		}
+	}
+	ImGui::Unindent();
+}
+
 void CRenderTargets::SetLayout(RenderTargetId p_id, VkImageLayout p_layout)
 {
 	m_textures[p_id].descInfo.imageLayout = p_layout;
 }
 
+std::string CRenderTargets::GetRenderTargetIDinString(RenderTargetId p_id)
+{
+	if (p_id == CRenderTargets::RenderTargetId::rt_PrimaryDepth)
+		return "PrimaryDepth";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_Position)
+		return "Position";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_Normal)
+		return "Normal";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_Albedo)
+		return "Albedo";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_SSAO)
+		return "SSAO";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_SSAOBlur)
+		return "SSAOBlur";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_DirectionalShadowDepth)
+		return "DirectionalShadowDepth";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_PrimaryColor)
+		return "PrimaryColor";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_DeferredRoughMetal)
+		return "DeferredRoughMetal";
+	else
+		return "Error Render Target";
+}
+
 CFixedBuffers::CFixedBuffers()
-	:CBuffers(CFixedBuffers::FixedBufferId::fb_max)
+	: CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
+	, CBuffers(CFixedBuffers::FixedBufferId::fb_max)
 {
 	m_primaryUniformData.ssaoKernelSize			= 64.0f;
 	m_primaryUniformData.ssaoRadius				= 0.5f;
 	m_primaryUniformData.enableShadowPCF		= 0;
-	m_primaryUniformData.sunIntensity			= 20.0f;
-	m_primaryUniformData.pbrAmbientFactor		= 0.03f;
+	//m_primaryUniformData.sunIntensity			= 20.0f;
+	m_primaryUniformData.pbrAmbientFactor		= 0.1f;
 	m_primaryUniformData.enableSSAO				= 1;
 	m_primaryUniformData.biasSSAO				= 0.015f;
 	m_primaryUniformData.unassigned_1			= 0.0f;
@@ -1240,7 +1462,7 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 {
 	size_t primaryUniformBufferSize =
 		(sizeof(float) * 1)					// delta time elapsed
-		+ (sizeof(float) * 3)				// camera lookfrom
+		+ (sizeof(float) * 3)				// camera look-from
 		+ (sizeof(float) * 16)				// camera view projection
 		+ (sizeof(float) * 16)				// camera projection
 		+ (sizeof(float) * 16)				// camera view
@@ -1253,10 +1475,10 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(float) * 1)				// SSAO Radius
 		+ (sizeof(float) * 16)				// sun light View Projection
 		+ (sizeof(float) * 3)				// sun light direction in world space
-		+ (sizeof(int) * 1)					// enbaled PCF for shadow
+		+ (sizeof(int) * 1)					// enabled PCF for shadow
 		+ (sizeof(float) * 3)				// sun light direction in view space
 		+ (sizeof(float) * 1)				// sun intensity
-		+ (sizeof(float) * 1)				// PBR Ambeient Factor
+		+ (sizeof(float) * 1)				// PBR ambient Factor
 		+ (sizeof(int) * 1)					// enable SSAO
 		+ (sizeof(float) * 1)				// unassigned_0
 		+ (sizeof(float) * 1);				// unassigned_1
@@ -1314,12 +1536,6 @@ void CFixedBuffers::Show()
 			ImGui::TreePop();
 
 		}
-		if (ImGui::TreeNode("Sunlight"))
-		{
-			ImGui::InputFloat3("World Sapce", &m_primaryUniformData.sunDirWorldSpace[0]);
-			ImGui::SliderFloat("Intensity", &m_primaryUniformData.sunIntensity, 0.0f, 20.0f);
-			ImGui::TreePop();
-		}		
 		if (ImGui::TreeNode("PBR"))
 		{
 			ImGui::SliderFloat("Ambient Factor", &m_primaryUniformData.pbrAmbientFactor, 0.00f, 1.0f);
@@ -1340,16 +1556,16 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	float* cameraProj						= const_cast<float*>(&m_primaryUniformData.cameraProj.column[0][0]);
 	float* cameraView						= const_cast<float*>(&m_primaryUniformData.cameraView.column[0][0]);
 	float* cameraInvView					= const_cast<float*>(&m_primaryUniformData.cameraInvView.column[0][0]);
-	float* sunViewProj						= const_cast<float*>(&m_primaryUniformData.sunViewProj.column[0][0]);
 	float* skyboxModelView					= const_cast<float*>(&m_primaryUniformData.skyboxModelView.column[0][0]);
-	// cancelling out translation for skybox rendering
+	
+	// canceling out translation for skybox rendering
 	skyboxModelView[12]						= 0.0;
 	skyboxModelView[13]						= 0.0;
 	skyboxModelView[14]						= 0.0;
 	skyboxModelView[15]						= 1.0;
 
 	std::vector<float> uniformValues;
-	uniformValues.push_back(m_primaryUniformData.elapsedTime);																							// time elapsed delata
+	uniformValues.push_back(m_primaryUniformData.elapsedTime);																							// time elapsed delta
 	std::copy(&m_primaryUniformData.cameraLookFrom[0], &m_primaryUniformData.cameraLookFrom[3], std::back_inserter(uniformValues));						// camera look from x, y, z
 	std::copy(&cameraViewProj[0], &cameraViewProj[16], std::back_inserter(uniformValues));																// camera view projection matrix
 	std::copy(&cameraProj[0], &cameraProj[16], std::back_inserter(uniformValues));																		// camera projection matrix
@@ -1358,52 +1574,32 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	std::copy(&skyboxModelView[0], &skyboxModelView[16], std::back_inserter(uniformValues));															// skybox model view
 	uniformValues.push_back((float)m_primaryUniformData.renderRes[0]);	uniformValues.push_back((float)m_primaryUniformData.renderRes[1]);				// render resolution
 	uniformValues.push_back((float)m_primaryUniformData.mousePos[0]);	uniformValues.push_back((float)m_primaryUniformData.mousePos[1]);				// mouse pos
-	uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[0]); uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[1]);		// ssao noise scale
-	uniformValues.push_back((float)m_primaryUniformData.ssaoKernelSize);																				// ssao kernel size
-	uniformValues.push_back((float)m_primaryUniformData.ssaoRadius);																					// ssao radius
-	std::copy(&sunViewProj[0], &sunViewProj[16], std::back_inserter(uniformValues));																	// sun light view projection matrix
-	std::copy(&m_primaryUniformData.sunDirWorldSpace[0], &m_primaryUniformData.sunDirWorldSpace[3], std::back_inserter(uniformValues));					// sun light sunLightDirection x, y, z in world space
+	uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[0]); uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[1]);		// SSAO noise scale
+	uniformValues.push_back((float)m_primaryUniformData.ssaoKernelSize);																				// SSAO kernel size
+	uniformValues.push_back((float)m_primaryUniformData.ssaoRadius);																					// SSAO radius
 	uniformValues.push_back((float)m_primaryUniformData.enableShadowPCF);																				// enable PCF for shadows
-	std::copy(&m_primaryUniformData.sunDirViewSpace[0], &m_primaryUniformData.sunDirViewSpace[3], std::back_inserter(uniformValues));					// sun light sunLightDirection x, y, z in view space
-	uniformValues.push_back(m_primaryUniformData.sunIntensity);																							// Sunlight Intensity
 	uniformValues.push_back(m_primaryUniformData.pbrAmbientFactor);																						// PBR Ambient Factor
 	uniformValues.push_back((float)m_primaryUniformData.enableSSAO);																					// enable SSAO
-	uniformValues.push_back(m_primaryUniformData.biasSSAO);																								// ssao Bias
+	uniformValues.push_back(m_primaryUniformData.biasSSAO);																								// SSAO Bias
 	uniformValues.push_back(m_primaryUniformData.unassigned_1);																							// unassigned_1
 
 	uint8_t* data							= (uint8_t*)(uniformValues.data());
-	uint32_t id								= (p_scId == 0) ? fb_PrimaryUniform_0 : fb_PrimaryUniform_1;
-	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, m_buffers[id]));
+	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, m_buffers[p_scId], false));
 		
 	return true;
 }
 
-bool CFixedAssets::Create(CVulkanRHI* p_rhi)
+CFixedAssets::CFixedAssets()
+	: CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
+{
+}
+
+bool CFixedAssets::Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool)
 {
 	RETURN_FALSE_IF_FALSE(m_fixedBuffers.Create(p_rhi));
 	RETURN_FALSE_IF_FALSE(m_renderTargets.Create(p_rhi));
-
-	{
-		m_samplers.resize(SamplerId::s_max);
-
-		struct SamplerData { uint32_t id; VkFilter filter; VkImageLayout layout; };
-		std::vector<SamplerData> samplerDataList
-		{
-			{s_Linear, VK_FILTER_LINEAR, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}
-		};
-
-		for (const auto& samp : samplerDataList)
-		{
-			m_samplers[samp.id].filter = samp.filter;
-			m_samplers[samp.id].maxAnisotropy = 1.0f;
-			m_samplers[samp.id].descInfo.imageLayout = samp.layout;
-			m_samplers[samp.id].descInfo.imageView = VK_NULL_HANDLE;
-			RETURN_FALSE_IF_FALSE(p_rhi->CreateSampler(m_samplers[samp.id]));
-		}
-	}
-
-	RETURN_FALSE_IF_FALSE(m_renderableDebug.Create(p_rhi, &m_fixedBuffers));
-
+	RETURN_FALSE_IF_FALSE(CreateSamplers(p_rhi));
+	RETURN_FALSE_IF_FALSE(m_renderableDebug.Create(p_rhi, &m_fixedBuffers, p_cmdPool));
 	return true;
 }
 
@@ -1424,6 +1620,44 @@ bool CFixedAssets::Update(CVulkanRHI* p_rhi, const FixedUpdateData& p_updateData
 {
 	m_fixedBuffers.SetPrimaryUniformData(*p_updateData.primaryUniData);
 	RETURN_FALSE_IF_FALSE(m_fixedBuffers.Update(p_rhi, p_updateData.swapchainIndex));
+	return true;
+}
+
+void CFixedAssets::Show()
+{
+	bool doubleClickedEntity = false;
+	int32_t sceneIndex = 0;
+	if (Header("Fixed Assets"))
+	{
+		ImGui::Indent();
+		if (ImGui::TreeNode("Render Targets"))
+		{
+			m_renderTargets.Show();
+			ImGui::TreePop();
+		}
+		ImGui::Unindent();
+	}
+}
+
+bool CFixedAssets::CreateSamplers(CVulkanRHI* p_rhi)
+{
+	m_samplers.resize(SamplerId::s_max);
+
+	struct SamplerData { uint32_t id; VkFilter filter; VkImageLayout layout; };
+	std::vector<SamplerData> samplerDataList
+	{
+		{s_Linear, VK_FILTER_LINEAR, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}
+	};
+
+	for (const auto& samp : samplerDataList)
+	{
+		m_samplers[samp.id].filter = samp.filter;
+		m_samplers[samp.id].maxAnisotropy = 1.0f;
+		m_samplers[samp.id].descInfo.imageLayout = samp.layout;
+		m_samplers[samp.id].descInfo.imageView = VK_NULL_HANDLE;
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateSampler(m_samplers[samp.id]));
+	}
+
 	return true;
 }
 
@@ -1460,7 +1694,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 	
 	SetLayoutForDescriptorCreation(rendTargets);
 
-	// read only tex desc info
+	// read only texture desc info
 	std::vector<VkDescriptorImageInfo> readTexDesInfoList;
 	for (int i = 0; i < CReadOnlyTextures::tr_max; i++)
 	{
@@ -1530,124 +1764,35 @@ void CPrimaryDescriptors::Destroy(CVulkanRHI* p_rhi)
 	DestroyDescriptors(p_rhi);
 }
 
-CUIParticipant::CUIParticipant()
-{
-	CUIParticipantManager::m_uiParticipants.push_back(this);
-};
-
-CUIParticipant::~CUIParticipant()
-{
-	for (int i = 0; i < CUIParticipantManager::m_uiParticipants.size(); i++)
-	{
-		if (CUIParticipantManager::m_uiParticipants[i] == this)
-		{
-			CUIParticipantManager::m_uiParticipants.erase(CUIParticipantManager::m_uiParticipants.begin() + i);
-			return;
-		}
-	}
-}
-
-bool CUIParticipant::Header(const char* caption)
-{
-	return ImGui::CollapsingHeader(caption, ImGuiTreeNodeFlags_DefaultOpen);
-}
-
-bool CUIParticipant::CheckBox(const char* caption, bool* value)
-{
-	bool res = ImGui::Checkbox(caption, value);
-	if (res) { m_updated = true; };
-	return res;
-}
-
-bool CUIParticipant::CheckBox(const char* caption, int32_t* value)
-{
-	bool val = (*value == 1);
-	bool res = ImGui::Checkbox(caption, &val);
-	*value = val;
-	if (res) { m_updated = true; };
-	return res;
-}
-
-bool CUIParticipant::RadioButton(const char* caption, bool value)
-{
-	bool res = ImGui::RadioButton(caption, value);
-	if (res) { m_updated = true; };
-	return res;
-}
-
-bool CUIParticipant::SliderFloat(const char* caption, float* value, float min, float max)
-{
-	bool res = ImGui::SliderFloat(caption, value, min, max);
-	if (res) { m_updated = true; };
-	return res;
-}
-
-bool CUIParticipant::SliderInt(const char* caption, int32_t* value, int32_t min, int32_t max)
-{
-	bool res = ImGui::SliderInt(caption, value, min, max);
-	if (res) { m_updated = true; };
-	return res;
-}
-
-bool CUIParticipant::ComboBox(const char* caption, int32_t* itemindex, std::vector<std::string> items)
-{
-	if (items.empty()) {
-		return false;
-	}
-	std::vector<const char*> charitems;
-	charitems.reserve(items.size());
-	for (size_t i = 0; i < items.size(); i++) {
-		charitems.push_back(items[i].c_str());
-	}
-	uint32_t itemCount = static_cast<uint32_t>(charitems.size());
-	bool res = ImGui::Combo(caption, itemindex, &charitems[0], itemCount, itemCount);
-	if (res) { m_updated = true; };
-	return res;
-}
-
-bool CUIParticipant::Button(const char* caption)
-{
-	bool res = ImGui::Button(caption);
-	if (res) { m_updated = true; };
-	return res;
-}
-
-void CUIParticipant::Text(const char* formatstr, ...)
-{
-	va_list args;
-	va_start(args, formatstr);
-	ImGui::TextV(formatstr, args);
-	va_end(args);
-}
-
-CUIParticipantManager::CUIParticipantManager()
-{
-
-}
-
-CUIParticipantManager::~CUIParticipantManager()
-{
-	m_uiParticipants.clear();
-}
-
-void CUIParticipantManager::Show()
-{
-	for (auto& participant : m_uiParticipants)
-	{
-		participant->Show();
-		ImGui::Separator();
-	}
-}
-
 CRenderableDebug::CRenderableDebug()
 	: CDescriptor(FRAME_BUFFER_COUNT)
-	, CRenderable(FRAME_BUFFER_COUNT)
+	, CRenderable(0)
 {
 }
 
-bool CRenderableDebug::Create(CVulkanRHI* p_rhi, const CFixedBuffers* p_fixedBuffers)
+bool CRenderableDebug::Create(CVulkanRHI* p_rhi, const CFixedBuffers* p_fixedBuffers, const CVulkanRHI::CommandPool& p_cmdPool)
 {
-	RETURN_FALSE_IF_FALSE(CreateDebugDescriptors(p_rhi, p_fixedBuffers));
+	CVulkanRHI::CommandBuffer cmdBfr;
+	CVulkanRHI::BufferList stgList;
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1));
+	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, "Debug Resources Loading"));
+
+	RETURN_FALSE_IF_FALSE(CreateBoxSphereBuffers(p_rhi, stgList, cmdBfr))
+
+	RETURN_FALSE_IF_FALSE(p_rhi->EndCommandBuffer(cmdBfr));
+
+	CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
+	CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
+	bool waitForFinish = true;
+	RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish));
+
+	for (auto& stg : stgList)
+		p_rhi->FreeMemoryDestroyBuffer(stg);
+
+	if (!CreateDebugDescriptors(p_rhi, p_fixedBuffers))
+	{
+		std::cerr << "Failed to Create Debug Descriptors" << std::endl;
+	}
 	return true;
 }
 
@@ -1656,173 +1801,128 @@ bool CRenderableDebug::Update()
 	return false;
 }
 
-bool CRenderableDebug::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx, const CFixedBuffers* p_fixedBuffers, const CSceneGraph* p_sceneGraph)
+bool CRenderableDebug::PreDrawInstanced(CVulkanRHI* p_rhi, uint32_t p_scIdx, const CFixedBuffers* p_fixedBuffers, 
+	const CSceneGraph* p_sceneGraph, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	std::vector<int>			indexData;
-	std::vector<DebugVertex>	vertexData;
-	std::vector<int>			indexTemplate{ 0, 1, 2, 3, 4, 5, 6, 7, 0, 4, 1, 5, 2, 6, 3, 7, 1, 2, 3, 0, 5, 6, 7, 4};	
-	uint32_t					modelMatIndex = 0;
-	uint32_t					displayingBBoxIndex = 0;
-	std::vector<float>			perbBoxTransformData;
+	bool						bufferStale = false;
 	CSceneGraph::EntityList*	entityList = p_sceneGraph->GetEntities();
-	uint32_t					vertexTemplateSize = 8; // 8 because that is number of vetices of the bbox
+	std::vector<float>			allSelectedTransformData;
+	std::vector<float>			selectedSphereTransformData;
+	std::vector<float>			selectedFrustumTransformData;
+	uint32_t					currentCount = 0;
+	
+	m_bBoxDetails.instanceOffset = 0;
+	m_bBoxDetails.instanceCount = 0;
+
+	m_bSphereDetails.instanceOffset = 0;
+	m_bSphereDetails.instanceCount = 0;
+
+	m_bFrustumDetails.instanceOffset = 0;
+	m_bFrustumDetails.instanceCount = 0;
 
 	if (p_sceneGraph->IsDebugDrawEnabled())
 	{
-		const nm::float3* box = p_sceneGraph->GetBoundingBox()->bBox;
-		for (uint32_t i = 0; i < vertexTemplateSize; i++)
-		{
-			DebugVertex dVert{ box[i], (int)modelMatIndex };
-			vertexData.push_back(dVert);
-		}
-	
-		{
-			auto indices = indexTemplate;
-			int vertexfactor = (displayingBBoxIndex * vertexTemplateSize);
-			std::transform(indices.begin(), indices.end(), indices.begin(), [=](int& c)
-			{
-				return vertexfactor + c;
-			});
-	
-			size_t indexOffset = indexData.size();
-			indexData.resize((displayingBBoxIndex + 1) * (int)indexTemplate.size());
-			std::copy(indices.begin(), indices.end(), indexData.begin() + indexOffset);
-		}
-	
-		displayingBBoxIndex++;
-	
-		const float* transform = &nm::float4x4().identity().column[0][0];
-		std::copy(&transform[0], &transform[16], std::back_inserter(perbBoxTransformData));
-	
-		modelMatIndex++;
+		const float* transform = &(p_sceneGraph->GetBoundingBox()->GetUnitBBoxTransform().GetTransform()).column[0][0];
+		std::copy(&transform[0], &transform[16], std::back_inserter(allSelectedTransformData));
+		++m_bBoxDetails.instanceCount;
 	}
 
+	// Loop through the entity list
 	for (auto& entity : (*entityList))
 	{
-		if (entity->IsDebugDrawEnabled() && !entity->IsSubmeshDebugDrawEnabled())
-		{
-			nm::float3* box = entity->GetBoundingBox()->bBox;
-			for (uint32_t i = 0; i < vertexTemplateSize; i++)
-			{
-				DebugVertex dVert{ box[i], (int)modelMatIndex };
-				vertexData.push_back(dVert);
-			}
-			
-			{
-				auto indices		= indexTemplate;
-				int vertexfactor	= (displayingBBoxIndex * vertexTemplateSize);
-				std::transform(indices.begin(), indices.end(), indices.begin(), [=](int& c)
-					{
-						return vertexfactor + c;
-					});
-
-				size_t indexOffset = indexData.size();
-				indexData.resize((displayingBBoxIndex + 1) * (int)indexTemplate.size());
-				std::copy(indices.begin(), indices.end(), indexData.begin() + indexOffset);
-			}
-
-			displayingBBoxIndex++;
-		}
-		if (entity->IsSubmeshDebugDrawEnabled())// && entity->IsDebugDrawEnabled())
-		{
-			for (uint32_t subBoxID = 0; subBoxID < entity->GetSubBoundingBoxCount(); subBoxID++)
-			{
-				nm::float3* box = entity->GetSubBoundingBox(subBoxID)->bBox;
-				for (uint32_t i = 0; i < vertexTemplateSize; i++)
-				{
-					// Adding vertex data and associated transformatioon index. This is same as per entity bbox
-					// beacuse every submesh of the bbox will have the transform
-					DebugVertex dVert{ box[i], (int)modelMatIndex };
-					vertexData.push_back(dVert);
-				}
-
-				{
-					// making a copy of the index template for this specific bounding box vertices
-					auto indices = indexTemplate;
-
-					// for each index i = i + (number of vertices in bbox * index of number of bboxes added for display )
-					int vertexfactor = (displayingBBoxIndex * vertexTemplateSize);
-					std::transform(indices.begin(), indices.end(), indices.begin(), [=](int& c)
-						{
-							return vertexfactor + c;
-						});
-
-					// this is number of indices already added to be displayed
-					size_t indexOffset = indexData.size();
-
-					// resizing the index buffer size to accomodate for another bbox for display
-					indexData.resize((displayingBBoxIndex + 1) * (int)indexTemplate.size());
-
-					// copying the indices data of this bbox to list of all the bboxes to display
-					std::copy(indices.begin(), indices.end(), indexData.begin() + indexOffset);
-				}
-
-				displayingBBoxIndex++;
-			}
-		}
-
 		if (entity->IsDebugDrawEnabled() || entity->IsSubmeshDebugDrawEnabled())
 		{
-			const float* transform = &(p_sceneGraph->GetTransform().GetTransform() * entity->GetTransform().GetTransform()).column[0][0];
-			std::copy(&transform[0], &transform[16], std::back_inserter(perbBoxTransformData));
+			nm::float4x4 entityTransform = entity->GetTransform().GetTransform();
+			BVolume* boundingVol = entity->GetBoundingVolume();
 
-			modelMatIndex++;
-		}
-	}
-	m_indexCount = indexData.size();
-	
-	if(!vertexData.empty())
-	{
-		// if the vertex buffer if already created from previous frame, destroy them and free the asscoiated memroy for this frame's use
-		if (m_vertexBuffers[p_scIdx].descInfo.buffer != VK_NULL_HANDLE)
-		{
-			Clear(p_rhi, p_scIdx);
-		}
-
-		{
-			CVulkanRHI::Buffer uniformBuffer = (p_scIdx == 0) ? p_fixedBuffers->GetBuffer(CFixedBuffers::fb_DebugUniform_0) : p_fixedBuffers->GetBuffer(CFixedBuffers::fb_DebugUniform_1);
-
-			uint8_t* data = (uint8_t*)(perbBoxTransformData.data());
-			RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, uniformBuffer));
-		}
-		{
-			// Create vertex / index buffers
-			size_t vertexSize = vertexData.size() * sizeof(DebugVertex);
-			size_t indexSize = (size_t)m_indexCount * sizeof(int);
-
-			// Creating vertex and index buffers and upload all data to single contigeous GPU buffers respectively
+			// Append the entity's bounding sphere to raw CPU buffer if selected
+			if (boundingVol->GetBoundingType() == BVolume::BType::Sphere)
 			{
-				p_rhi->CreateAllocateBindBuffer(vertexSize, m_vertexBuffers[p_scIdx], VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-				p_rhi->CreateAllocateBindBuffer(indexSize, m_indexBuffers[p_scIdx], VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-
-				bool flushMemRanges = true;
-				std::vector<VkMappedMemoryRange> memRanges;
-				void* vertexMapped;
-				void* indexMapped;
-
-				if (!p_rhi->MapMemory(m_vertexBuffers[p_scIdx], flushMemRanges, &vertexMapped, &memRanges))
-					return false;
-
-				if (!p_rhi->MapMemory(m_indexBuffers[p_scIdx], flushMemRanges, &indexMapped, &memRanges))
-					return false;
-
+				if (dynamic_cast<BSphere*>(boundingVol))
 				{
-					memcpy(vertexMapped, vertexData.data(), vertexSize);
-					memcpy(indexMapped, indexData.data(), indexSize);
+					const float* transform = &(entityTransform).column[0][0];
+					std::copy(&transform[0], &transform[16], std::back_inserter(selectedSphereTransformData));
+					++m_bSphereDetails.instanceCount;
 				}
+			}
+			else if(boundingVol->GetBoundingType() == BVolume::BType::Box)
+			{
+				BBox* boundingBox = dynamic_cast<BBox*>(boundingVol);
+				if (boundingBox)
+				{
+					// Append the entity's mesh's primary bbox to raw CPU buffer if selected
+					if (entity->IsDebugDrawEnabled())
+					{
+						const float* transform =  &(entityTransform * boundingBox->GetUnitBBoxTransform().GetTransform()).column[0][0];
+						std::copy(&transform[0], &transform[16], std::back_inserter(allSelectedTransformData));
+						++m_bBoxDetails.instanceCount;
+					}
 
-				if (!p_rhi->FlushMemoryRanges(&memRanges))
-					return false;
-
-				p_rhi->UnMapMemory(m_vertexBuffers[p_scIdx]);
-				p_rhi->UnMapMemory(m_indexBuffers[p_scIdx]);
+					// Append the sub-mesh's bbox to raw CPU buffer if selected
+					if (dynamic_cast<CRenderableMesh*>(entity) && entity->IsSubmeshDebugDrawEnabled())
+					{
+						CRenderableMesh* mesh = dynamic_cast<CRenderableMesh*>(entity);
+						for (uint32_t subBoxID = 0; subBoxID < mesh->GetSubBoundingBoxCount(); subBoxID++)
+						{
+							BBox* box = mesh->GetSubBoundingBox(subBoxID);
+							const float* transform = &(entityTransform * box->GetUnitBBoxTransform().GetTransform()).column[0][0];
+							std::copy(&transform[0], &transform[16], std::back_inserter(allSelectedTransformData));
+							++m_bBoxDetails.instanceCount;
+						}
+					}
+				}
+			}
+			else if (boundingVol->GetBoundingType() == BVolume::BType::Frustum)
+			{
+				BFrustum* frustum = dynamic_cast<BFrustum*>(boundingVol);
+				if (frustum)
+				{
+					// since this is a frustum, we are going to multiply every vertex of a unit-camera-style-box with 
+					// its view projection matrix. Hence sending that matrix to get multiplied
+					const float* transform = &(frustum->GetViewProjection()).column[0][0];
+					std::copy(&transform[0], &transform[16], std::back_inserter(selectedFrustumTransformData));
+					++m_bFrustumDetails.instanceCount;
+				}
 			}
 		}
-
-		return true;
 	}
 
-	return false;
+	// Append sphere transform data to the end of all selected bbox transform raw data list
+	if (!selectedSphereTransformData.empty())
+	{
+		std::copy(selectedSphereTransformData.begin(), selectedSphereTransformData.end(), std::back_inserter(allSelectedTransformData));
+		m_bSphereDetails.instanceOffset = m_bBoxDetails.instanceCount;
+	}
+
+	// Append frustum transform data to the end of all selected bbox + sphere transform raw data list
+	if (!selectedFrustumTransformData.empty())
+	{
+		std::copy(selectedFrustumTransformData.begin(), selectedFrustumTransformData.end(), std::back_inserter(allSelectedTransformData));
+		m_bFrustumDetails.instanceOffset = m_bBoxDetails.instanceCount + m_bSphereDetails.instanceCount;
+	}
+
+	uint32_t allInstanceCount = 
+		m_bBoxDetails.instanceCount + 
+		m_bSphereDetails.instanceCount + 
+		m_bFrustumDetails.instanceCount;
+
+	// Heuristic to identify if the uniform buffer is stale and needs rebuilding
+	//if (allInstanceCount != m_instanceCount ||
+	//	p_sceneGraph->GetSceneStatus() != CSceneGraph::SceneStatus::ss_NoChange)
+	{
+		m_instanceCount = allInstanceCount;
+		bufferStale = true;
+	}
+
+	// Irrespective of the swap chain buffer id, nuke both uniform buffers and reload them
+	if (bufferStale && !allSelectedTransformData.empty())
+	{
+		uint8_t* data = (uint8_t*)(allSelectedTransformData.data());
+		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, p_fixedBuffers->GetBuffer(CFixedBuffers::fb_DebugUniform_0), true));
+		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, p_fixedBuffers->GetBuffer(CFixedBuffers::fb_DebugUniform_1), true));
+	}
+
+	return m_instanceCount > 0;
 }
 
 void CRenderableDebug::Destroy(CVulkanRHI* p_rhi)
@@ -1834,15 +1934,72 @@ bool CRenderableDebug::CreateDebugDescriptors(CVulkanRHI* p_rhi, const CFixedBuf
 	VkShaderStageFlags vertex_frag = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	{
 		CVulkanRHI::Buffer uniformBuffer = p_fixedBuffers->GetBuffer(CFixedBuffers::fb_DebugUniform_0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_MeshInfo_Uniform,	1,	VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	vertex_frag,	&uniformBuffer.descInfo,	VK_NULL_HANDLE}, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Debug_Transforms_Uniform,	1,	VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	vertex_frag,	&uniformBuffer.descInfo,	VK_NULL_HANDLE}, 0);
 		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 0, BindingDest::bd_Debug_Transforms_Uniform, 0));
 	}
 
 	{
 		CVulkanRHI::Buffer uniformBuffer = p_fixedBuffers->GetBuffer(CFixedBuffers::fb_DebugUniform_1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_MeshInfo_Uniform,	1,	VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	vertex_frag,	&uniformBuffer.descInfo,	VK_NULL_HANDLE }, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Debug_Transforms_Uniform,	1,	VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	vertex_frag,	&uniformBuffer.descInfo,	VK_NULL_HANDLE }, 1);
 		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 0, BindingDest::bd_Debug_Transforms_Uniform, 1));
 	}
+
+	return true;
+}
+
+bool CRenderableDebug::CreateBoxSphereBuffers(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
+{
+	std::cout << "Loading Debug Resources" << std::endl;
+	MeshRaw	debugMeshes;
+	// we are going to instance the bounding boxes
+	// so loading the mesh only once as a template
+	{
+		// Bounding Box Template
+		debugMeshes.indicesList = BBox::GetIndexTemplate();
+		debugMeshes.vertexList = BBox::GetVertexTempate();
+
+		// Populate bbox details
+		m_bBoxDetails.indexCount = (uint32_t)debugMeshes.indicesList.size();
+		m_bBoxDetails.indexOffset = 0;
+		m_bBoxDetails.vertexOffset = 0;
+	}
+
+	// we are going to instance the bounding spheres so loading the mesh only
+	// once as a template
+	{
+		// Bounding Sphere Template
+		// create sphere
+		RawSphere debugSphere;
+		GenerateSphere(25, 25, debugSphere, 1.0f);
+
+		// populate bSphere details
+		m_bSphereDetails.indexCount		= (uint32_t)debugSphere.lineIndices.size();
+		m_bSphereDetails.indexOffset	= (uint32_t)debugMeshes.indicesList.size();
+		m_bSphereDetails.vertexOffset   = (uint32_t)debugMeshes.vertexList.size() / debugMeshes.vertexList.GetVertexSize();
+		
+		auto rawVertexData = debugSphere.vertices.getRaw();
+		std::vector<int> rawIndexData = debugSphere.lineIndices;
+
+		std::copy(rawVertexData.begin(), rawVertexData.end(), std::back_inserter(debugMeshes.vertexList.getRaw()));
+		std::copy(rawIndexData.begin(), rawIndexData.end(), std::back_inserter(debugMeshes.indicesList));
+	}
+
+	// we are going to instance the bounding frustums so loading the mesh only
+	// once as a template
+	{
+		// Bounding Frustum Template
+		auto rawIndexData = BFrustum::GetIndexTemplate();
+		auto rawVertexData = BFrustum::GetVertexTempate().getRaw();
+
+		// Populate Frustum details
+		m_bFrustumDetails.indexCount = (uint32_t)rawIndexData.size();
+		m_bFrustumDetails.indexOffset = 0;	// we are reusing the same indices that bound box is using because they are same for frustum
+		m_bFrustumDetails.vertexOffset = (uint32_t)debugMeshes.vertexList.size() / debugMeshes.vertexList.GetVertexSize();
+
+		std::copy(rawVertexData.begin(), rawVertexData.end(), std::back_inserter(debugMeshes.vertexList.getRaw()));
+	}
+		
+	RETURN_FALSE_IF_FALSE(CreateVertexIndexBuffer(p_rhi, p_stgList, &debugMeshes, p_cmdBfr));
 
 	return true;
 }

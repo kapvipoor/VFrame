@@ -33,9 +33,11 @@ bool CStaticShadowPrepass::CreateRenderpass(RenderData* p_renderData)
 
 bool CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 {
+	uint32_t offset											= 0;
+
 	VkVertexInputBindingDescription vertexInputBinding		= {};
 	vertexInputBinding.binding								= 0;
-	vertexInputBinding.stride								= sizeof(Vertex);
+	vertexInputBinding.stride = 48;// sizeof(Vertex);
 	vertexInputBinding.inputRate							= VK_VERTEX_INPUT_RATE_VERTEX;
 
 	//	layout (location = 0) in vec3 pos;
@@ -48,32 +50,35 @@ bool CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	attribDesc.binding										= 0;
 	attribDesc.location										= 0;
 	attribDesc.format										= VK_FORMAT_R32G32B32_SFLOAT;
-	attribDesc.offset										= offsetof(Vertex, pos);
+	attribDesc.offset										= offset;//offsetof(Vertex, pos);
 	vertexAttributs.push_back(attribDesc);
+	offset													+= 3 * sizeof(float);
 
 	// Attribute location 1: normal
 	attribDesc.binding										= 0;
 	attribDesc.location										= 1;
 	attribDesc.format										= VK_FORMAT_R32G32B32_SFLOAT;
-	attribDesc.offset										= offsetof(Vertex, normal);
+	attribDesc.offset										= offset;// offsetof(Vertex, normal);
 	vertexAttributs.push_back(attribDesc);
+	offset													+= 3 * sizeof(float);
 
 	// Attribute location 2: uv
 	attribDesc.binding	= 0;
 	attribDesc.location										= 2;
 	attribDesc.format										= VK_FORMAT_R32G32_SFLOAT;
-	attribDesc.offset										= offsetof(Vertex, uv);
+	attribDesc.offset										= offset;// offsetof(Vertex, uv);
 	vertexAttributs.push_back(attribDesc);
+	offset													+= 2 * sizeof(float);
 
 	// Attribute location 3: tangent
 	attribDesc.binding	= 0;
 	attribDesc.location										= 3;
 	attribDesc.format										= VK_FORMAT_R32G32B32A32_SFLOAT;
-	attribDesc.offset										= offsetof(Vertex, tangent);
+	attribDesc.offset										= offset;// offsetof(Vertex, tangent);
 	vertexAttributs.push_back(attribDesc);
 
 	CVulkanRHI::ShaderPaths shadowPassShaderpaths{};
-	shadowPassShaderpaths.shaderpath_vertex					= g_EnginePath + "/shaders/spirv/LightDepthPrepass.vert.spv";
+	shadowPassShaderpaths.shaderpath_vertex					= g_EnginePath /"shaders/spirv/LightDepthPrepass.vert.spv";
 	m_pipeline.pipeLayout									= p_Pipeline.pipeLayout;
 	m_pipeline.vertexInBinding								= vertexInputBinding;
 	m_pipeline.vertexAttributeDesc							= vertexAttributs;
@@ -91,7 +96,7 @@ bool CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 
 bool CStaticShadowPrepass::Update(UpdateData* p_updateData)
 {
-	// we are choosig to reuse the shadow map if the scene graph has not gone through any changes 
+	// we are choosing to reuse the shadow map if the scene graph has not gone through any changes 
 	m_bReuseShadowMap = (p_updateData->sceneGraph->GetSceneStatus() == CSceneGraph::SceneStatus::ss_NoChange) ? true : false;
 	
 	return true;
@@ -115,7 +120,7 @@ bool CStaticShadowPrepass::Render(RenderData* p_renderData)
 
 	vkCmdBindPipeline(p_renderData->cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
 	vkCmdBindDescriptorSets(p_renderData->cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-	vkCmdBindDescriptorSets(p_renderData->cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(), 0, nullptr);
+	vkCmdBindDescriptorSets(p_renderData->cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
 
 	// Bind Index and Vertices buffers
 	VkDeviceSize offsets[1] = { 0 };

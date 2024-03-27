@@ -791,6 +791,26 @@ namespace nm {
     inline constexpr S lengthsq(const vec<S, N>& v) { return dot(v, v); }
 
     /**
+     * @return The squared distance between 2 vectors
+     */
+    template <unsigned N, class S>
+    inline constexpr S distancesq(const vec<S, N>& l, const vec<S, N>& r) {
+        S result = (S)0.00f;
+        for (unsigned int i = 0; i < N; i++) {
+            result += (l[i] - r[i]) * (l[i] - r[i]);
+        }
+        return result;
+    }
+
+    /**
+     * @return The distance between 2 vectors
+     */
+    template <unsigned N, class S>
+    inline constexpr S distance(const vec<S, N>& l, const vec<S, N>& r) {
+        return (S)std::sqrt(distancesq(l, r));
+    }
+
+    /**
      * @return The magnitude of a vector.
      */
     template <unsigned N, class S>
@@ -1606,16 +1626,24 @@ namespace nm {
              scaleVec       = nm::float3(1.0f);
          }
 
-         // for now only handling scaling multiplication
-         //Transform operator*(nm::Transform const& p_rhs)
-         //{
-         //   Transform temp;
-         //   //temp.SetScale(scale * p_rhs.scale);
-         //   //temp.SetRotation(p_rhs.rotate);
-         //   //temp.SetTranslate(p_rhs.translate);
-         //   temp = p_rhs;
-         //   return temp;
-         //}
+         Transform(nm::float4x4 p_translate, nm::float4x4 p_rotate, nm::float4x4 p_scale)
+         {
+             translate = p_translate;
+             rotate = p_rotate;
+             scale = p_scale;
+
+             transform = translate * rotate * scale;
+             Decompose2Translation(translate, translateVec);
+             Decompose2Rotation(rotate, rotateVec);
+             Decompose2Scaling(scale, scaleVec);
+         }
+
+         // This is a hack and should only be used for visualizing the bounding
+         // limits of directional lights only. DO NOT USE FOR ANY OTHER PURPOSE.
+         Transform(nm::float4x4 p_transform)
+         {
+             transform = p_transform;
+         }
 
          nm::float4x4 GetTranslate()   const { return translate; }
          nm::float4x4 GetRotate()      const { return rotate; }
@@ -1631,25 +1659,23 @@ namespace nm {
          nm::float3 GetRotateVector() { return rotateVec; }
          nm::float3 GetScaleVector() { return scaleVec; }
 
-         void SetTransform(nm::float4x4 p_transform)
+         void SetTransform(nm::float4x4 p_translate, nm::float4x4 p_rotate, nm::float4x4 p_scale)
          {
-             transform = p_transform;
-
-             Decompose2Translation(p_transform, translateVec);
-             translate = nm::translation(translateVec);
-
-             Decompose2Rotation(p_transform, rotateVec);
-             rotate = nm::rotation_x(rotateVec[0]) * nm::rotation_x(rotateVec[1]) * nm::rotation_x(rotateVec[2]);
-
-             Decompose2Scaling(p_transform, scaleVec);
-             scale = nm::scale(nm::float4(scaleVec, 1.0));
+             translate = p_translate;
+             rotate = p_rotate;
+             scale = p_scale;
+             
+             transform = translate * rotate * scale;
+             Decompose2Translation(translate, translateVec);
+             Decompose2Rotation(rotate, rotateVec);
+             Decompose2Scaling(scale, scaleVec);
          }
 
          void SetRotation(nm::float4x4 p_rotate)
          {
              rotate = p_rotate;
              Decompose2Rotation(p_rotate, rotateVec);
-             transform = scale * rotate * translate;
+             transform = translate * rotate * scale;
          }
 
          void SetRotation(float p_roll, float p_pitch, float p_yaw)
@@ -1699,14 +1725,23 @@ namespace nm {
              }
 
              Decompose2Rotation(rotate, rotateVec);
-             transform = scale * rotate * translate;
+             transform = translate * rotate * scale;
          }
 
          void SetScale(nm::float4x4 p_scale)
          {
              scale = p_scale;
              Decompose2Scaling(p_scale, scaleVec);
-             transform = scale * rotate * translate;
+             transform = translate * rotate * scale;
+         }
+
+         void SetScale(nm::float3 p_scale)
+         {
+             scaleVec = p_scale;
+             scale.column[0][0] = scaleVec[0];
+             scale.column[1][1] = scaleVec[1];
+             scale.column[2][2] = scaleVec[2];
+             transform = translate * rotate * scale;
          }
 
          void SetTranslate(nm::float4x4 p_translate)
@@ -1734,5 +1769,18 @@ namespace nm {
              transform.column[3][3] = p_translate[3];
          }
 
+         nm::Transform operator*(nm::Transform const& that)
+         {
+             nm::Transform out;
+             out.translate = this->translate * that.translate;
+             out.rotate = this->rotate * that.rotate;
+             out.scale = this->scale * that.scale;
+             out.transform = this->translate * this->rotate * this->scale;
+             
+             Decompose2Translation(out.translate, out.translateVec);
+             Decompose2Rotation(out.rotate, out.rotateVec);
+             Decompose2Scaling(out.scale, out.scaleVec);
+             return out;
+         }
      };
 }

@@ -20,7 +20,7 @@ bool CSSAOComputePass::CreateRenderpass(RenderData* p_renderData)
 bool CSSAOComputePass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 {
 	CVulkanRHI::ShaderPaths ssaoShaderpaths{};
-	ssaoShaderpaths.shaderpath_compute = g_EnginePath + "/shaders/spirv/SSAO.comp.spv";
+	ssaoShaderpaths.shaderpath_compute = g_EnginePath /"shaders/spirv/SSAO.comp.spv";
 	m_pipeline.pipeLayout = p_Pipeline.pipeLayout;
 	if (!m_rhi->CreateComputePipeline(ssaoShaderpaths, m_pipeline))
 		return false;
@@ -85,7 +85,7 @@ bool CSSAOBlurPass::CreateRenderpass(RenderData* p_renderData)
 bool CSSAOBlurPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 {
 	CVulkanRHI::ShaderPaths ssaoBlurShaderpaths{};
-	ssaoBlurShaderpaths.shaderpath_compute = g_EnginePath + "/shaders/spirv/SSAOBlur.comp.spv";
+	ssaoBlurShaderpaths.shaderpath_compute = g_EnginePath /"shaders/spirv/SSAOBlur.comp.spv";
 	m_pipeline.pipeLayout = p_Pipeline.pipeLayout;
 	if (!m_rhi->CreateComputePipeline(ssaoBlurShaderpaths, m_pipeline))
 		return false;

@@ -49,8 +49,11 @@ private:
 
 	uint32_t							m_swapchainIndex;
 
-	VkSemaphore							m_vkswapchainAcquireSemaphore;
+	VkSemaphore							m_activeAcquireSemaphore;
+	VkSemaphore							m_vkswapchainAcquireSemaphore[FRAME_BUFFER_COUNT];
 	VkSemaphore							m_vksubmitCompleteSemaphore;
+
+	VkFence								m_activeCmdBfrFreeFence;
 	VkFence								m_vkFenceCmdBfrFree[FRAME_BUFFER_COUNT];
 
 	VkCommandPool						m_vkCmdPool;
@@ -58,7 +61,8 @@ private:
 	CVulkanRHI::CommandBufferList		m_cmdBfrsInUse;
 
 	CPerspectiveCamera*					m_primaryCamera;
-	COrthoCamera*						m_sunLightCamera;
+	//COrthoCamera*						m_sunLightCamera;
+	//CDirectionaLight*					m_sunLight;
 	//CPerspectiveCamera m_sunLightCamera;
 		
 	bool								m_pickObject;
@@ -81,12 +85,17 @@ private:
 	CToneMapPass*						m_toneMapPass;
 	CUIPass*							m_uiPass;
 	
+	VkSemaphore GetAvailableAcquireSemaphore(VkSemaphore p_in);
+	VkFence WaitForFinishIfNecessary(VkFence p_in);
+
 	bool InitCamera();
 	bool CreateSyncPremitives();																															
 	void DestroySyncPremitives();
 	bool CreatePasses();
 
-	bool UpdateCamera(float p_delta);																																
+	void UpdateCamera(CCamera::UpdateData&);
+	void UpdateSceneGraphDependencies(float p_delta);
+
 	bool DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkanRHI::CommandBuffer& p_cmdBfr);
 	bool RenderForward();
 	bool RenderDeferred();

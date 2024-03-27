@@ -17,7 +17,8 @@ float CalculateShadow(in vec4 fragPosViewSpace, bool applyPCF)
     vec4 fragPosWorldSpace = g_Info.invCamView * fragPosViewSpace;
 
     // converting from world space to light space
-    vec4 fragPosLightSpace = g_Info.sunLightViewProj * fragPosWorldSpace;
+	// PS: THis is only to snub compilation errors. This is not a fix na dis currently broken.
+    vec4 fragPosLightSpace = fragPosWorldSpace; //g_Info.sunLightViewProj * fragPosWorldSpace;
 
     // converting from light space to projection
     vec3 projCoord = fragPosLightSpace.xyz/fragPosLightSpace.w;
@@ -36,7 +37,7 @@ float CalculateShadow(in vec4 fragPosViewSpace, bool applyPCF)
     	    {
     	        for(int dy = -1; dy < 2; dy++)
     	        {
-    	            vec2 uv = projCoord.xy + (vec2(dx, dy)/vec2(4096, 4096));
+    	            vec2 uv = projCoord.xy + (vec2(dx, dy)/vec2(512, 512));
     	            float sampledDepth = texture(sampler2D(g_LightDepthImage, g_LinearSampler), uv).r;
     	            shadowFactor = shadowFactor + ((projCoord.z > sampledDepth) ? g_shadowFactor : 1.0f);
     	        }
@@ -81,9 +82,11 @@ void main()
 		// for each light source
 		{
 			// As light color is over 1, the result will be over 1, hence will need tonemapping
-			vec3 lightColor 					= vec3(1.0, 1.0, 0.9) * g_Info.sunLightIntensity;
+			vec3 lightColor 					= vec3(1.0, 1.0, 0.9); // * g_Info.sunLightIntensity;
 			//vec3 lightDir 					= g_Info.sunLightDirWorld.xyz - inWorldPosition.xyz;
-			vec3 L 								= normalize((inverse(transpose(g_Info.camView)) * vec4(g_Info.sunLightDirWorld, 1.0)).xyz);             
+			
+			// PS: THis is not a fix. THis is only to snub compilation errors.
+			vec3 L 								= lightColor;//normalize((inverse(transpose(g_Info.camView)) * vec4(g_Info.sunLightDirWorld, 1.0)).xyz);             
 			vec3 H 								= normalize(V+L);
 
 			// before we calculate anything related to light, we want to make sure

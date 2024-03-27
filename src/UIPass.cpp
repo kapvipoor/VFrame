@@ -37,8 +37,8 @@ bool CToneMapPass::CreateRenderpass(RenderData* p_renderData)
 bool CToneMapPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 {
 	CVulkanRHI::ShaderPaths uiShaderpaths{};
-	uiShaderpaths.shaderpath_vertex				= g_EnginePath + "/shaders/spirv/FulllScreenQuad.vert.spv";
-	uiShaderpaths.shaderpath_fragment			= g_EnginePath + "/shaders/spirv/ToneMap.frag.spv";
+	uiShaderpaths.shaderpath_vertex				= g_EnginePath /"shaders/spirv/FulllScreenQuad.vert.spv";
+	uiShaderpaths.shaderpath_fragment			= g_EnginePath /"shaders/spirv/ToneMap.frag.spv";
 	m_pipeline.pipeLayout						= p_Pipeline.pipeLayout;
 	m_pipeline.cullMode							= VK_CULL_MODE_FRONT_BIT;
 	m_pipeline.enableBlending					= false;
@@ -146,7 +146,7 @@ bool CUIPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	uiVertexInputBinding.inputRate				= VK_VERTEX_INPUT_RATE_VERTEX;
 
 	//	layout (location = 0) in vec2 pos;
-	//	layout (location = 1) in vec2 uv;
+	//	layout (location = 1) in vec2 UV;
 	//	layout (location = 2) in vec4 color;
 	std::vector<VkVertexInputAttributeDescription> uiVertexAttributs;
 	VkVertexInputAttributeDescription attribDesc{};
@@ -157,7 +157,7 @@ bool CUIPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	attribDesc.offset							= offsetof(ImDrawVert, pos);
 	uiVertexAttributs.push_back(attribDesc);
 
-	// Attribute location 1: uv
+	// Attribute location 1: UV
 	attribDesc.binding							= 0;
 	attribDesc.location							= 1;
 	attribDesc.format							= VK_FORMAT_R32G32_SFLOAT;
@@ -172,8 +172,8 @@ bool CUIPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	uiVertexAttributs.push_back(attribDesc);
 
 	CVulkanRHI::ShaderPaths uiShaderpaths{};
-	uiShaderpaths.shaderpath_vertex				= g_EnginePath + "/shaders/spirv/UI.vert.spv";
-	uiShaderpaths.shaderpath_fragment			= g_EnginePath + "/shaders/spirv/UI.frag.spv";
+	uiShaderpaths.shaderpath_vertex				= g_EnginePath /"shaders/spirv/UI.vert.spv";
+	uiShaderpaths.shaderpath_fragment			= g_EnginePath /"shaders/spirv/UI.frag.spv";
 	m_pipeline.pipeLayout						= p_Pipeline.pipeLayout;
 	m_pipeline.vertexInBinding					= uiVertexInputBinding;
 	m_pipeline.vertexAttributeDesc				= uiVertexAttributs;
@@ -219,18 +219,6 @@ bool CUIPass::Render(RenderData* p_renderData)
 
 	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
 
-	{
-		CRenderableUI::UIPushConstant pc{};
-		pc.scale[0]								= (2.0f / drawData->DisplaySize.x);
-		pc.scale[1]								= (2.0f / drawData->DisplaySize.y);
-
-		pc.offset[0]							= (-1.0f - drawData->DisplayPos.x * pc.scale[0]);
-		pc.offset[1]							= (-1.0f - drawData->DisplayPos.y * pc.scale[1]);
-
-		VkPipelineStageFlags stgFlags			= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-		vkCmdPushConstants(cmdBfr, m_pipeline.pipeLayout, stgFlags, 0, sizeof(CRenderableUI::UIPushConstant), (void*)&pc);
-	}
-
 	// Bind Vertex And Index Buffer:
 	if (drawData->TotalVtxCount > 0)
 	{
@@ -243,8 +231,8 @@ bool CUIPass::Render(RenderData* p_renderData)
 	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
 	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_UI, 1, ui->GetDescriptorSet(), 0, nullptr);
 
-	// Will project scissor/clipping rectangles into framebuffer space
-	ImVec2 clipOff								= drawData->DisplayPos;         // (0,0) unless using multi-viewports
+	// Will project scissor/clipping rectangles into frame buffer space
+	ImVec2 clipOff								= drawData->DisplayPos;         // (0,0) unless using multi-view ports
 	ImVec2 clipScale							= drawData->FramebufferScale; // (1,1) unless using retina display which are often (2,2)
 
 	int globalVtxOffset							= 0;
@@ -255,9 +243,23 @@ bool CUIPass::Render(RenderData* p_renderData)
 		for (int cmd_i = 0; cmd_i < cmdList->CmdBuffer.Size; cmd_i++)
 		{
 			const ImDrawCmd* pcmd = &cmdList->CmdBuffer[cmd_i];
+			{
+				CRenderableUI::UIPushConstant pc{};
+				pc.scale[0] = (2.0f / drawData->DisplaySize.x);
+				pc.scale[1] = (2.0f / drawData->DisplaySize.y);
+
+				pc.offset[0] = (-1.0f - drawData->DisplayPos.x * pc.scale[0]);
+				pc.offset[1] = (-1.0f - drawData->DisplayPos.y * pc.scale[1]);
+
+				uint32_t texId = *static_cast<uint32_t*>(pcmd->TextureId);
+				pc.binding_textureId = texId;
+
+				VkPipelineStageFlags stgFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+				vkCmdPushConstants(cmdBfr, m_pipeline.pipeLayout, stgFlags, 0, sizeof(CRenderableUI::UIPushConstant), (void*)&pc);
+			}
 
 			{
-				// Project scissor/clipping rectangles into framebuffer space
+				// Project scissor/clipping rectangles into frame buffer space
 				ImVec2 clipMin((pcmd->ClipRect.x - clipOff.x) * clipScale.x, (pcmd->ClipRect.y - clipOff.y) * clipScale.y);
 				ImVec2 clipMax((pcmd->ClipRect.z - clipOff.x) * clipScale.x, (pcmd->ClipRect.w - clipOff.y) * clipScale.y);
 
@@ -335,16 +337,19 @@ bool CDebugDrawPass::CreateRenderpass(RenderData* p_renderData)
 
 bool CDebugDrawPass::CreatePipeline(CVulkanRHI::Pipeline p_Pipeline)
 {
-	struct DebugVertex
-	{
-		nm::float3	pos;
-		int			id;
-	};
+	// This is only a template needed to create the vertex
+	// description for this Pipeline
+	VertexList debugVertex(
+		Vertex::AttributeFlag::position |
+		Vertex::AttributeFlag::id);
+
+	VertexList debugInstancedVertex(
+		Vertex::AttributeFlag::position);
 
 	VkVertexInputBindingDescription vertexInputBinding		= {};
-	vertexInputBinding.binding								= 0;
-	vertexInputBinding.stride								= sizeof(DebugVertex);
+	vertexInputBinding.binding								= 0;	
 	vertexInputBinding.inputRate							= VK_VERTEX_INPUT_RATE_VERTEX;
+	vertexInputBinding.stride								= sizeof(float) * debugInstancedVertex.GetVertexSize(); //sizeof(DebugVertex);
 
 	//	layout (location = 0) in vec3 pos;
 	//	layout (location = 1) in int entity id;
@@ -354,18 +359,12 @@ bool CDebugDrawPass::CreatePipeline(CVulkanRHI::Pipeline p_Pipeline)
 	attribDesc.binding										= 0;
 	attribDesc.location										= 0;
 	attribDesc.format										= VK_FORMAT_R32G32B32_SFLOAT;
-	attribDesc.offset										= offsetof(DebugVertex, pos);
-	vertexAttributs.push_back(attribDesc);
-
-	attribDesc.binding										= 0;
-	attribDesc.location										= 1;
-	attribDesc.format										= VK_FORMAT_R32_SINT;
-	attribDesc.offset										= offsetof(DebugVertex, id);
-	vertexAttributs.push_back(attribDesc);
+	attribDesc.offset										= sizeof(float) * debugInstancedVertex.GetOffsetOf(Vertex::AttributeFlag::position); //offsetof(DebugVertex, id);
+	vertexAttributs.push_back(attribDesc);	
 
 	CVulkanRHI::ShaderPaths shadowPassShaderpaths{};
-	shadowPassShaderpaths.shaderpath_vertex					= g_EnginePath + "/shaders/spirv/DebugDisplay.vert.spv";
-	shadowPassShaderpaths.shaderpath_fragment				= g_EnginePath + "/shaders/spirv/DebugDisplay.frag.spv";
+	shadowPassShaderpaths.shaderpath_vertex					= g_EnginePath /"shaders/spirv/DebugDisplay_Instanced.vert.spv";
+	shadowPassShaderpaths.shaderpath_fragment				= g_EnginePath /"shaders/spirv/DebugDisplay.frag.spv";
 	m_pipeline.pipeLayout									= p_Pipeline.pipeLayout;
 	m_pipeline.vertexInBinding								= vertexInputBinding;
 	m_pipeline.vertexAttributeDesc							= vertexAttributs;
@@ -395,25 +394,38 @@ bool CDebugDrawPass::Render(RenderData* p_renderData)
 	CRenderableDebug* debugRender								= p_renderData->fixedAssets->GetDebugRenderer();
 	const CPrimaryDescriptors* primaryDesc						= p_renderData->primaryDescriptors;
 
-	RETURN_FALSE_IF_FALSE(debugRender->PreDraw(m_rhi, scId, p_renderData->fixedAssets->GetFixedBuffers(), p_renderData->sceneGraph));	
-
-	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Debug Draw"));
-
+	// instanced indexed draw
+	RETURN_FALSE_IF_FALSE(debugRender->PreDrawInstanced(m_rhi, scId, p_renderData->fixedAssets->GetFixedBuffers(), p_renderData->sceneGraph, cmdBfr));
+	
+	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Debug Draw Instanced"));
 	m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
-
+	
 	m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
 	m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
-
+	
 	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
-
 	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
 	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_DebugDisplay, 1, debugRender->GetDescriptorSet(), 0, nullptr);
-
+	
 	VkDeviceSize offsets[1] = { 0 };
-	vkCmdBindVertexBuffers(cmdBfr, 0, 1, &debugRender->GetVertexBuffer(scId)->descInfo.buffer, offsets);
-	vkCmdBindIndexBuffer(cmdBfr, debugRender->GetIndexBuffer(scId)->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-	vkCmdDrawIndexed(cmdBfr, (uint32_t)debugRender->GetIndexBufferCount(), 1, 0, 0, 1);
+	vkCmdBindVertexBuffers(cmdBfr, 0, 1, &debugRender->GetVertexBuffer(0)->descInfo.buffer, offsets);
+	vkCmdBindIndexBuffer(cmdBfr, debugRender->GetIndexBuffer(0)->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+	
+	// Render bBoxes
+	{
+		CRenderableDebug::DebugDrawDetails drawDetails = debugRender->GetBBoxDrawDetails();
+		vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
+	}	
+	// Render bSpheres
+	{
+		CRenderableDebug::DebugDrawDetails drawDetails = debugRender->GetBSphereDrawDetails();
+		vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
+	}	
+	// Render bFrustums
+	{
+		CRenderableDebug::DebugDrawDetails drawDetails = debugRender->GetBFrustumDrawDetails();
+		vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
+	}
 	
 	m_rhi->EndRenderPass(cmdBfr);
 	m_rhi->EndCommandBuffer(cmdBfr);
@@ -423,7 +435,7 @@ bool CDebugDrawPass::Render(RenderData* p_renderData)
 
 void CDebugDrawPass::Destroy()
 {
-	// No need to destroy renderpass and frame buffers becuase they have been resused from forward pass.
+	// No need to destroy render pass and frame buffers because they have been reused from forward pass.
 	m_rhi->DestroyPipeline(m_pipeline);
 }
 
