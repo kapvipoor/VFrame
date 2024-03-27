@@ -19,20 +19,31 @@ public:
 	enum ParticipationType
 	{
 		  pt_none = 0
-		, pt_everyFrame = 1
-		, pt_onSelect = 2
+		, pt_everyFrame = 1		// Update loop is called every frame 
+		, pt_onSelect = 2		// Update loop is called every-time on click
 	};
 
-	CUIParticipant(ParticipationType pType);
+	// 
+	enum UIDPanelType
+	{
+			uipt_same	= 0		// Adds ui-content to the same panel
+		,	uipt_new	= 1		// Adds ui-content to a new panel
+	};
+
+	CUIParticipant(ParticipationType pPartType, UIDPanelType pPanelType ,std::string pPanelName = " ");
 	~CUIParticipant();
 
 	virtual void Show() = 0;
 
 	ParticipationType GetParticipationType() { return m_participationType; }
+	UIDPanelType GetPanelType() { return m_uIDPanelType; }
+	std::string GetPanelName() { return m_panelName; }
 protected:
 
 	bool m_updated;
 	ParticipationType m_participationType;
+	UIDPanelType m_uIDPanelType;
+	std::string m_panelName;
 
 	bool Header(const char* caption);
 	bool CheckBox(const char* caption, bool* value);
@@ -57,6 +68,9 @@ public:
 
 private:
 	static std::vector<CUIParticipant*> m_uiParticipants;
+
+	void BeginPanel(std::string p_panelName);
+	void EndPanel();
 };
 
 class CSelectionListener
@@ -69,11 +83,11 @@ public:
 	//virtual void OnSelectionChange(CEntity*) = 0;
 
 	CEntity* GetCurSelectEntity() { return m_selectedEntity; }
-	int GetSelectedSubMesh() { return m_selectedSubMeshIndex; }
+	int GetSelectedSubMeshId() { return m_selectedSubMeshId; }
 
 protected:
 	CEntity* m_selectedEntity;
-	int	m_selectedSubMeshIndex;
+	int	m_selectedSubMeshId;
 };
 
 class CSelectionBroadcast
@@ -83,7 +97,9 @@ public:
 	CSelectionBroadcast() {};
 	~CSelectionBroadcast();
 
-	void Broadcast(CSceneGraph* p_sceneGraph, int p_entityId);
+	// Triggered on selection
+	void BroadcastEntityId(CSceneGraph* p_sceneGraph, int p_entityId);
+	void BroadcastSubmeshId(CSceneGraph* p_sceneGraph, int p_submeshId);
 
 private:
 	static std::vector<CSelectionListener*> m_listeneers;
@@ -92,12 +108,6 @@ private:
 class CDebugData
 {
 public:
-	enum DebugType
-	{
-		 Box	= 0
-		,Sphere 
-	};
-
 	CDebugData();
 	~CDebugData() {};
 
@@ -107,12 +117,9 @@ public:
 	bool IsSubmeshDebugDrawEnabled() { return m_debugDrawSubmeshes; }
 	void SetSubmeshDebugDrawEnable(bool p_enable) { m_debugDrawSubmeshes = p_enable; }
 
-	DebugType GetDebugDataType() { return m_debugType; }
-
 protected:
 	bool m_debugDraw;
 	bool m_debugDrawSubmeshes;
-	DebugType m_debugType;
 };
  
 class CSceneGraph : public CDebugData
@@ -124,19 +131,20 @@ public:
 	enum SceneStatus
 	{
 			ss_NoChange = 0
-		,	ss_SceneMoved				// the submeshes have moved but have not changed the bounds of the scene
-		,	ss_BoundsChange				// the submeshes have moved and have chnaged the bounds of the scene
+		,	ss_SceneMoved				// the sub-meshes have moved but have not changed the bounds of the scene
+		,	ss_BoundsChange				// the sub-meshes have moved and have changed the bounds of the scene
 	};
 
 	CSceneGraph(CPerspectiveCamera*);
 	~CSceneGraph();
 
-	bool Update();
+	void Update();
 
 	static void RequestSceneBBoxUpdate();
 
 	static EntityList* GetEntities() { return &s_entities; };
 	void SetCurSelectEntityId(int p_id);
+	void SetCurSelectedSubMeshId(int p_id);
 
 	const BBox* GetBoundingBox() const { return &m_boundingBox; }
 
@@ -165,7 +173,7 @@ public:
 	CEntity(std::string p_name);
 	~CEntity() {}
 
-	virtual void Show(); //CUIParticipant virtual override
+	virtual void Show() override;
 
 	int	GetId() { return m_id; }
 	const char* GetName() { return m_name.c_str(); }
@@ -173,12 +181,8 @@ public:
 	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox = true) = 0;
 	nm::Transform& GetTransform();
 	
-	void SetBoundingBox(BBox p_bbox, bool p_bRecomputeSceneBBox = true);
-	BBox* GetBoundingBox() { return &m_boundingBox; }
-
-	uint32_t GetSubBoundingBoxCount() { return (uint32_t)m_subBoundingBoxes.size(); }
-	void SetSubBoundingBox(BBox p_bbox) { m_subBoundingBoxes.push_back(p_bbox); }
-	BBox* GetSubBoundingBox(uint32_t p_id) { return &(m_subBoundingBoxes[p_id]); }
+	void SetBoundingVolume(BVolume* p_bvol, bool p_bRecomputeSceneBBox = true);
+	BVolume* GetBoundingVolume() { return m_boundingVolume; }
 
 	bool IsDirty() { return m_dirty; }
 	void SetDirty(bool p_dirty) { m_dirty = p_dirty; }
@@ -191,8 +195,7 @@ protected:
 	uint32_t					m_id;
 	std::string					m_name;
 	nm::Transform				m_transform;
-	BBox						m_boundingBox;
-	std::vector<BBox>			m_subBoundingBoxes;
+	BVolume*					m_boundingVolume;
 
 	virtual void forPolymorphism() {};
 };
@@ -244,14 +247,14 @@ public:
 		, Point
 	};
 
-	CLight(std::string p_name, Type p_type, bool p_castShadow);
+	CLight(std::string p_name, Type p_type, float p_intensity, bool p_castShadow);
 	~CLight() {};
 
 	virtual bool Init(const CCamera::InitData&) = 0;
-	virtual bool Update(const CCamera::UpdateData&) = 0;
-	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox = true) = 0;
+	virtual bool Update(const CCamera::UpdateData&, const CSceneGraph*) = 0;
+	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox = true);
 
-	virtual void Show(); //CUIParticipant virtual override
+	virtual void Show() override;
 
 	Type GetType() { return m_type; }
 	bool IsCastsShadow() { return m_castShadow; }
@@ -272,15 +275,14 @@ protected:
 class CDirectionaLight : public CLight
 {
 public:
-	CDirectionaLight(std::string p_name, bool p_castShadow, nm::float3 p_direction);
 	CDirectionaLight(std::string p_name, bool p_castShadow, nm::float3 p_direction, float intensity, nm::float3 color);
 	~CDirectionaLight();
 
 	virtual bool Init(const CCamera::InitData&) override;
-	virtual bool Update(const CCamera::UpdateData&) override;
+	virtual bool Update(const CCamera::UpdateData&, const CSceneGraph*) override;
 	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox = true) override;
 
-	virtual void Show(); //CUIParticipant virtual override
+	virtual void Show() override;
 
 	COrthoCamera* GetShadowCamera() { return m_camera; }
 	nm::float3 GetDirection() { return m_direction; }
@@ -290,19 +292,18 @@ private:
 	nm::float3 m_direction;
 };
 
-
 class CPointLight : public CLight
 {
 public:
 	CPointLight(std::string p_name, bool p_castShadow, nm::float3 p_position, float intensity, nm::float3 color);
-	~CPointLight() {}
+	~CPointLight();
 
 	virtual bool Init(const CCamera::InitData&) override;
-	virtual bool Update(const CCamera::UpdateData&) override;
+	virtual bool Update(const CCamera::UpdateData&, const CSceneGraph*) override;
 
 	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox) override;
 
-	virtual void Show(); //CUIParticipant virtual override
+	virtual void Show() override;
 
 	nm::float3 GetPosition() { return m_position; }
 
@@ -320,12 +321,13 @@ public:
 		float color[3];
 		float intensity;
 		float vector3[3];
+		float viewProj[16];
 	};
 
 	CLights();
-	~CLights() {}
+	~CLights();
 
-	void Update(const CCamera::UpdateData& p_updateData);
+	void Update(const CCamera::UpdateData& p_updateData, const CSceneGraph*);
 	void CreateLight(CLight::Type p_type, const char* p_name, bool p_castShadow, nm::float3 p_color, float p_intensity, nm::float3 p_position);
 	void DestroyLights();
 

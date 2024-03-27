@@ -304,9 +304,9 @@ bool CVulkanCore::CreateSurface(HINSTANCE p_hnstns, HWND p_Hwnd)
 
 bool CVulkanCore::CreateSwapChain(VkFormat p_format, VkImageUsageFlags p_imageUsage)
 {
-	// Bruteforcing swapchain count to 2 without querying for capabilities
-	// Forcing presentaiton mode to FIFO without querying for support
-	VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
+	// Brute-forcing swapchain count to 2 without querying for capabilities
+	// Forcing presentation mode to immediate without querying for support
+	VkPresentModeKHR presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
 
 	VkSwapchainCreateInfoKHR swapChainCreateInfo{};
 	swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -945,7 +945,7 @@ bool CVulkanCore::CreateFence(VkFenceCreateFlags p_flags, VkFence& p_fence)
 {
 	VkFenceCreateInfo fenceinfo{};
 	fenceinfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fenceinfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+	fenceinfo.flags = p_flags;
 	VkResult res = vkCreateFence(m_vkDevice, &fenceinfo, nullptr, &p_fence);
 	if (res != VK_SUCCESS)
 	{

@@ -37,16 +37,17 @@ nm::float4 ComputeTangent(Vertex p_a, Vertex p_b, Vertex p_c)
 
 void ComputeBBox(BBox& p_bbox)
 {
-	p_bbox.bBox[0] = nm::float3{ p_bbox.bbMin[0], p_bbox.bbMin[1], p_bbox.bbMin[2] };
-	p_bbox.bBox[1] = nm::float3{ p_bbox.bbMax[0], p_bbox.bbMin[1], p_bbox.bbMin[2] };
-	p_bbox.bBox[2] = nm::float3{ p_bbox.bbMax[0], p_bbox.bbMax[1], p_bbox.bbMin[2] };
-	p_bbox.bBox[3] = nm::float3{ p_bbox.bbMin[0], p_bbox.bbMax[1], p_bbox.bbMin[2] };
-	p_bbox.bBox[4] = nm::float3{ p_bbox.bbMin[0], p_bbox.bbMin[1], p_bbox.bbMax[2] };
-	p_bbox.bBox[5] = nm::float3{ p_bbox.bbMax[0], p_bbox.bbMin[1], p_bbox.bbMax[2] };
-	p_bbox.bBox[6] = nm::float3{ p_bbox.bbMax[0], p_bbox.bbMax[1], p_bbox.bbMax[2] };
-	p_bbox.bBox[7] = nm::float3{ p_bbox.bbMin[0], p_bbox.bbMax[1], p_bbox.bbMax[2] };
+	//p_bbox.bBox[0] = nm::float3{ p_bbox.bbMin[0], p_bbox.bbMin[1], p_bbox.bbMin[2] };
+	//p_bbox.bBox[1] = nm::float3{ p_bbox.bbMax[0], p_bbox.bbMin[1], p_bbox.bbMin[2] };
+	//p_bbox.bBox[2] = nm::float3{ p_bbox.bbMax[0], p_bbox.bbMax[1], p_bbox.bbMin[2] };
+	//p_bbox.bBox[3] = nm::float3{ p_bbox.bbMin[0], p_bbox.bbMax[1], p_bbox.bbMin[2] };
+	//p_bbox.bBox[4] = nm::float3{ p_bbox.bbMin[0], p_bbox.bbMin[1], p_bbox.bbMax[2] };
+	//p_bbox.bBox[5] = nm::float3{ p_bbox.bbMax[0], p_bbox.bbMin[1], p_bbox.bbMax[2] };
+	//p_bbox.bBox[6] = nm::float3{ p_bbox.bbMax[0], p_bbox.bbMax[1], p_bbox.bbMax[2] };
+	//p_bbox.bBox[7] = nm::float3{ p_bbox.bbMin[0], p_bbox.bbMax[1], p_bbox.bbMax[2] };
 }
 
+// Heavily inspired from - http://www.songho.ca/opengl/gl_sphere.html
 void GenerateSphere(int p_stackCount, int p_sectorCount, RawSphere& p_sphere, float p_radius)
 {
 	p_sphere.indices.clear();
@@ -58,26 +59,15 @@ void GenerateSphere(int p_stackCount, int p_sectorCount, RawSphere& p_sphere, fl
 	float stackStep = nm::PI / p_stackCount;
 	float sectorAngle, stackAngle;
 
-	// generate CCW index list of sphere triangles
-	// k1--k1+1
-	// |  / |
-	// | /  |
-	// k2--k2+1
-	int k1, k2;
-
 	for (int i = 0; i <= p_stackCount; ++i)
 	{
 		stackAngle = nm::PI / 2 - i * stackStep;        // starting from pi/2 to -pi/2
 		xy = p_radius * cosf(stackAngle);             // r * cos(u)
 		z = p_radius * sinf(stackAngle);              // r * sin(u)
 
-		k1 = i * (p_stackCount + 1);     // beginning of current stack
-		k2 = k1 + p_stackCount + 1;      // beginning of next stack
-
-
 		// add (sectorCount+1) vertices per stack
 		// the first and last vertices have same position and normal, but different texture coordinates
-		for (int j = 0; j <= p_sectorCount; ++j, ++k1, ++k2)
+		for (int j = 0; j <= p_sectorCount; ++j)
 		{
 			sectorAngle = j * sectorStep;           // starting from 0 to 2pi
 
@@ -86,32 +76,46 @@ void GenerateSphere(int p_stackCount, int p_sectorCount, RawSphere& p_sphere, fl
 			y = xy * sinf(sectorAngle);             // r * cos(u) * sin(v)
 			//p_sphere.vertices.push_back(nm::float3(x, y, z));
 			p_sphere.vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{ x, y, z }[0]);
+		}
+	}
 
-			// 2 triangles per sector excluding first and last stacks
-			// k1 => k2 => k1+1
-			if(i != 0)
+	// indices
+	//  k1--k1+1
+	//  |  / |
+	//  | /  |
+	//  k2--k2+1
+	unsigned int k1, k2;
+	for (int i = 0; i < p_stackCount; ++i)
+	{
+		k1 = i * (p_sectorCount + 1);     // beginning of current stack
+		k2 = k1 + p_sectorCount + 1;      // beginning of next stack
+
+		for (int j = 0; j < p_sectorCount; ++j, ++k1, ++k2)
+		{
+			// 2 triangles per sector excluding 1st and last stacks
+			if (i != 0)
 			{
-			    p_sphere.indices.push_back(k1);
-			    p_sphere.indices.push_back(k2);
-			    p_sphere.indices.push_back(k1 + 1);
+				p_sphere.indices.push_back(k1);
+				p_sphere.indices.push_back(k2);
+				p_sphere.indices.push_back(k1 + 1);
+				//addIndices(k1, k2, k1 + 1);   // k1---k2---k1+1
 			}
 
-			// k1+1 => k2 => k2+1
-			if(i != (p_stackCount -1))
+			if (i != (p_stackCount - 1))
 			{
-			    p_sphere.indices.push_back(k1 + 1);
-			    p_sphere.indices.push_back(k2);
-			    p_sphere.indices.push_back(k2 + 1);
+				p_sphere.indices.push_back(k1 + 1);
+				p_sphere.indices.push_back(k2);
+				p_sphere.indices.push_back(k2 + 1);
+				//addIndices(k1 + 1, k2, k2 + 1); // k1+1---k2---k2+1
 			}
 
-			// store indices for lines
-			// vertical lines for all stacks, k1 => k2
+			// vertical lines for all stacks
 			p_sphere.lineIndices.push_back(k1);
 			p_sphere.lineIndices.push_back(k2);
-			if(i != 0)  // horizontal lines except 1st stack, k1 => k+1
+			if (i != 0)  // horizontal lines except 1st stack
 			{
-			    p_sphere.lineIndices.push_back(k1);
-			    p_sphere.lineIndices.push_back(k1 + 1);
+				p_sphere.lineIndices.push_back(k1);
+				p_sphere.lineIndices.push_back(k1 + 1);
 			}
 		}
 	}
@@ -177,7 +181,6 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 	{
 		const tinygltf::Node node = input.nodes[scene.nodes[n_id]];
 
-		objMesh.transform = nm::float4x4().identity();
 		//if (node.translation.size() == 3) {
 		//	objMesh.transform = objMesh.transform * nm::translation(nm::float3((float)node.translation[0], (float)node.translation[1], (float)node.translation[2]));
 		//}
@@ -317,7 +320,6 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 				objMesh.submeshes.push_back(submesh);
 
 				BBox meshbox(BBox::Type::Custom, BBox::Origin::Center, bbMin, bbMax);
-				ComputeBBox(meshbox);
 				objMesh.submeshesBbox.push_back(meshbox);
 				
 			}
@@ -339,14 +341,13 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 
 	objMesh.bbox = BBox(BBox::Type::Custom, BBox::Origin::Center, bbMin, bbMax);
 	BBox* meshBBox = &objMesh.bbox;
-	ComputeBBox(*meshBBox);
+	//ComputeBBox(*meshBBox);
 
 	
 	{
 		// correcting the translation of the mesh based on its min and max 
-		nm::float3 translationFactor = -(objMesh.bbox.bbMin + objMesh.bbox.bbMax) / 2.0f;
-		objMesh.transform = nm::translation(translationFactor);
-		
+		//nm::float3 translationFactor = -(objMesh.bbox.bbMin + objMesh.bbox.bbMax) / 2.0f;
+		//objMesh.transform.SetTranslate((nm::translation(translationFactor)));
 	}
 
 	p_objScene.meshList.push_back(objMesh);
@@ -565,50 +566,42 @@ VertexList BBox::GetVertexTempate()
 }
 
 BBox::BBox(Type p_type, Origin p_origin, nm::float3 p_min, nm::float3 p_max)
-	:unitBBoxTransform()
+	: BVolume(BVolume::BType::Box)
+	, unitBBoxTransform()
 {
 	Reset(p_type, p_origin, p_min, p_max);
+}
+
+// Note that we do not directly multiply the incoming transform with the unit
+// box transform. Because the unit box transform cannot be used to directly
+// multiply to. Its used a representation of transform required to render the
+// bounding box that ranges (-1,1) along x, y and z by default. The unit box
+// transform is multiplied to  this unit box to generate box of its logical
+// representation. Hence, the transform is multiplied to the min and mix of the
+// bounding box and a new min max generated (if there is also rotation). from
+// those values, a new unit box transform is computed.
+BBox BBox::operator*(nm::Transform const& p_transform)
+{
+	BBox box;
+	
+	std::vector<nm::float3> corners = CalculateCorners(this->bbMin, this->bbMax);
+	CalculateMinMaxfromCorners(corners, box.bbMin, box.bbMax, p_transform);
+	
+	box.unitBBoxTransform.SetTranslate(CalculateTranslate(box.bbMin, box.bbMax));
+	box.unitBBoxTransform.SetScale(CalculateScale(box.bbMin, box.bbMax));
+	
+	return box;
 }
 
 BBox BBox::operator*(nm::float4x4 const& p_transform)
 {
 	BBox box;
 
-	box.bbMin = (p_transform * nm::float4(this->bbMin, 1.0)).xyz();
-	box.bbMax = (p_transform * nm::float4(this->bbMax, 1.0)).xyz();
+	std::vector<nm::float3> corners = CalculateCorners(this->bbMin, this->bbMax);
+	CalculateMinMaxfromCorners(corners, box.bbMin, box.bbMax, p_transform);
 
-	box.CalculateCorners();
-	box.CalculateUnitBBoxTransform();
-
-	return box;
-}
-
-BBox BBox::operator*(nm::Transform const& p_transform)
-{
-	BBox box;
-	if (!(p_transform.GetRotate() == nm::float4x4().identity()))
-	{
-		for (int i = 0; i < 8; i++)
-		{
-			box.bBox[i] = (p_transform.GetTransform() * nm::float4(this->bBox[i], 1.0)).xyz();
-
-			box.bbMin[0] = (box.bbMin[0] <= box.bBox[i][0]) ? box.bbMin[0] : box.bBox[i][0];
-			box.bbMin[1] = (box.bbMin[1] <= box.bBox[i][1]) ? box.bbMin[1] : box.bBox[i][1];
-			box.bbMin[2] = (box.bbMin[2] <= box.bBox[i][2]) ? box.bbMin[2] : box.bBox[i][2];
-
-			box.bbMax[0] = (box.bbMax[0] > box.bBox[i][0]) ? box.bbMax[0] : box.bBox[i][0];
-			box.bbMax[1] = (box.bbMax[1] > box.bBox[i][1]) ? box.bbMax[1] : box.bBox[i][1];
-			box.bbMax[2] = (box.bbMax[2] > box.bBox[i][2]) ? box.bbMax[2] : box.bBox[i][2];
-		}
-	}
-	else
-	{
-		box.bbMin = (p_transform.GetTransform()  * nm::float4(this->bbMin, 1.0)).xyz();
-		box.bbMax = (p_transform.GetTransform() * nm::float4(this->bbMax, 1.0)).xyz();
-
-		box.CalculateCorners();
-		box.CalculateUnitBBoxTransform();
-	}
+	box.unitBBoxTransform.SetTranslate(CalculateTranslate(box.bbMin, box.bbMax));
+	box.unitBBoxTransform.SetScale(CalculateScale(box.bbMin, box.bbMax));
 
 	return box;
 }
@@ -632,8 +625,8 @@ void BBox::Merge(const BBox& that)
 	this->bbMax[1] = (this->bbMax[1] > that.bbMax[1]) ? this->bbMax[1] : that.bbMax[1];
 	this->bbMax[2] = (this->bbMax[2] > that.bbMax[2]) ? this->bbMax[2] : that.bbMax[2];
 
-	CalculateCorners();
-	CalculateUnitBBoxTransform();
+	unitBBoxTransform.SetTranslate(CalculateTranslate(bbMin, bbMax));
+	unitBBoxTransform.SetScale(CalculateScale(bbMin, bbMax));
 }
 
 // merge this with that
@@ -647,12 +640,13 @@ void BBox::Merge(const BSphere& that)
 	this->bbMax[1] = (this->bbMax[1] > (that.bsCenter[1] + that.bsRadius)) ? this->bbMax[1] : (that.bsCenter[1] + that.bsRadius);
 	this->bbMax[2] = (this->bbMax[2] > (that.bsCenter[2] + that.bsRadius)) ? this->bbMax[2] : (that.bsCenter[2] + that.bsRadius);
 
-	CalculateCorners();
-	CalculateUnitBBoxTransform();
+	unitBBoxTransform.SetScale(CalculateScale(bbMin, bbMax));
+	
 }
 
 void BBox::Reset(Type p_type, Origin p_origin, nm::float3 p_min, nm::float3 p_max)
 {
+	origin = p_origin;
 	bbMin = nm::float3{ 0.0f };
 	bbMax = nm::float3{ 0.0f };
 
@@ -660,22 +654,25 @@ void BBox::Reset(Type p_type, Origin p_origin, nm::float3 p_min, nm::float3 p_ma
 	{
 		bbMin = nm::float3{ -1.0f, -1.0f, -1.0f };
 		bbMax = nm::float3{ 1.0f, 1.0f, 1.0f };
+		unitBBoxTransform = nm::Transform();
 	}
 
 	if (p_origin == CameraStyle)
 	{
-		bbMin = nm::float3{ -1.0f, -1.0f, 0.0f };
-		bbMax = nm::float3{ 1.0f, 1.0f, 2.0f };
+		bbMin = nm::float3{ -1.0f, -1.0f, -1.0f };
+		bbMax = nm::float3{ 1.0f, 1.0f, 1.0f };
+		unitBBoxTransform = nm::Transform();
 	}
 
 	if (p_type == Custom)
 	{
 		bbMin = p_min;
 		bbMax = p_max;
+		nm::float4x4 translate = CalculateTranslate(p_min, p_max);
+		nm::float4x4 rotate = nm::float4x4::identity();
+		nm::float4x4 scale = CalculateScale(p_min, p_max);
+		unitBBoxTransform = nm::Transform(translate, rotate, scale);
 	}
-
-	CalculateCorners();
-	CalculateUnitBBoxTransform();
 }
 
 float BBox::GetDepth() const
@@ -695,27 +692,27 @@ float BBox::GetWidth() const
 
 bool BBox::isVisiable(BBox p_b)
 {
-	for (int i = 0; i < 8; i++)
-	{
-		if (p_b.bBox[i].x() > this->bbMin.x() && p_b.bBox[i].x() <= this->bbMax.x() &&
-			p_b.bBox[i].x() > this->bbMin.y() && p_b.bBox[i].y() <= this->bbMax.y() &&
-			p_b.bBox[i].x() > this->bbMin.z() && p_b.bBox[i].z() <= this->bbMax.z())
-		{
-			return true;
-		}
-	}
+	//for (int i = 0; i < 8; i++)
+	//{
+	//	if (p_b.bBox[i].x() > this->bbMin.x() && p_b.bBox[i].x() <= this->bbMax.x() &&
+	//		p_b.bBox[i].x() > this->bbMin.y() && p_b.bBox[i].y() <= this->bbMax.y() &&
+	//		p_b.bBox[i].x() > this->bbMin.z() && p_b.bBox[i].z() <= this->bbMax.z())
+	//	{
+	//		return true;
+	//	}
+	//}
 	return false;
 }
 
 bool BBox::isVisiable(BSphere p_s)
 {
-	for (int i = 0; i < 8; i++)
-	{
-		if (nm::distance(p_s.bsCenter, this->bBox[i]) <= p_s.bsRadius)
-		{
-			return true;
-		}
-	}
+	//for (int i = 0; i < 8; i++)
+	//{
+	//	if (nm::distance(p_s.bsCenter, this->bBox[i]) <= p_s.bsRadius)
+	//	{
+	//		return true;
+	//	}
+	//}
 	return false;
 }
 
@@ -724,51 +721,100 @@ nm::Transform BBox::GetUnitBBoxTransform() const
 	return unitBBoxTransform;
 }
 
-void BBox::CalculateUnitBBoxTransform()
+//void BBox::SetUnitBoxTranform(nm::float4x4 p_Transform)
+//{
+//	std::vector<nm::float3> corners = CalculateCorners(bbMin, bbMax);
+//	CalculateMinMaxfromCorners(corners, bbMin, bbMax, nm::Transform(p_Transform));
+//	nm::float4x4 offsetTransform = nm::float4x4::identity();
+//	if (origin == Origin::CameraStyle)
+//	{
+//		offsetTransform.column[2][2] = 0.5f;
+//		unitBBoxTransform = nm::Transform(p_Transform * offsetTransform);
+//		
+//		nm::float4x4 withTranslation = unitBBoxTransform.GetTransform();
+//		withTranslation.column[3][2] -= (bbMax[2])/3.0f;
+//		unitBBoxTransform = nm::Transform(withTranslation);
+//	}
+//	else
+//	{
+//		unitBBoxTransform = nm::Transform(p_Transform * offsetTransform);
+//	}
+//}
+
+std::vector<nm::float3> BBox::CalculateCorners(nm::float3 p_bbMin, nm::float3 p_bbMax)
 {
-	// This function assumes the bounding-box to be of unit size
-	// and calculates scaling and translation factor of this
-	// box with min and max values. 
-	nm::float4x4 scale = nm::float4x4::identity();
-	scale.column[0][0] = (bbMax.x() - bbMin.x())/2.0f;
-	scale.column[1][1] = (bbMax.y() - bbMin.y())/2.0f;
-	scale.column[2][2] = (bbMax.z() - bbMin.z())/2.0f;
-	scale.column[3][3] = 1.0f;
-	unitBBoxTransform.SetScale(scale);
-	
-	nm::float4 translate = (nm::float4(bbMax, 1.0f) + nm::float4(bbMin, 1.0f))/2.0f;
-	unitBBoxTransform.SetTranslate(translate);
+	std::vector<nm::float3> bBox(8, nm::float3());
+	bBox[0] = nm::float3{ p_bbMin[0], p_bbMin[1], p_bbMin[2] };
+	bBox[1] = nm::float3{ p_bbMax[0], p_bbMin[1], p_bbMin[2] };
+	bBox[2] = nm::float3{ p_bbMax[0], p_bbMax[1], p_bbMin[2] };
+	bBox[3] = nm::float3{ p_bbMin[0], p_bbMax[1], p_bbMin[2] };
+	bBox[4] = nm::float3{ p_bbMin[0], p_bbMin[1], p_bbMax[2] };
+	bBox[5] = nm::float3{ p_bbMax[0], p_bbMin[1], p_bbMax[2] };
+	bBox[6] = nm::float3{ p_bbMax[0], p_bbMax[1], p_bbMax[2] };
+	bBox[7] = nm::float3{ p_bbMin[0], p_bbMax[1], p_bbMax[2] };
+	return bBox;
 }
 
-void BBox::CalculateCorners()
+void BBox::CalculateMinMaxfromCorners(std::vector<nm::float3> p_corners, nm::float3& p_min, nm::float3& p_max, nm::Transform p_transform)
 {
-	bBox[0] = nm::float3{ bbMin[0], bbMin[1], bbMin[2] };
-	bBox[1] = nm::float3{ bbMax[0], bbMin[1], bbMin[2] };
-	bBox[2] = nm::float3{ bbMax[0], bbMax[1], bbMin[2] };
-	bBox[3] = nm::float3{ bbMin[0], bbMax[1], bbMin[2] };
-	bBox[4] = nm::float3{ bbMin[0], bbMin[1], bbMax[2] };
-	bBox[5] = nm::float3{ bbMax[0], bbMin[1], bbMax[2] };
-	bBox[6] = nm::float3{ bbMax[0], bbMax[1], bbMax[2] };
-	bBox[7] = nm::float3{ bbMin[0], bbMax[1], bbMax[2] };
+	p_min = nm::float3{};
+	p_max = nm::float3{};
+
+	if (p_corners.empty())
+	{
+		std::cerr << "BBox::CalculateMinMaxfromCorners p_corners is empty" << std::endl;
+		return;
+	}
+
+	if (p_corners.size() != 8)
+	{
+		std::cerr << "BBox::CalculateMinMaxfromCorners p_corners != 8" << std::endl;
+		return;
+	}
+
+	//for (auto& corner : p_corners)
+	for (int i = 0; i < 8; i++)
+	{
+		nm::float3 corner = (p_transform.GetTransform() * nm::float4(p_corners[i], 1.0)).xyz();
+		if (i == 0)
+		{
+			p_min = corner;
+			p_max = corner;
+		}
+
+		p_min[0] = (p_min[0] <= corner[0]) ? p_min[0] : corner[0];
+		p_min[1] = (p_min[1] <= corner[1]) ? p_min[1] : corner[1];
+		p_min[2] = (p_min[2] <= corner[2]) ? p_min[2] : corner[2];
+
+		p_max[0] = (p_max[0] > corner[0]) ? p_max[0] : corner[0];
+		p_max[1] = (p_max[1] > corner[1]) ? p_max[1] : corner[1];
+		p_max[2] = (p_max[2] > corner[2]) ? p_max[2] : corner[2];
+	}
+}
+
+nm::float4x4 BBox::CalculateScale(nm::float3 p_min, nm::float3 p_max)
+{
+	nm::float4x4 scale = nm::float4x4::identity();
+	scale.column[0][0] = (p_max.x() - p_min.x())/2.0f;
+	scale.column[1][1] = (p_max.y() - p_min.y())/2.0f;
+	scale.column[2][2] = (p_max.z() - p_min.z())/2.0f;
+	scale.column[3][3] = 1.0f;
+	return scale;
+}
+
+nm::float4x4 BBox::CalculateTranslate(nm::float3 p_min, nm::float3 p_max)
+{
+	nm::float4x4 transate = nm::float4x4::identity();
+	nm::float4 translateVec = (nm::float4(p_min, 1.0f) + nm::float4(p_max, 1.0f)) / 2.0f;
+	transate.column[3] = translateVec;
+	return transate;
 }
 
 BSphere::BSphere()
+	: BVolume(BVolume::BType::Sphere)
 {
 	bsCenter = nm::float3(0.0f, 0.0f, 0.0f);
 	bsRadius = 1.0f;
-}
-
-BSphere BSphere::operator*(nm::Transform const& p_transform)
-{
-	BSphere bSphere;
-	if (!(p_transform.GetRotate() == nm::float4x4().identity()))
-	{
-		bSphere.bsCenter = const_cast<nm::Transform*>(&p_transform)->GetTranslateVector();
-	}
-
-	bsBox = bsBox * p_transform;
-
-	return bSphere;
 }
 
 bool BSphere::operator==(const BSphere& other)
@@ -781,13 +827,13 @@ bool BSphere::operator==(const BSphere& other)
 
 bool BSphere::isVisiable(BBox p_b)
 {
-	for (int i = 0; i < 8; i++)
-	{
-		if (nm::distance(this->bsCenter, p_b.bBox[i]) <= this->bsRadius)
-		{
-			return true;
-		}
-	}
+	//for (int i = 0; i < 8; i++)
+	//{
+	//	if (nm::distance(this->bsCenter, p_b.bBox[i]) <= this->bsRadius)
+	//	{
+	//		return true;
+	//	}
+	//}
 	return false;
 }
 
@@ -799,3 +845,40 @@ bool BSphere::isVisiable(BSphere p_s)
 	}
 	return true;
 }
+
+std::vector<int> BFrustum::GetIndexTemplate()
+{
+	std::vector<int> indexTemplate{ 0, 1, 2, 3, 4, 5, 6, 7, 0, 4, 1, 5, 2, 6, 3, 7, 1, 2, 3, 0, 5, 6, 7, 4 };
+	return indexTemplate;
+}
+
+VertexList BFrustum::GetVertexTempate()
+{
+	VertexList vertices(Vertex::AttributeFlag::position);
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{ -1.0f,		-1.0f,		0.0f } [0] );
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{ 1.0f,		-1.0f,		0.0f } [0] );
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{ 1.0f,		1.0f,		0.0f } [0] );
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{ -1.0f,		1.0f,		0.0f } [0] );
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{ -1.0f,		-1.0f,		1.0f } [0] );
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{ 1.0f,		-1.0f,		1.0f } [0] );
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{ 1.0f,		1.0f,		1.0f } [0] );
+	vertices.AddVertex(Vertex::AttributeFlag::position, &nm::float3{ -1.0f,		1.0f,		1.0f } [0] );
+	return vertices;
+}
+
+BFrustum::BFrustum(nm::float4x4 p_viewProj)
+	: BVolume(BVolume::BType::Frustum)
+	, viewProjection(p_viewProj)
+{
+}
+
+/*
+BFrustum BFrustum::operator*(nm::float4x4 const& p_transform)
+{
+	BFrustum frustum;
+	for (int i = 0; i < 8; i++)
+	{
+		frustum.corners[i] = (p_transform * nm::float4(frustum.corners[i], 1.0f)).xyz();
+	}
+	return frustum;
+}*/

@@ -219,18 +219,6 @@ bool CUIPass::Render(RenderData* p_renderData)
 
 	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
 
-	{
-		CRenderableUI::UIPushConstant pc{};
-		pc.scale[0]								= (2.0f / drawData->DisplaySize.x);
-		pc.scale[1]								= (2.0f / drawData->DisplaySize.y);
-
-		pc.offset[0]							= (-1.0f - drawData->DisplayPos.x * pc.scale[0]);
-		pc.offset[1]							= (-1.0f - drawData->DisplayPos.y * pc.scale[1]);
-
-		VkPipelineStageFlags stgFlags			= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-		vkCmdPushConstants(cmdBfr, m_pipeline.pipeLayout, stgFlags, 0, sizeof(CRenderableUI::UIPushConstant), (void*)&pc);
-	}
-
 	// Bind Vertex And Index Buffer:
 	if (drawData->TotalVtxCount > 0)
 	{
@@ -255,6 +243,20 @@ bool CUIPass::Render(RenderData* p_renderData)
 		for (int cmd_i = 0; cmd_i < cmdList->CmdBuffer.Size; cmd_i++)
 		{
 			const ImDrawCmd* pcmd = &cmdList->CmdBuffer[cmd_i];
+			{
+				CRenderableUI::UIPushConstant pc{};
+				pc.scale[0] = (2.0f / drawData->DisplaySize.x);
+				pc.scale[1] = (2.0f / drawData->DisplaySize.y);
+
+				pc.offset[0] = (-1.0f - drawData->DisplayPos.x * pc.scale[0]);
+				pc.offset[1] = (-1.0f - drawData->DisplayPos.y * pc.scale[1]);
+
+				uint32_t texId = *static_cast<uint32_t*>(pcmd->TextureId);
+				pc.binding_textureId = texId;
+
+				VkPipelineStageFlags stgFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+				vkCmdPushConstants(cmdBfr, m_pipeline.pipeLayout, stgFlags, 0, sizeof(CRenderableUI::UIPushConstant), (void*)&pc);
+			}
 
 			{
 				// Project scissor/clipping rectangles into frame buffer space
@@ -347,43 +349,21 @@ bool CDebugDrawPass::CreatePipeline(CVulkanRHI::Pipeline p_Pipeline)
 	VkVertexInputBindingDescription vertexInputBinding		= {};
 	vertexInputBinding.binding								= 0;	
 	vertexInputBinding.inputRate							= VK_VERTEX_INPUT_RATE_VERTEX;
-#ifdef INSTANCED_DEBUG_DRAW
 	vertexInputBinding.stride								= sizeof(float) * debugInstancedVertex.GetVertexSize(); //sizeof(DebugVertex);
-#else
-	vertexInputBinding.stride								= sizeof(float) * debugVertex.GetVertexSize(); //sizeof(DebugVertex);
-#endif
 
 	//	layout (location = 0) in vec3 pos;
 	//	layout (location = 1) in int entity id;
 	std::vector<VkVertexInputAttributeDescription> vertexAttributs;
 	// Attribute location 0: pos
 	VkVertexInputAttributeDescription attribDesc{};
-#ifdef INSTANCED_DEBUG_DRAW
 	attribDesc.binding										= 0;
 	attribDesc.location										= 0;
 	attribDesc.format										= VK_FORMAT_R32G32B32_SFLOAT;
 	attribDesc.offset										= sizeof(float) * debugInstancedVertex.GetOffsetOf(Vertex::AttributeFlag::position); //offsetof(DebugVertex, id);
 	vertexAttributs.push_back(attribDesc);	
-#else
-	attribDesc.binding										= 0;
-	attribDesc.location										= 0;
-	attribDesc.format										= VK_FORMAT_R32G32B32_SFLOAT;
-	attribDesc.offset										= sizeof(float) * debugVertex.GetOffsetOf(Vertex::AttributeFlag::position);//offsetof(DebugVertex, pos);
-	vertexAttributs.push_back(attribDesc);
-
-	attribDesc.binding										= 0;
-	attribDesc.location										= 1;
-	attribDesc.format										= VK_FORMAT_R32_SINT;
-	attribDesc.offset										= sizeof(float) * debugVertex.GetOffsetOf(Vertex::AttributeFlag::id); //offsetof(DebugVertex, id);
-	vertexAttributs.push_back(attribDesc);
-#endif
 
 	CVulkanRHI::ShaderPaths shadowPassShaderpaths{};
-#ifdef INSTANCED_DEBUG_DRAW
 	shadowPassShaderpaths.shaderpath_vertex					= g_EnginePath /"shaders/spirv/DebugDisplay_Instanced.vert.spv";
-#else
-	shadowPassShaderpaths.shaderpath_vertex					= g_EnginePath /"shaders/spirv/DebugDisplay.vert.spv";
-#endif
 	shadowPassShaderpaths.shaderpath_fragment				= g_EnginePath /"shaders/spirv/DebugDisplay.frag.spv";
 	m_pipeline.pipeLayout									= p_Pipeline.pipeLayout;
 	m_pipeline.vertexInBinding								= vertexInputBinding;
@@ -415,67 +395,41 @@ bool CDebugDrawPass::Render(RenderData* p_renderData)
 	const CPrimaryDescriptors* primaryDesc						= p_renderData->primaryDescriptors;
 
 	// instanced indexed draw
-#ifdef INSTANCED_DEBUG_DRAW
+	RETURN_FALSE_IF_FALSE(debugRender->PreDrawInstanced(m_rhi, scId, p_renderData->fixedAssets->GetFixedBuffers(), p_renderData->sceneGraph, cmdBfr));
+	
+	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Debug Draw Instanced"));
+	m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
+	
+	m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
+	m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
+	
+	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
+	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_DebugDisplay, 1, debugRender->GetDescriptorSet(), 0, nullptr);
+	
+	VkDeviceSize offsets[1] = { 0 };
+	vkCmdBindVertexBuffers(cmdBfr, 0, 1, &debugRender->GetVertexBuffer(0)->descInfo.buffer, offsets);
+	vkCmdBindIndexBuffer(cmdBfr, debugRender->GetIndexBuffer(0)->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+	
+	// Render bBoxes
 	{
-		RETURN_FALSE_IF_FALSE(debugRender->PreDrawInstanced(m_rhi, scId, p_renderData->fixedAssets->GetFixedBuffers(), p_renderData->sceneGraph, cmdBfr));
-
-		RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Debug Draw Instanced"));
-
-		m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
-
-		m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
-		m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
-
-		vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
-
-		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_DebugDisplay, 1, debugRender->GetDescriptorSet(), 0, nullptr);
-		
-		VkDeviceSize offsets[1] = { 0 };
-		vkCmdBindVertexBuffers(cmdBfr, 0, 1, &debugRender->GetVertexBuffer(0)->descInfo.buffer, offsets);
-		vkCmdBindIndexBuffer(cmdBfr, debugRender->GetIndexBuffer(0)->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-		// Render bBoxes
-		{
-			CRenderableDebug::DebugDrawDetails drawDetails = debugRender->GetBBoxDrawDetails();
-			vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
-		}
-
-		// Render bSpheres
-		{
-			CRenderableDebug::DebugDrawDetails drawDetails = debugRender->GetBSphereDrawDetails();
-			vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
-		}
-
-		m_rhi->EndRenderPass(cmdBfr);
-		m_rhi->EndCommandBuffer(cmdBfr);
-	}
-#else
+		CRenderableDebug::DebugDrawDetails drawDetails = debugRender->GetBBoxDrawDetails();
+		vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
+	}	
+	// Render bSpheres
 	{
-		RETURN_FALSE_IF_FALSE(debugRender->PreDraw(m_rhi, scId, p_renderData->fixedAssets->GetFixedBuffers(), p_renderData->sceneGraph));
-
-		RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Debug Draw"));
-
-		m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
-
-		m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
-		m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
-
-		vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
-
-		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_DebugDisplay, 1, debugRender->GetDescriptorSet(), 0, nullptr);
-
-		VkDeviceSize offsets[1] = { 0 };
-		vkCmdBindVertexBuffers(cmdBfr, 0, 1, &debugRender->GetVertexBuffer(scId)->descInfo.buffer, offsets);
-		vkCmdBindIndexBuffer(cmdBfr, debugRender->GetIndexBuffer(scId)->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-		vkCmdDrawIndexed(cmdBfr, (uint32_t)debugRender->GetIndexBufferCount(), 1, 0, 0, 1);
-
-		m_rhi->EndRenderPass(cmdBfr);
-		m_rhi->EndCommandBuffer(cmdBfr);
+		CRenderableDebug::DebugDrawDetails drawDetails = debugRender->GetBSphereDrawDetails();
+		vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
+	}	
+	// Render bFrustums
+	{
+		CRenderableDebug::DebugDrawDetails drawDetails = debugRender->GetBFrustumDrawDetails();
+		vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
 	}
-#endif
+	
+	m_rhi->EndRenderPass(cmdBfr);
+	m_rhi->EndCommandBuffer(cmdBfr);
+	
 	return true;
 }
 

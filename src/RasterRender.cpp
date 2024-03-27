@@ -9,14 +9,16 @@
 //nm::float4 g_sunDirection = nm::float4(0.0f, 1.0f, 0.0f, 0.0f);// -93.83f);
 
 CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_height_, int window_scale)
-		:CWinCore(name, screen_width_, screen_height_, window_scale)
-		, m_pickObject(false)
+	: CWinCore(name, screen_width_, screen_height_, window_scale)
+	, m_pickObject(false)
+	, m_activeAcquireSemaphore(VK_NULL_HANDLE)
+	, m_activeCmdBfrFreeFence(VK_NULL_HANDLE)
 
 {			
 	m_rhi					= new CVulkanRHI(name, screen_width_, screen_height_);
 
 	m_primaryCamera			= new CPerspectiveCamera();
-	m_sunLight				= new CDirectionaLight("Sunlight", true, nm::float3(0.0f, 1.0f, 0.0f));
+	//m_sunLight				= new CDirectionaLight("Sunlight", true, nm::float3(0.0f, 1.0f, 0.0f));
 
 	m_sceneGraph			= new CSceneGraph(m_primaryCamera);
 
@@ -39,7 +41,7 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 
 CRasterRender::~CRasterRender() 
 {
-	delete m_sunLight;
+	//delete m_sunLight;
 	//delete m_sunLightCamera;
 	delete m_primaryCamera;
 
@@ -69,7 +71,6 @@ void CRasterRender::on_destroy()
 	m_uiPass->Destroy();
 	m_toneMapPass->Destroy();
 	m_debugDrawPass->Destroy();
-	m_ssaoBlurPass->Destroy();
 	m_ssaoBlurPass->Destroy();
 	m_ssaoComputePass->Destroy();
 	m_deferredLightPass->Destroy();
@@ -130,18 +131,13 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 
 		RETURN_FALSE_IF_FALSE(m_rhi->ResetFence(m_vkFenceCmdBfrFree[0]));
 
-		VkPipelineStageFlags waitstage{ VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
-		VkSubmitInfo submitInfo{};
-		VkQueue cmdQueue							= m_rhi->GetQueue(0);
-		submitInfo.sType							= VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.commandBufferCount				= 1;
-		submitInfo.pCommandBuffers					= &m_vkCmdBfr[0][0];
-		submitInfo.pSignalSemaphores				= VK_NULL_HANDLE;
-		submitInfo.signalSemaphoreCount				= 0;
-		submitInfo.pWaitSemaphores					= VK_NULL_HANDLE;
-		submitInfo.waitSemaphoreCount				= 0;
-		submitInfo.pWaitDstStageMask				= &waitstage;
-		RETURN_FALSE_IF_FALSE(m_rhi->SubmitCommandbuffer(cmdQueue, &submitInfo, 1, m_vkFenceCmdBfrFree[0]));
+		CVulkanRHI::CommandBufferList cbrList{ m_vkCmdBfr[0][0] };
+		CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
+		bool waitForFinish = false;
+		RETURN_FALSE_IF_FALSE(m_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish, &m_vkFenceCmdBfrFree[0]));
+	
+	if (!m_rhi->ResetFence(m_vkFenceCmdBfrFree[0]))
+		return false;
 	}
 
 	RETURN_FALSE_IF_FALSE(InitCamera());
@@ -151,12 +147,8 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 
 bool CRasterRender::on_update(float delta)
 {
-	RETURN_FALSE_IF_FALSE(m_rhi->AcquireNextSwapChain(m_vkswapchainAcquireSemaphore, m_swapchainIndex));
-	if (!m_rhi->WaitFence(m_vkFenceCmdBfrFree[m_swapchainIndex]))
-		return false;
-
-	if (!m_rhi->ResetFence(m_vkFenceCmdBfrFree[m_swapchainIndex]))
-		return false;
+	m_activeAcquireSemaphore = GetAvailableAcquireSemaphore(m_activeAcquireSemaphore);
+	RETURN_FALSE_IF_FALSE(m_rhi->AcquireNextSwapChain(m_activeAcquireSemaphore, m_swapchainIndex));
 
 	m_sceneGraph->Update();
 
@@ -181,9 +173,9 @@ bool CRasterRender::on_update(float delta)
 		uniformData.mousePos						= nm::float2((float)mousepos_x, (float)mousepos_y);
 		uniformData.renderRes						= nm::float2((float)m_rhi->GetRenderWidth(), (float)m_rhi->GetRenderHeight());
 		uniformData.skyboxModelView					= m_primaryCamera->GetView();
-		uniformData.sunDirViewSpace					= (m_primaryCamera->GetView() * nm::float4(m_sunLight->GetShadowCamera()->GetLookAt(), 1.0f)).xyz();
-		uniformData.sunDirWorldSpace				= m_sunLight->GetShadowCamera()->GetLookAt();
-		uniformData.sunViewProj						= m_sunLight->GetShadowCamera()->GetViewProj();
+		//uniformData.sunDirViewSpace					= (m_primaryCamera->GetView() * nm::float4(m_sunLight->GetShadowCamera()->GetLookAt(), 1.0f)).xyz();
+		//uniformData.sunDirWorldSpace				= m_sunLight->GetShadowCamera()->GetLookAt();
+		//uniformData.sunViewProj						= m_sunLight->GetShadowCamera()->GetViewProj();
 		//uniformData.sunIntensity					= 10.0f; // no need for update, this is updated from the user interface
 
 		FixedUpdateData fixedUpdate{};
@@ -224,6 +216,19 @@ bool CRasterRender::on_update(float delta)
 		m_toneMapPass->Update(&updateData);
 		m_uiPass->Update(&updateData);
 	}
+	
+	// This code path does not work ATM because we are presenting outdated
+	// descriptors hence all meshed in the scene look to be updating on delayed
+	// descriptors when the camera moves
+	m_activeCmdBfrFreeFence = WaitForFinishIfNecessary(m_activeCmdBfrFreeFence);
+
+	// We are forcing a CPU-GPU sync here for now. Without this sync we 
+	// are rendering with outdated descriptor data.
+	//if (!m_rhi->WaitFence(m_vkFenceCmdBfrFree[m_swapchainIndex]))
+	//	return false;
+	//
+	//if (!m_rhi->ResetFence(m_vkFenceCmdBfrFree[m_swapchainIndex]))
+	//	return false;
 
 	if (m_rhi->GetRendererType() == CVulkanRHI::RendererType::Forward)
 	{
@@ -241,18 +246,14 @@ bool CRasterRender::on_update(float delta)
 			return false;
 	}
 
-	CVulkanRHI::Queue queue						= m_rhi->GetQueue(0);
-	VkPipelineStageFlags waitstage{ VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType							= VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount				= (uint32_t)m_cmdBfrsInUse.size();
-	submitInfo.pCommandBuffers					= m_cmdBfrsInUse.data();
-	submitInfo.pSignalSemaphores				= &m_vksubmitCompleteSemaphore;
-	submitInfo.signalSemaphoreCount				= 1;
-	submitInfo.pWaitSemaphores					= &m_vkswapchainAcquireSemaphore;
-	submitInfo.waitSemaphoreCount				= 1;
-	submitInfo.pWaitDstStageMask				= &waitstage;
-	RETURN_FALSE_IF_FALSE(m_rhi->SubmitCommandbuffer(queue, &submitInfo, 1, m_vkFenceCmdBfrFree[m_swapchainIndex]));
+	CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
+	bool waitForFinish = false;
+	bool waitForFence = false;
+	CVulkanRHI::SemaphoreList signalList{ m_vksubmitCompleteSemaphore };
+	CVulkanRHI::SemaphoreList waitList{ m_activeAcquireSemaphore };
+	RETURN_FALSE_IF_FALSE(m_rhi->SubmitCommandBuffers(
+		&m_cmdBfrsInUse, &psfList, waitForFinish, &m_vkFenceCmdBfrFree[m_swapchainIndex], waitForFence, &signalList, &waitList));
+
 	m_cmdBfrsInUse.clear();
 
 	if (m_pickObject)
@@ -287,6 +288,41 @@ void CRasterRender::on_present()
 	}
 }
 
+VkSemaphore CRasterRender::GetAvailableAcquireSemaphore(VkSemaphore p_in)
+{
+	return (p_in == m_vkswapchainAcquireSemaphore[1] || p_in == VK_NULL_HANDLE) ? m_vkswapchainAcquireSemaphore[0] : m_vkswapchainAcquireSemaphore[1];
+}
+
+VkFence CRasterRender::WaitForFinishIfNecessary(VkFence p_in)
+{
+	if (p_in == m_vkFenceCmdBfrFree[0])
+	{
+		if (m_swapchainIndex == 0) 
+		{
+			m_rhi->WaitFence(p_in);
+			m_rhi->ResetFence(p_in);
+			return m_vkFenceCmdBfrFree[1];
+		}
+		return p_in;
+	}
+		
+	if (p_in == m_vkFenceCmdBfrFree[1])
+	{
+		if(m_swapchainIndex == 1)
+		{
+			m_rhi->WaitFence(p_in);
+			m_rhi->ResetFence(p_in);
+			return m_vkFenceCmdBfrFree[0];
+		}
+		return p_in;
+	}
+
+	if (p_in == VK_NULL_HANDLE)
+		return m_vkFenceCmdBfrFree[0];
+
+	return p_in;
+}
+
 bool CRasterRender::InitCamera()
 {
 	CPerspectiveCamera::PerpspectiveInitdData persIntData{};
@@ -301,37 +337,40 @@ bool CRasterRender::InitCamera()
 	persIntData.pitch							= 0.0f;							
 	RETURN_FALSE_IF_FALSE( m_primaryCamera->Init(&persIntData));
 
-	COrthoCamera::OrthInitdData orthoInit{};
-	orthoInit.lookFrom							= nm::float4(0.0f);
-	orthoInit.lrbt								= nm::float4{ -50.0f, 50.0f, -50.0f, 50.0f };
-	orthoInit.nearPlane							= 0;
-	orthoInit.farPlane							= 50;
-	orthoInit.yaw								= 0.0f;
-	orthoInit.pitch								= 0.0f;
-	RETURN_FALSE_IF_FALSE(m_sunLight->Init(orthoInit));
+	//COrthoCamera::OrthInitdData orthoInit{};
+	//orthoInit.lookFrom							= nm::float4(0.0f);
+	//orthoInit.lrbt								= nm::float4{ -50.0f, 50.0f, -50.0f, 50.0f };
+	//orthoInit.nearPlane							= 0;
+	//orthoInit.farPlane							= 50;
+	//orthoInit.yaw								= 0.0f;
+	//orthoInit.pitch								= 0.0f;
+	//RETURN_FALSE_IF_FALSE(m_sunLight->Init(orthoInit));
 
 	return true;
 }
 
 bool CRasterRender::CreateSyncPremitives()
 {
-	RETURN_FALSE_IF_FALSE(m_rhi->CreateSemaphor(m_vkswapchainAcquireSemaphore));
+	for (int i = 0; i < FRAME_BUFFER_COUNT; i++)
+	{
+		RETURN_FALSE_IF_FALSE(m_rhi->CreateSemaphor(m_vkswapchainAcquireSemaphore[i]));
+		RETURN_FALSE_IF_FALSE(m_rhi->CreateFence(VK_FENCE_CREATE_SIGNALED_BIT, m_vkFenceCmdBfrFree[i]));
+		m_rhi->ResetFence(m_vkFenceCmdBfrFree[i]);
+	}
 
 	RETURN_FALSE_IF_FALSE(m_rhi->CreateSemaphor(m_vksubmitCompleteSemaphore));
-
-	RETURN_FALSE_IF_FALSE(m_rhi->CreateFence(VK_FENCE_CREATE_SIGNALED_BIT, m_vkFenceCmdBfrFree[0]));
-
-	RETURN_FALSE_IF_FALSE(m_rhi->CreateFence(VK_FENCE_CREATE_SIGNALED_BIT, m_vkFenceCmdBfrFree[1]));
 
 	return true;
 }
 
 void CRasterRender::DestroySyncPremitives()
 {
-	m_rhi->DestroySemaphore(m_vkswapchainAcquireSemaphore);
+	for (int i = 0; i < FRAME_BUFFER_COUNT; i++)
+	{
+		m_rhi->DestroySemaphore(m_vkswapchainAcquireSemaphore[i]);
+		m_rhi->DestroyFence(m_vkFenceCmdBfrFree[i]);
+	}
 	m_rhi->DestroySemaphore(m_vksubmitCompleteSemaphore);
-	m_rhi->DestroyFence(m_vkFenceCmdBfrFree[0]);
-	m_rhi->DestroyFence(m_vkFenceCmdBfrFree[1]);
 }
 
 bool CRasterRender::CreatePasses()
@@ -466,31 +505,31 @@ void CRasterRender::UpdateSceneGraphDependencies(float p_delta)
 {
 	// if the scene bounds have changed (this happens when an entity moves out of scene bounds in the previous frame) 
 	// sunlight's camera is re-initialized with new scene bounding metrics. Their view and projection matrices are recalculated
-	if (m_sceneGraph->GetSceneStatus() == CSceneGraph::SceneStatus::ss_BoundsChange)
-	{
-		// shadow camera by default will always look downwards, like sun at 12 o'clock
-		const BBox* sceneBB = m_sceneGraph->GetBoundingBox();
+	//if (m_sceneGraph->GetSceneStatus() == CSceneGraph::SceneStatus::ss_BoundsChange)
+	//{
+	//	// shadow camera by default will always look downwards, like sun at 12 o'clock
+	//	const BBox* sceneBB = m_sceneGraph->GetBoundingBox();
 
-		COrthoCamera::OrthInitdData initData{};
-		initData.lookFrom = nm::float4(0.0f);
-		initData.lrbt = nm::float4{ -sceneBB->GetWidth() / 2.0f, sceneBB->GetWidth() / 2.0f, -sceneBB->GetDepth() / 2.0f, sceneBB->GetDepth() / 2.0f };
-		initData.nearPlane = 0;
-		initData.farPlane = sceneBB->GetHeight();
-		initData.yaw = 0.0f;
-		initData.pitch = 0.0f;
-		m_sunLight->Init(initData);
+	//	COrthoCamera::OrthInitdData initData{};
+	//	initData.lookFrom = nm::float4(0.0f);
+	//	initData.lrbt = nm::float4{ -sceneBB->GetWidth() / 2.0f, sceneBB->GetWidth() / 2.0f, -sceneBB->GetDepth() / 2.0f, sceneBB->GetDepth() / 2.0f };
+	//	initData.nearPlane = 0;
+	//	initData.farPlane = sceneBB->GetHeight();
+	//	initData.yaw = 0.0f;
+	//	initData.pitch = 0.0f;
+	//	m_sunLight->Init(initData);
 
-		nm::float3 sunLightDirection = m_sunLight->GetDirection();
-		
-		nm::Transform transform = m_sunLight->GetTransform();
-		transform.SetRotation(atan2(sunLightDirection.x(), sunLightDirection.z()), asin(sunLightDirection.y()), 0.0f);
-		transform.SetTranslate(nm::float4((sceneBB->bbMin[0] + sceneBB->bbMax[0]) / 2.0f, sceneBB->bbMax[1], (sceneBB->bbMin[2] + sceneBB->bbMax[2]) / 2.0f, 1.0f));
-		m_sunLight->SetTransform(transform);
-	}
+	//	nm::float3 sunLightDirection = m_sunLight->GetDirection();
+	//	
+	//	nm::Transform transform = m_sunLight->GetTransform();
+	//	transform.SetRotation(atan2(sunLightDirection.x(), sunLightDirection.z()), asin(sunLightDirection.y()), 0.0f);
+	//	transform.SetTranslate(nm::float4((sceneBB->bbMin[0] + sceneBB->bbMax[0]) / 2.0f, sceneBB->bbMax[1], (sceneBB->bbMin[2] + sceneBB->bbMax[2]) / 2.0f, 1.0f));
+	//	m_sunLight->SetTransform(transform);
+	//}
 
-	CCamera::UpdateData cdata;
-	cdata.timeDelta = p_delta;
-	m_sunLight->Update(cdata);
+	//CCamera::UpdateData cdata;
+	//cdata.timeDelta = p_delta;
+	//m_sunLight->Update(cdata);
 }
 
 bool CRasterRender::DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkanRHI::CommandBuffer& p_cmdBfr)
@@ -581,7 +620,7 @@ bool CRasterRender::RenderForward()
 	renderData.scIdx					= m_swapchainIndex;
 	renderData.sceneGraph				= m_sceneGraph;
 
-	if (!m_staticShadowPass->ReuseShadowMap())
+	//if (!m_staticShadowPass->ReuseShadowMap())
 	{
 		renderData.cmdBfr				= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ShadowMap];
 		RETURN_FALSE_IF_FALSE(m_staticShadowPass->Render(&renderData));
@@ -605,7 +644,7 @@ bool CRasterRender::RenderForward()
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
 	// placing debug draw here because I do not want the depth buffer to go through another layout barrier
-	// from depth stencil attachment to shader read used in ssao pass
+	// from depth stencil attachment to shader read used in SSAO pass
 	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_DebugDraw];
 	if (m_debugDrawPass->Render(&renderData))
 	{
@@ -631,7 +670,7 @@ initialization:
 	2. Create bounding box of camera with min.z = 0 && max.z = 1
 	3. Convert this bbox from View space to workd space by multiplying with inverse view proj matrix
 	4. Set it as the bounding box
-	5. Update the accociated tranaltion of the entity based on look from value
+	5. Update the associated tranaltion of the entity based on look from value
 	6. Update the accociated roation of the entity based on yaw and pitch values
 
 Update:

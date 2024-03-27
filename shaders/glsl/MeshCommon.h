@@ -41,6 +41,7 @@ struct Light
 	float						color[3];
 	float						intensity;
 	float						vector3[3];
+	float						viewProj[16];
 };
 
 layout(set = 1, binding = 3) buffer Light_Storage

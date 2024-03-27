@@ -7,8 +7,6 @@
 #include "external/NiceMath.h"
 #include <list>
 
-#define INSTANCED_DEBUG_DRAW
-
 class CCircularList
 {
 public:
@@ -201,11 +199,7 @@ public:
 		nm::float2					ssaoNoiseScale;
 		float						ssaoKernelSize;
 		float						ssaoRadius;
-		nm::float4x4				sunViewProj;
-		nm::float3					sunDirWorldSpace;
 		int							enableShadowPCF;
-		nm::float3					sunDirViewSpace;
-		float						sunIntensity;
 		float						pbrAmbientFactor;
 		int							enableSSAO;
 		float						biasSSAO;
@@ -237,7 +231,7 @@ struct FixedUpdateData
 	CSceneGraph*						sceneGraph;
 };
 
-class CRenderTargets : public CTextures
+class CRenderTargets : public CTextures, public CUIParticipant
 {
 public:
 	enum RenderTargetId
@@ -260,12 +254,20 @@ public:
 	bool Create(CVulkanRHI*);
 	void Destroy(CVulkanRHI*);
 
-	// temporary hack - to create the primary descriptor set, the render targets need to be in a specific layout
-	// as some of them are required in compute shaders as shader resources. Once the primary descriptors are created
-	// all the layout of the render targets are reset to default IE: LAYOUT_UNDEFINED
+	void Show() override;
+
+	// temporary hack - to create the primary descriptor set, the render targets
+	// need to be in a specific layout as some of them are required in compute
+	// shaders as shader resources. Once the primary descriptors are created all
+	// the layout of the render targets are reset to default IE:
+	// LAYOUT_UNDEFINED
 	void SetLayout(RenderTargetId, VkImageLayout);
 
+	std::string GetRenderTargetIDinString(RenderTargetId);
+
 private:
+
+	std::vector<uint32_t> m_rtID;
 };
 
 class CRenderable
@@ -281,7 +283,7 @@ public:
 	// This is a clean up operation performed during shut down
 	void DestroyRenderable(CVulkanRHI*);
 
-	bool CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr);
+	bool CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, int32_t index = -1);
 
 	void SetVertexBuffer(CVulkanRHI::Buffer p_vertBuf, uint32_t p_idx = 0) { m_vertexBuffers[p_idx] = p_vertBuf; }
 	void SetIndexBuffer(CVulkanRHI::Buffer p_indxBuf, uint32_t p_idx = 0) { m_indexBuffers[p_idx] = p_indxBuf; }
@@ -297,13 +299,16 @@ protected:
 	uint32_t						m_instanceCount;
 };
 
-class CRenderableUI : public CRenderable, public CTextures, public CDescriptor, public CSelectionListener
+class CRenderableUI : public CRenderable, public CTextures, public CDescriptor, public CUIParticipant, public CSelectionListener
 {
 public:
+	static uint32_t fontID;
+
 	struct UIPushConstant
 	{
 		float						offset[2];
 		float						scale[2];
+		uint32_t					binding_textureId;
 	};
 
 	struct Guizmo
@@ -321,6 +326,8 @@ public:
 	CRenderableUI();
 	~CRenderableUI();
 
+	void virtual Show() override;
+
 	bool Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool);
 	void Destroy(CVulkanRHI* p_rhi);
 
@@ -330,6 +337,7 @@ public:
 private:
 	Guizmo								m_guizmo;
 	bool								m_showImguiDemo;
+	CVulkanRHI::RendererType			m_curRenderType;
 	CCircularList						m_latestFPS;
 	CUIParticipantManager*				m_participantManager;
 	CFixedBuffers::PrimaryUniformData	m_primUniforms;
@@ -344,24 +352,42 @@ class CRenderableMesh : public CRenderable, public CEntity
 {
 	friend class CScene;
 public:
-	CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::float4x4 p_modelMat);
-	~CRenderableMesh() {};
+	CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat);
+	~CRenderableMesh();
 	
+	virtual void Show() override; //CUIParticipant virtual override
 	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox) override;
 
 	uint32_t GetMeshId() const { return m_mesh_id; }
 	uint32_t GetSubmeshCount() const { return (uint32_t)m_submeshes.size(); }
 	const SubMesh* GetSubmesh(uint32_t p_idx) const { return &m_submeshes[p_idx]; }
 
+	void SetSubBoundingBox(BBox p_bbox) { m_subBoundingBoxes.push_back(p_bbox); }
+	BBox* GetSubBoundingBox(uint32_t p_id) { return &(m_subBoundingBoxes[p_id]); }
+	uint32_t GetSubBoundingBoxCount() { return (uint32_t)m_subBoundingBoxes.size(); }
+
+	int GetSelectedSubMeshId() { return m_selectedSubMeshId; }
+
 private:
 	std::vector<SubMesh>			m_submeshes;
+	std::vector<BBox>				m_subBoundingBoxes;
 	uint32_t						m_mesh_id;
 	nm::float4x4					m_viewNormalTransform;
+
+	// few members needed for ui
+	int								m_selectedSubMeshId;
 };
 
 class CRenderableDebug : public CRenderable, public CDescriptor
 {
 public:
+	//enum MeshType
+	//{
+	//	  Box_Sphere = 0	// combining vertex and index buffer pair for instanced box and sphere (created only once at the beginning of the application)
+	//	, Frustum			// another vertex and index buffer pair for frustums (created on demand) 
+	//	, Max
+	//};
+
 	struct DebugVertex
 	{
 		nm::float3	pos;
@@ -384,18 +410,20 @@ public:
 	bool Create(CVulkanRHI* p_rhi, const CFixedBuffers*, const CVulkanRHI::CommandPool&);
 	bool Update();
 	void Destroy(CVulkanRHI* p_rhi);
-	bool PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx, const CFixedBuffers*, const CSceneGraph*);
 	bool PreDrawInstanced(CVulkanRHI* p_rhi, uint32_t p_scIdx, const CFixedBuffers*, const CSceneGraph*, CVulkanRHI::CommandBuffer&);
 
 	DebugDrawDetails GetBBoxDrawDetails() { return m_bBoxDetails; }
 	DebugDrawDetails GetBSphereDrawDetails() { return m_bSphereDetails; }
+	DebugDrawDetails GetBFrustumDrawDetails() { return m_bFrustumDetails; }
 
 private: 
 	DebugDrawDetails			m_bBoxDetails;
 	DebugDrawDetails			m_bSphereDetails;
+	DebugDrawDetails			m_bFrustumDetails;
+	
 
 	bool CreateDebugDescriptors(CVulkanRHI*, const CFixedBuffers*);
-	bool CreateGPUBuffers(CVulkanRHI*, CVulkanRHI::BufferList&, CVulkanRHI::CommandBuffer&);
+	bool CreateBoxSphereBuffers(CVulkanRHI*, CVulkanRHI::BufferList&, CVulkanRHI::CommandBuffer&);
 };
 
 class CScene : public CDescriptor, public CUIParticipant, public CSelectionListener
@@ -435,16 +463,16 @@ public:
 
 private:
 	CSceneGraph*							m_sceneGraph;
-	std::vector<CRenderableMesh*>			m_meshes;						// list of all meshes required by the scene
-	CTextures*                              m_sceneTextures;				// list of all the textures used by the scene
-	CLights*								m_sceneLights;					// List of all the lights in use by the scene (Does not include primary directional light - Sun Light)
-	std::vector<Material>					m_materialsList;
+	std::vector<CRenderableMesh*>			m_meshes;			// list of all meshes used by the scene
+	CTextures*                              m_sceneTextures;	// list of all the textures used by the scene
+	CLights*								m_sceneLights;		// List of all the lights used by the scene
+	std::vector<Material>					m_materialsList;	// List of all the materials used by the scene
 	
 	// TODO: need to fix the current selected render-able mesh 
 	// it is used by object picker pass and is not the best way to do.
 	int										m_curSelecteRenderableMesh;		
 
-	CVulkanRHI::Buffer						m_meshInfo_uniform;				// stores all meshes uniform data
+	CVulkanRHI::Buffer						m_meshInfo_uniform[FRAME_BUFFER_COUNT];	// stores all meshes uniform data
 	CVulkanRHI::Buffer						m_material_storage;
 	CVulkanRHI::Buffer						m_light_storage;				// buffer for holding light count, raw light list data
 
@@ -541,15 +569,17 @@ private:
 	CReadOnlyBuffers				m_readOnlyBuffers;
 };
 
-class CFixedAssets
+class CFixedAssets : public CUIParticipant
 {
 public:
-	CFixedAssets() {};
+	CFixedAssets();
 	~CFixedAssets() {};
 
 	bool Create(CVulkanRHI*, const CVulkanRHI::CommandPool&);
 	void Destroy(CVulkanRHI*);
 	bool Update(CVulkanRHI*, const FixedUpdateData&);
+
+	void Show() override;
 
 	CFixedBuffers* GetFixedBuffers() { return &m_fixedBuffers; }
 	const CFixedBuffers* GetFixedBuffers() const { return &m_fixedBuffers; }

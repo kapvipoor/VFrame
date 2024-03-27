@@ -10,6 +10,63 @@ CVulkanRHI::~CVulkanRHI()
 {
 }
 
+bool CVulkanRHI::SubmitCommandBuffers(
+	CommandBufferList* p_commndBfrList, PipelineStageFlagsList* p_psfList, bool p_waitForFinish, 
+	VkFence* p_fence, bool p_waitforFence,
+	SemaphoreList* p_signalList, SemaphoreList* p_waitList)
+{
+	if (!p_commndBfrList || !p_psfList)
+	{
+		std::cerr << "CVulkanRHI::SubmitCommandBuffers Failed - CommandBuffer/PipelineStageFlag is nullptr. " << std::endl;
+		return false;
+	}
+
+	if (p_commndBfrList->empty() || p_psfList->empty())
+	{
+		std::cerr << "CVulkanRHI::SubmitCommandBuffers - CommandBuffer/PipelineStageFlag count is 0. " << std::endl;
+		return false;
+	}
+
+	if (p_commndBfrList->size() < p_psfList->size())
+	{
+		std::cerr << "CVulkanRHI::SubmitCommandBuffers - CommandBuffer count and PipelineStageFlag count mismatch. " << std::endl;
+		return false;
+	}
+
+	// we do not have a multi-queue infrastructure at the moment so we are only
+	// going to submit to the default (Gfx) queue.
+	CVulkanRHI::Queue queue = GetQueue(0);
+
+	//VkPipelineStageFlags waitstage{ VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = (uint32_t)p_commndBfrList->size();
+	submitInfo.pCommandBuffers = p_commndBfrList->data();
+	submitInfo.pSignalSemaphores = p_signalList == nullptr ? nullptr : p_signalList->data();
+	submitInfo.signalSemaphoreCount = p_signalList == nullptr ? 0 : (uint32_t)p_signalList->size();
+	submitInfo.pWaitSemaphores = p_waitList == nullptr ? nullptr : p_waitList->data();
+	submitInfo.waitSemaphoreCount = p_waitList == nullptr ? 0 : (uint32_t)p_waitList->size();
+	submitInfo.pWaitDstStageMask = p_psfList->data();
+	if (!SubmitCommandbuffer(queue, &submitInfo, 1, (p_fence == nullptr ? VK_NULL_HANDLE : *p_fence)))
+		return false;
+
+	if (p_waitForFinish)
+	{
+		// This is a blocking call
+		if (!WaitToFinish(queue))
+			return false;
+	}
+
+	if (p_waitforFence)
+	{
+		// This is a blocking call
+		if (!WaitFence(*p_fence))
+			return false;
+	}
+
+	return true;
+}
+
 bool CVulkanRHI::CreateAllocateBindBuffer(size_t p_size, Buffer& p_buffer, VkBufferUsageFlags p_bfrUsg, VkMemoryPropertyFlags p_propFlag)
 {
 	VkBufferCreateInfo bufferCreateInfo{};

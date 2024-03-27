@@ -32,6 +32,9 @@ public:
         bool                        E;
         bool                        Shft;
         nm::Transform               transform;   // if attached to a light source
+        float                       yaw;
+        float                       pitch;
+        float                       roll;
     };
 
     CCamera(/*std::string p_name*/);

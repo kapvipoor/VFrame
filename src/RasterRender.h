@@ -49,8 +49,11 @@ private:
 
 	uint32_t							m_swapchainIndex;
 
-	VkSemaphore							m_vkswapchainAcquireSemaphore;
+	VkSemaphore							m_activeAcquireSemaphore;
+	VkSemaphore							m_vkswapchainAcquireSemaphore[FRAME_BUFFER_COUNT];
 	VkSemaphore							m_vksubmitCompleteSemaphore;
+
+	VkFence								m_activeCmdBfrFreeFence;
 	VkFence								m_vkFenceCmdBfrFree[FRAME_BUFFER_COUNT];
 
 	VkCommandPool						m_vkCmdPool;
@@ -59,7 +62,7 @@ private:
 
 	CPerspectiveCamera*					m_primaryCamera;
 	//COrthoCamera*						m_sunLightCamera;
-	CDirectionaLight*					m_sunLight;
+	//CDirectionaLight*					m_sunLight;
 	//CPerspectiveCamera m_sunLightCamera;
 		
 	bool								m_pickObject;
@@ -82,6 +85,9 @@ private:
 	CToneMapPass*						m_toneMapPass;
 	CUIPass*							m_uiPass;
 	
+	VkSemaphore GetAvailableAcquireSemaphore(VkSemaphore p_in);
+	VkFence WaitForFinishIfNecessary(VkFence p_in);
+
 	bool InitCamera();
 	bool CreateSyncPremitives();																															
 	void DestroySyncPremitives();

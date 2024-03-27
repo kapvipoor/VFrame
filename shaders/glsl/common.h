@@ -37,11 +37,7 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 	vec2	ssaoNoiseScale;
 	float	ssaoKernelSize;
 	float	ssaoRadius;
-	mat4 	sunLightViewProj;
-	vec3	sunLightDirWorld;
 	bool	enableShadowPCF;
-	vec3	sunLightDirView;
-	float 	sunLightIntensity;
 	float 	pbrAmbientFactor;
 	float 	enabelSSAO;
 	float 	biasSSAO;

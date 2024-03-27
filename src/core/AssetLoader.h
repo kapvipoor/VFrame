@@ -203,48 +203,45 @@ namespace std
 	};
 }
 
-//struct Vertex
-//{
-//	union Attribute
-//	{
-//		nm::float3					normal;
-//		nm::float2					uv;
-//		nm::float4					tangent;
-//	
-//		Attribute(const nm::float3 p_normal) : normal(p_normal) {}
-//		Attribute(const nm::float2 p_uv) : uv(p_uv) {}
-//		Attribute(const nm::float4 p_tangent) : tangent(p_tangent) {}
-//	};
-//
-//	nm::float3					position;
-//	//nm::float3					normal;
-//	//nm::float2					uv;
-//	//nm::float4					tangent;
-//	std::vector<Attribute>		attributes;
-//	
-//	//Vertex() {};
-//	Vertex(const nm::float3 p_position) : position(p_position)
-//	{}
-//
-//	bool operator==(const Vertex& other) const
-//	{
-//		return position == other.position;
-//	}
-//
-//	void addAttribute(const nm::float3 p_normal) { attributes.emplace_back(p_normal); }
-//	void addAttribute(const nm::float2 p_uv) { attributes.emplace_back(p_uv); }
-//	void addAttribute(const nm::float4 p_tangent) { attributes.emplace_back(p_tangent); }
-//};
-
 struct BSphere;
 
 struct BVolume
 {
-	enum Type
+public:
+	enum BType
 	{
 			Box					= 0
 		,	Sphere				= 1
+		,	Frustum				= 2
 	};
+
+	BVolume(BType p_bType) { bType = p_bType; }
+	virtual ~BVolume() {};
+
+	// for polymorphism. Does nothing part from supporting dynamic casting
+	virtual void Pure() = 0; 
+
+	BType GetBoundingType() { return bType; }
+protected:
+	BType bType;
+};
+
+struct BFrustum : BVolume
+{
+	static std::vector<int> GetIndexTemplate();
+	static VertexList GetVertexTempate();
+
+	BFrustum(nm::float4x4 p_viewProj);
+	~BFrustum() {};
+
+	void Pure() override {};
+
+	//BFrustum operator* (nm::float4x4 const& p_transform);
+
+	nm::float4x4 GetViewProjection() { return viewProjection; }
+
+private:
+	nm::float4x4 viewProjection;
 };
 
 struct BBox : BVolume
@@ -266,14 +263,17 @@ struct BBox : BVolume
 	static std::vector<uint32_t> GetIndexTemplate();
 	static VertexList GetVertexTempate();
 
+	Origin						origin;
 	nm::float3					bbMin;
 	nm::float3					bbMax;
-	nm::float3					bBox[8];
 	nm::Transform				unitBBoxTransform;
+
 	BBox(Type p_type = Null, Origin p_origin = Auto, nm::float3 p_min = nm::float3(), nm::float3 p_max = nm::float3());
-	
-	BBox operator* (nm::float4x4 const& p_transform);
+
+	void Pure() override {};
+
 	BBox operator* (nm::Transform const& p_transform);
+	BBox operator* (nm::float4x4 const& p_transform);
 	bool operator==(const BBox& other);
 	
 	void Merge(const BBox&);
@@ -290,17 +290,22 @@ struct BBox : BVolume
 	nm::Transform GetUnitBBoxTransform() const;
 
 private:
-	void CalculateUnitBBoxTransform();
-	void CalculateCorners();
+	std::vector<nm::float3> CalculateCorners(nm::float3 p_min, nm::float3 p_max);
+	void CalculateMinMaxfromCorners(std::vector<nm::float3> p_corners, nm::float3& p_min, nm::float3& p_max, nm::Transform p_transform);
+	nm::float4x4 CalculateScale(nm::float3 p_min, nm::float3 p_max);
+	nm::float4x4 CalculateTranslate(nm::float3 p_min, nm::float3 p_max);
 };
 
 struct BSphere : BVolume
 {
 	nm::float3					bsCenter;
 	float						bsRadius;
-	BSphere();
 
-	BSphere operator* (nm::Transform const& p_transform);
+	BSphere();
+	~BSphere() {};
+	
+	void Pure() override {};
+
 	bool operator==(const BSphere& other);
 
 	bool isVisiable(BBox);
@@ -323,14 +328,16 @@ struct SubMesh
 struct MeshRaw
 {
 	std::string					name;
-	nm::float4x4				transform;
+	nm::Transform				transform;
 	VertexList					vertexList;
 	std::vector<uint32_t>		indicesList;
 	std::vector<SubMesh>		submeshes;
 	std::vector<BBox>			submeshesBbox;
 	BBox						bbox;
 
-	MeshRaw(): vertexList(VertexList(Vertex::AttributeFlag::position)) 
+	MeshRaw(): 
+		  vertexList(VertexList(Vertex::AttributeFlag::position)) 
+		, transform(nm::Transform())
 	{};
 };
 

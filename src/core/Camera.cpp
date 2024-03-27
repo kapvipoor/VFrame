@@ -211,15 +211,19 @@ void COrthoCamera::Update(UpdateData p_data)
     //if (m_dirty)
     {
         //CCamera::Update(p_data);
+        //nm::float4x4 rotationMat = p_data.transform.GetRotate();
+        //m_yaw = atan2f(rotationMat.column[2][0], rotationMat.column[2][1]);
+        //m_pitch = acos(rotationMat.column[2][2]);
+
         m_lookFrom = nm::float4(p_data.transform.GetTranslateVector(), 1.0f);
-        m_pitch = -p_data.transform.GetRotateVector().x();
-        m_yaw = p_data.transform.GetRotateVector().y();
+        //m_pitch = -p_data.pitch;            //transform.GetRotateVector().x();
+        //m_yaw = p_data.yaw;                 // transform.GetRotateVector().y();
 
         // recalculating view and viewproj
         nm::float4 dir          = PolarToVector(m_yaw, m_pitch) * m_dist;
         m_lookAt                = dir.xyz(); // (m_lookFrom - dir).xyz();
         m_view                  = LookAtRH(m_lookFrom, m_lookFrom - dir);
         m_viewProj              = m_projection * m_view;
-        m_up                    = p_data.transform.GetRotateVector() * c_up;
+        m_up                    = (p_data.transform.GetRotate() * nm::float4(c_up, 1.0f)).xyz();
     }
 }

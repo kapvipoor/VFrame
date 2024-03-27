@@ -1,4 +1,5 @@
 #include "SceneGraph.h"
+#include "Asset.h"
 #include "external/imgui/imgui.h"
 #include "external/imguizmo/ImGuizmo.h"
 
@@ -17,9 +18,17 @@ bool CSceneGraph::s_bShouldRecomputeSceneBBox = false;
 std::vector<CSelectionListener*> CSelectionBroadcast::m_listeneers;
 nm::Transform CSceneGraph::s_sceneTransform = nm::Transform();
 
-CUIParticipant::CUIParticipant(ParticipationType pType)
-	: m_participationType(pType)
+CUIParticipant::CUIParticipant(ParticipationType pPartType, UIDPanelType pPanelType, std::string pPanelName)
+	: m_participationType(pPartType)
+	, m_uIDPanelType(pPanelType)
+	, m_panelName(pPanelName)
 {
+	// At the moment we do not support creation of new panels if update is
+	// called on selection for this participant.
+	m_uIDPanelType = 
+		(m_participationType == ParticipationType::pt_onSelect) ? 
+		UIDPanelType::uipt_same : m_uIDPanelType;
+
 	CUIParticipantManager::m_uiParticipants.push_back(this);
 };
 
@@ -120,19 +129,39 @@ CUIParticipantManager::~CUIParticipantManager()
 
 void CUIParticipantManager::Show()
 {
+	BeginPanel(m_uiParticipants[0]->GetPanelName());
 	for (auto& participant : m_uiParticipants)
 	{
 		if (participant->GetParticipationType() == CUIParticipant::ParticipationType::pt_everyFrame)
 		{
+			if (participant->GetPanelType() == CUIParticipant::UIDPanelType::uipt_new)
+			{
+				EndPanel();
+				BeginPanel(participant->GetPanelName());
+			}
 			participant->Show();
 			ImGui::Separator();
 		}
 	}
+	EndPanel();
+}
+
+void CUIParticipantManager::BeginPanel(std::string p_panelName)
+{
+	ImGui::SetNextWindowBgAlpha(0.25f); // Transparent background
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
+	ImGui::Begin(p_panelName.c_str(), nullptr, ImGuiWindowFlags_NoMove);
+}
+
+void CUIParticipantManager::EndPanel()
+{
+	// close current panel
+	ImGui::End();
+	ImGui::PopStyleVar();
 }
 
 CSelectionListener::CSelectionListener()
 {
-	m_selectedSubMeshIndex = -1;
 	CSelectionBroadcast::m_listeneers.push_back(this);
 };
 
@@ -140,7 +169,7 @@ CSelectionBroadcast::~CSelectionBroadcast()
 {
 	m_listeneers.clear();
 }
-void CSelectionBroadcast::Broadcast(CSceneGraph* p_sceneGraph, int p_entityId)
+void CSelectionBroadcast::BroadcastEntityId(CSceneGraph* p_sceneGraph, int p_entityId)
 {
 	CEntity* selectedEntity = (*p_sceneGraph->GetEntities())[p_entityId];
 
@@ -154,7 +183,21 @@ void CSelectionBroadcast::Broadcast(CSceneGraph* p_sceneGraph, int p_entityId)
 	for (auto& listener : m_listeneers)
 	{
 		listener->m_selectedEntity = selectedEntity;
-		//listener->OnSelectionChange(selectedEntity);
+	}
+}
+
+void CSelectionBroadcast::BroadcastSubmeshId(CSceneGraph* p_sceneGraph, int p_submeshId)
+{
+	// if previously selected entity is same as currently selected entity; return
+	if (p_submeshId < 0 || m_listeneers[0]->GetSelectedSubMeshId() == p_submeshId)
+	{
+		return;
+	}
+
+	// else broadcast
+	for (auto& listener : m_listeneers)
+	{
+		listener->m_selectedSubMeshId = p_submeshId;
 	}
 }
 
@@ -169,37 +212,60 @@ CSceneGraph::~CSceneGraph()
 	delete m_selectionBroadcast;
 }
 
-bool CSceneGraph::Update()
+void CSceneGraph::Update()
 {
 	m_sceneStatus = SceneStatus::ss_NoChange;
 	BBox prevBBox = m_boundingBox;
+
 	if (s_bShouldRecomputeSceneBBox == true)
 	{
 		m_boundingBox.Reset();
 		s_bShouldRecomputeSceneBBox = false;
-		
-		for (int i = SceneBoundsNonContributors::count; i < s_entities.size(); i++)
+		m_boundingBox = BBox(BBox::Type::Unit, BBox::Origin::Center);
+
+		// only Render-able Meshes are allowed to participate in the the scene
+		// bounding box for now. Other entities like Lights and skybox do not
+		// participate.
+		//for (int i = 0; i < s_entities.size(); i++)
+		for (auto& entity : s_entities)
 		{
-			m_boundingBox.Merge((*s_entities[i]->GetBoundingBox()) * s_entities[i]->GetTransform());
-			m_sceneStatus = SceneStatus::ss_SceneMoved;
+			CRenderableMesh* mesh = dynamic_cast<CRenderableMesh*>(entity);
+			if (mesh)
+			{
+				BBox* meshBox = dynamic_cast<BBox*>(entity->GetBoundingVolume());
+				if (meshBox)
+				{
+					BBox entityBbox = (*meshBox) * entity->GetTransform();
+					m_boundingBox.Merge(entityBbox);
+					m_sceneStatus = SceneStatus::ss_SceneMoved;
+				}
+			}
 		}
 	}
 	if (!(prevBBox == m_boundingBox))
 	{
 		m_sceneStatus = SceneStatus::ss_BoundsChange;
 	}
-
-	return true;
 }
 
 void CSceneGraph::SetCurSelectEntityId(int p_entityId)
 {
-	if (p_entityId < -1 || p_entityId > GetEntities()->size())
+	if (p_entityId < 0 || p_entityId > GetEntities()->size())
 	{
 		return;
 	}
 
-	m_selectionBroadcast->Broadcast(this, p_entityId);
+	m_selectionBroadcast->BroadcastEntityId(this, p_entityId);
+}
+
+void CSceneGraph::SetCurSelectedSubMeshId(int p_meshId)
+{
+	if (p_meshId < 0)
+	{
+		return;
+	}
+
+	m_selectionBroadcast->BroadcastSubmeshId(this, p_meshId);
 }
 
 uint32_t CSceneGraph::RegisterEntity(CEntity* p_entity)
@@ -215,8 +281,8 @@ void CSceneGraph::RequestSceneBBoxUpdate()
 }
 
 CEntity::CEntity(std::string p_name)
-	: CUIParticipant(CUIParticipant::ParticipationType::pt_onSelect)
-{
+	: CUIParticipant(CUIParticipant::ParticipationType::pt_onSelect, CUIParticipant::UIDPanelType::uipt_same)
+ {
 	m_dirty						= false;
 	m_id						= CSceneGraph::RegisterEntity(this);
 	m_name						= p_name + "_" + std::to_string(m_id);
@@ -262,42 +328,39 @@ void CEntity::Show()
 	ImGui::Unindent();
 }
 
-//void CEntity::SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox)
-//{
-//	m_dirty						= true;
-//	m_transform					= p_transform;
-//
-//	if(p_bRecomputeSceneBBox)
-//		CSceneGraph::RequestSceneBBoxUpdate();
-//}
-
 nm::Transform& CEntity::GetTransform()
 {
 	return m_transform;
 }
 
-void CEntity::SetBoundingBox(BBox p_bbox, bool p_bRecomputeSceneBBox)
+void CEntity::SetBoundingVolume(BVolume* p_bvol, bool p_bRecomputeSceneBBox)
 {
-	m_boundingBox				= p_bbox;
+	m_boundingVolume = p_bvol;
 
-	if(p_bRecomputeSceneBBox)
+	if (p_bRecomputeSceneBBox)
 		CSceneGraph::RequestSceneBBoxUpdate();
 }
 
 CDebugData::CDebugData()
 {
-	m_debugType					= DebugType::Box;
 	m_debugDrawSubmeshes		= false;
 	m_debugDraw					= false;
 }
 
-CLight::CLight(std::string p_name, Type p_type, bool p_castShadow)
+CLight::CLight(std::string p_name, Type p_type, float p_intensity, bool p_castShadow)
 	:CEntity(p_name)
 	, m_type(p_type)
 	, m_castShadow(p_castShadow)
-	, m_intensity(1.0f)
+	, m_intensity(p_intensity)
 	, m_color(nm::float3(1.0f))
 {
+	m_transform.SetScale(nm::float3(m_intensity));
+}
+
+void CLight::SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox)
+{
+	m_dirty = true;
+	m_transform = p_transform;
 }
 
 void CLight::Show()
@@ -312,99 +375,106 @@ void CLight::Show()
 	ImGui::Unindent();
 }
 
-//CPointLight::CPointLight(std::string p_name)
-//	: CLight(p_name)
-//{
-//	m_drawAsSphere = true;
-//}
-//
-//void CPointLight::SetTransform(nm::Transform p_transform)
-//{
-//	m_dirty			= true;
-//	
-//	// for point lights; we want to
-//	// 1. neutralize rotation matrix
-//	p_transform.SetRotation(nm::float4x4::identity());
-//
-//	// 2. Apply uniform scaling matrix so that scaling happens in all axis uniformly
-//	nm::float3 scale = p_transform.GetScaleVector();
-//	float scaleFactor = (scale[0] == scale[1]) ? scale[2] : ((scale[1] == scale[2]) ? scale[0] : ((scale[0] == scale[2]) ? scale[1] : 1.0f));
-//	p_transform.SetScale(nm::float4x4::identity() * scaleFactor);
-//
-//	m_transform		= p_transform;
-//	CSceneGraph::RequestSceneBBoxUpdate();
-//}
-
-CDirectionaLight::CDirectionaLight(std::string p_name, bool p_castShadow, nm::float3 p_direction)
-	:CLight(p_name, Type::Directional, p_castShadow)
+CDirectionaLight::CDirectionaLight(std::string p_name, bool p_castShadow, nm::float3 p_direction, float p_intensity, nm::float3 color)
+	:CLight(p_name, Type::Directional, p_intensity, p_castShadow)
 	, m_direction(p_direction)
 {
-	m_camera = new COrthoCamera();
-}
-
-CDirectionaLight::CDirectionaLight(std::string p_name, bool p_castShadow, nm::float3 p_direction, float intensity, nm::float3 color)
-	:CLight(p_name, Type::Directional, p_castShadow)
-	, m_direction(p_direction)
-{
-	m_intensity = intensity;
 	m_color = color;
 	m_camera = new COrthoCamera();
+	m_boundingVolume = new BFrustum(nm::float4x4::identity());
 }
 
 CDirectionaLight::~CDirectionaLight()
 {
+	delete m_boundingVolume;
 	delete m_camera;
 }
 
 bool CDirectionaLight::Init(const CCamera::InitData& p_data)
 {
-	// Re-initialize the shadow camera's view and projection matrix because we want the 
-	// shadow camera to properly fit the new scene bounds
+	// Initialize the shadow camera's view and projection matrix because we
+	// want the shadow camera to properly fit the new scene bounds
 	RETURN_FALSE_IF_FALSE(m_camera->Init(const_cast<COrthoCamera::InitData*>(&p_data)));
-
-	/// Recompute the bounding box of the shadow camera for debug visibility
-	// the z values in Vulkan ranges between 0-1 and not -1 and 1
-	// so, min.z = 0 and max.z = 1
-	BBox box = BBox(BBox::Custom, BBox::CameraStyle, nm::float3(-1.0f, -1.0f, 0.0f), nm::float3(1.0f, 1.0f, 1.0f));
-
-	// Convert this bounding box from View space to world space by multiplying with inverse view projection matrix
-	box = box * nm::inverse(m_camera->GetViewProj());
-
-	SetBoundingBox(box, false /*do not recalculate the bounding box of the scene graph*/);
-
-	//m_transform.SetRotation(0.0f, -m_camera->GetPitch(), m_camera->GetYaw());
-	//m_transform.SetTranslate(nm::float4(m_camera->GetLookFrom(), 1.0f));
 
 	return true;
 }
 
-bool CDirectionaLight::Update(const CCamera::UpdateData& p_data)
+bool CDirectionaLight::Update(const CCamera::UpdateData& p_data, const CSceneGraph* p_sceneGraph)
 {
-	if (CEntity::m_dirty)
+	if (m_dirty)
 	{
-		m_direction = (m_transform.GetRotate() * nm::float4(m_direction, 1.0f)).xyz();
-
-		//CCamera::UpdateData camUpdateData = p_data;
-		//camUpdateData.transform = m_transform;
-		//m_camera->Update(camUpdateData);
-
-		CEntity::m_dirty = false;
+		m_direction = (m_transform.GetRotate() * nm::float4(0.0f, 1.0f, 0.0f, 1.0f)).xyz();
+		m_intensity = m_transform.GetScaleVector()[0];
 	}
 
+	if(m_castShadow && p_sceneGraph)
+	{ 
+		// if the scene bounds have changed (this happens when an entity moves
+		// out of scene bounds in the previous frame) sunlight's camera is
+		// re-initialized with new scene bounding metrics. Their view and
+		// projection matrices are recalculated
+		// If there is a change in light's direction, we need to recompute the scene fitting
+		// because we want an axis aligned bounding frustum around the scene.
+		bool recomputeSceneFitting =
+			m_dirty || 
+			(p_sceneGraph->GetSceneStatus() == CSceneGraph::SceneStatus::ss_BoundsChange);
+
+		if (recomputeSceneFitting)
+		{
+			const BBox* sceneBB = p_sceneGraph->GetBoundingBox();
+
+			BBox sceneFittingBB = *p_sceneGraph->GetBoundingBox();			
+			sceneFittingBB = sceneFittingBB * m_transform.GetRotate();
+			sceneFittingBB.Merge(*sceneBB);
+
+			float sceneWidth = sceneFittingBB.GetWidth();
+			float sceneHeight = sceneFittingBB.GetHeight();
+			float sceneDepth = sceneFittingBB.GetDepth();
+
+			nm::float3 sunLightDirection = nm::normalize(GetDirection());
+
+			COrthoCamera::OrthInitdData initData{};
+			initData.lookFrom = nm::float4(0.0f, 0.0f, 0.0f, 1.0f);
+			initData.lrbt = nm::float4{-sceneWidth/2.0f, sceneWidth/2.0f, -sceneHeight/2.0f, sceneHeight/2.0f};
+			initData.nearPlane = 0.0f;
+			initData.farPlane = sceneDepth;
+			initData.yaw = atan2(sunLightDirection[0], sunLightDirection[2]);
+			initData.pitch = asin(sunLightDirection[1]);
+			m_camera->Init(static_cast<CCamera::InitData*>(&initData));
+
+			//Considering the scene ranges from (-1,-1,-1) to (1,1,1), these
+			//offsets ensure the camera is looking from (0,0,-1)
+			nm::float3 sceneTranslationOffset = sceneBB->GetUnitBBoxTransform().GetTranslateVector();
+			nm::float3 cameraTranslationOffset = m_camera->GetLookAt() * sceneDepth/2.0f;
+			nm::float3 shadowCamLookingFrom = sceneTranslationOffset + cameraTranslationOffset;
+
+			nm::Transform transform;
+			transform.SetTranslate(nm::float4(shadowCamLookingFrom, 1.0f));
+
+			CCamera::UpdateData cdata;
+			cdata.timeDelta = p_data.timeDelta;
+			cdata.transform = transform;
+
+			m_camera->Update(cdata);
+
+			BFrustum newFrustum(nm::inverse(m_camera->GetViewProj()));
+			delete m_boundingVolume;
+			m_boundingVolume = new BFrustum(newFrustum);
+
+			// reconstructing the light direction from camera's look at
+			m_direction = m_camera->GetLookAt();
+		}
+	}
+
+	m_dirty = false;
 	return true;
 }
 
 void CDirectionaLight::SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox)
 {
-	// we do not expect directional light to trigger
-	// re-computation of scene bounding box
-	p_bRecomputeSceneBBox	= false;
-	
-	m_dirty					= true;
-	m_transform				= p_transform;
-	
-	if(p_bRecomputeSceneBBox)
-		CSceneGraph::RequestSceneBBoxUpdate();
+	// we do not expect directional light to trigger re-computation of scene
+	// bounding box; hence not calling CSceneGraph::RequestSceneBBoxUpdate();
+	CLight::SetTransform(p_transform, p_bRecomputeSceneBBox);
 }
 
 void CDirectionaLight::Show()
@@ -416,11 +486,6 @@ void CDirectionaLight::Show()
 	ImGui::Unindent();
 }
 
-//void CDirectionaLight::Show()
-//{
-//	CEntity::Show();
-//}
-
 /*
 Initialization
 1. Construct the Directional light with its shadow camera the way we want it (looking downwards)
@@ -429,32 +494,33 @@ Update - Scene change
 1. The Light's entity transform remains unchanged
 2. If the scene bounds change, we want the shadow camera to recompute its bounding box.
 
-Update - Gizmo interaction with Directional Light
+Update - Guizmo interaction with Directional Light
 1. Only rotation is valid, do not allow translation or scaling
 2. When rotation occurs, update the transform of the entity (the bounding box of the entity will apply as is)
 3. Apply transform to shadow camera
-
 */
 
 CPointLight::CPointLight(std::string p_name, bool p_castShadow, nm::float3 p_position, float intensity, nm::float3 color)
-	: CLight(p_name, Type::Point, p_castShadow)
+	: CLight(p_name, Type::Point, intensity, p_castShadow)
 	, m_position(p_position)
 {
 	CEntity::m_transform.SetTranslate(nm::float4(p_position, 1.0f));
 	CEntity::m_transform.SetScale(nm::float3(intensity));
-	m_intensity			= intensity;
 	m_color				= color;
-	m_debugType			= CDebugData::DebugType::Sphere; 
+	m_boundingVolume	= new BSphere();
+}
+
+CPointLight::~CPointLight()
+{
+	delete m_boundingVolume;
 }
 
 bool CPointLight::Init(const CCamera::InitData&)
 {
-	BBox box = BBox(BBox::Unit, BBox::Center);
-	SetBoundingBox(box, true /*we expect point light to trigger re-computation of scene */);
 	return true;
 }
 
-bool CPointLight::Update(const CCamera::UpdateData&)
+bool CPointLight::Update(const CCamera::UpdateData&, const CSceneGraph*)
 {
 	if (CEntity::m_dirty)
 	{
@@ -471,9 +537,8 @@ bool CPointLight::Update(const CCamera::UpdateData&)
 
 void CPointLight::SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox)
 {
-	// assuming uniform scaling on all axis.
-	// We are applying the scaling on the axis that has changed from
-	// last update to all the axises
+	// assuming uniform scaling on all axis. We are applying the scaling on the
+	// axis that has changed from last update to all the axises
 	float oldIntensity = m_intensity;
 	nm::float3 scale = p_transform.GetScaleVector();
 	m_intensity = (scale[0] != m_intensity) ? scale[0] :
@@ -486,9 +551,8 @@ void CPointLight::SetTransform(nm::Transform p_transform, bool p_bRecomputeScene
 		p_transform.SetScale(nm::float3(m_intensity));
 	}
 
-	m_dirty = true;
-	m_transform = p_transform;
-	
+	CLight::SetTransform(p_transform);
+
 	// we expect point light to trigger re-computation of scene 
 	// bounding box if it goes out of scene bounds
 	CSceneGraph::RequestSceneBBoxUpdate();
@@ -506,46 +570,65 @@ void CPointLight::Show()
 CLights::CLights()
 	: m_isDirty(false)
 {
-	//CreateLight(CLight::Type::Directional, "Sunlight", false, nm::float3(1.0f, 1.0f, 0.99f), 10.0f, nm::float3(0.0f, 1.0f, 0.0f));
+	CreateLight(CLight::Type::Directional, "Sunlight", true, nm::float3(1.0f, 1.0f, 0.99f), 10.0f, nm::float3(0.0f, 1.0f, 0.0f));
 	CreateLight(CLight::Type::Point, "PointLight_A", false, nm::float3(1.0f, 1.0f, 0.0f), 1.0f, nm::float3(0.0f, 0.0f, 0.0f));
 	CreateLight(CLight::Type::Point, "PointLight_B", false, nm::float3(0.0f, 1.0f, 1.0f), 1.0f, nm::float3(1.0f, 0.0f, 0.0f));
 	CreateLight(CLight::Type::Point, "PointLight_C", false, nm::float3(1.0f, 0.0f, 1.0f), 1.0f, nm::float3(0.0f, 0.0f, 1.0f));
 }
 
-void CLights::Update(const CCamera::UpdateData& p_updateData)
+CLights::~CLights()
 {
-	for (int i = 0; i < m_lights.size(); i++)
+	DestroyLights();
+}
+
+void CLights::Update(const CCamera::UpdateData& p_updateData, const CSceneGraph* p_sceneGraph)
+{
+	int  i = 0;
+	bool hasSceneBoundsChanged = (p_sceneGraph->GetSceneStatus() == CSceneGraph::SceneStatus::ss_BoundsChange);
+	for (auto& light : m_lights)
 	{
-		if (m_lights[i]->IsDirty())
+		if (hasSceneBoundsChanged || light->IsDirty())
 		{
-			m_lights[i]->Update(p_updateData);
+			light->Update(p_updateData, p_sceneGraph);
 
-			nm::float3 vector3 = (m_lights[i]->GetType() == CLight::Type::Directional) ?
-				static_cast<CDirectionaLight*>(m_lights[i])->GetDirection() :
-				static_cast<CPointLight*>(m_lights[i])->GetPosition();
+			nm::float3 vector3 = (light->GetType() == CLight::Type::Directional) ?
+				static_cast<CDirectionaLight*>(light)->GetDirection() :
+				static_cast<CPointLight*>(light)->GetPosition();
 
-			m_rawGPUData[i].intensity = m_lights[i]->GetIntensity();
-			m_rawGPUData[i].vector3[0] = vector3[0];
-			m_rawGPUData[i].vector3[1] = vector3[1];
-			m_rawGPUData[i].vector3[2] = vector3[2];
-
+			m_rawGPUData[i].intensity = light->GetIntensity();
+			std::copy(std::begin(vector3.data), std::end(vector3.data), std::begin(m_rawGPUData[i].vector3));
+			
+			if (light->IsCastsShadow())
+			{
+				CDirectionaLight* dLight = dynamic_cast<CDirectionaLight*>(light);
+				if (dLight)
+				{
+					float* lightViewProj = const_cast<float*>(&dLight->GetShadowCamera()->GetViewProj().column[0][0]);
+					std::copy(&lightViewProj[0], &lightViewProj[16], std::begin(m_rawGPUData[i].viewProj));
+				}
+			}
 			m_isDirty = true;
 		}
+		i++;
 	}
 }
 
 void CLights::CreateLight(CLight::Type p_type, const char* p_name, bool p_castShadow, nm::float3 p_color, float p_intensity, nm::float3 p_vector3)
 {
 	CLight* light = nullptr;
+	COrthoCamera::OrthInitdData oData{};
+	CPerspectiveCamera::PerpspectiveInitdData pData{};
 
 	switch (p_type)
 	{
 	case CLight::Type::Directional:
-		light = new CDirectionaLight(p_name, p_castShadow, p_vector3 /*position*/, p_intensity, p_color);
+		light = new CDirectionaLight(p_name, p_castShadow, p_vector3 /*direction*/, p_intensity, p_color);
+		light->Init(oData);
 		break;
 
 	case CLight::Type::Point:
 		light = new CPointLight(p_name, p_castShadow, p_vector3 /*position*/, p_intensity, p_color);
+		light->Init(pData);
 		break;
 
 	default:
@@ -554,21 +637,19 @@ void CLights::CreateLight(CLight::Type p_type, const char* p_name, bool p_castSh
 
 	light->SetId((uint32_t)m_lights.size());
 
-	CPerspectiveCamera::PerpspectiveInitdData data{};
-	light->Init(data);
-
 	m_lights.push_back(light);
 
+	float* identity = const_cast<float*>(&nm::float4x4::identity().column[0][0]);
+	
 	LightGPUData gpuData{};
 	gpuData.type_castShadow = ((uint32_t)light->GetType() << 16) | (uint32_t)(light->IsCastsShadow());
-	gpuData.color[0] = p_color[0];
-	gpuData.color[1] = p_color[1];
-	gpuData.color[2] = p_color[2];
 	gpuData.intensity = p_intensity;
-	gpuData.vector3[0] = p_vector3[0];
-	gpuData.vector3[1] = p_vector3[1];
-	gpuData.vector3[2] = p_vector3[2];
+	std::copy(std::begin(p_color.data), std::end(p_color.data), std::begin(gpuData.color));
+	std::copy(std::begin(p_vector3.data), &p_vector3[3], std::begin(gpuData.vector3));
+	std::copy(&identity[0], &identity[16], std::begin(gpuData.viewProj));
 	m_rawGPUData.push_back(gpuData);
+
+	m_isDirty = true;
 }
 
 void CLights::DestroyLights()

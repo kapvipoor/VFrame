@@ -221,6 +221,9 @@ public:
 	typedef VkCommandPool									CommandPool;
 	typedef VkCommandBuffer									CommandBuffer;
 	typedef std::vector<VkCommandBuffer>					CommandBufferList;
+	typedef std::vector<VkSemaphore>						SemaphoreList;
+	typedef std::vector<VkPipelineStageFlags>				PipelineStageFlagsList;
+	typedef std::vector<VkFence>							FenceList;
 	typedef std::vector<Buffer>								BufferList;
 	typedef std::vector<Image>								ImageList;
 	typedef std::vector<Sampler>							SamplerList;

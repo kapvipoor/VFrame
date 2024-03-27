@@ -41,7 +41,7 @@ void PickMeshID()
 	}
 }
 
-float CalculateShadow(vec4 L, vec3 N, bool applyPCF)
+float CalculateDirectonalShadow(vec4 L, vec3 N, bool applyPCF)
 {
 	vec3 lightPositionNDC 				= L.xyz/L.w;
 	vec2 shadowMapSize 					= textureSize(sampler2D(g_LightDepthImage, g_LinearSampler), 0);
@@ -87,6 +87,7 @@ void main()
 	mat3 TBN 								= mat3(inTangentinViewSpace, inBiTangentinViewSpace, inNormalinViewSpace);	
 	vec3 N 									= GetNormal(TBN, mat.normal_id, inUV, inNormalinViewSpace);
 	vec3 Lo 								= vec3(0.0);
+	float shadow							= 0.0f;
 
 	// for each light source
 	for(int i = 0; i < g_lights.count; i++)
@@ -107,7 +108,13 @@ void main()
 			L 								= normalize(g_Info.camView * vec4(light.vector3[0], light.vector3[1], light.vector3[2], 0.0f)).xyz; // L in View Space
 
 			// Light color is directly impacted by the intensity
-			lightColor						= lightColor *  light.intensity;
+			lightColor						= lightColor * light.intensity;
+
+			// before we calculate anything related to light, we want to make sure
+			// the position is not in shadow
+			shadow 								= CalculateDirectonalShadow(inPosinLightSpace, N, g_Info.enableShadowPCF);
+
+			lightColor = lightColor * (1.0f - shadow);
 
 		}
 		else if (lightType == POINT_LIGHT_TYPE)
@@ -126,10 +133,6 @@ void main()
 		
 		vec3 H 								= normalize(V+L);
 
-		// before we calculate anything related to light, we want to make sure
-		// the position is not in shadow
-		float shadow 						= CalculateShadow(inPosinLightSpace, N, g_Info.enableShadowPCF);
-		// if not in shadow
 		if(any(greaterThan(lightColor, vec3(0.0f))))
 		{
 			// as we do not want to calculate light attenuation on directional light
@@ -160,7 +163,8 @@ void main()
 
 			// calculating Lambertian diffuse
 			float NdotL 					= max(dot(N, L), 0.0);
-			Lo 								= (Lo + ((Kd * color.xyz / PI) + specular) * radiance * NdotL) * (1.0f - shadow);
+
+			Lo 								= (Lo + ((Kd * color.xyz / PI) + specular) * radiance * NdotL);
 		}
 	}
 
