@@ -1383,6 +1383,8 @@ void CRenderTargets::Destroy(CVulkanRHI* p_rhi)
 
 void CRenderTargets::Show()
 {
+	return;
+
 	CVulkanRHI::ImageList rendTargetList = GetTextures();
 	ImGui::Indent();
 	for (int i = 0; i < CRenderTargets::RenderTargetId::rt_max; i++)
@@ -1701,42 +1703,54 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 		readTexDesInfoList.push_back(readonlyTex->GetTexture(i).descInfo);
 	}
 
+	VkShaderStageFlags all = VK_SHADER_STAGE_ALL;
+	VkShaderStageFlags compute = VK_SHADER_STAGE_COMPUTE_BIT;
+	VkShaderStageFlags frag = VK_SHADER_STAGE_FRAGMENT_BIT;
+	VkShaderStageFlags compute_frag = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+
+	VkDescriptorType unfirom = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	VkDescriptorType sampler = VK_DESCRIPTOR_TYPE_SAMPLER;
+	VkDescriptorType image_storage = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	VkDescriptorType image_sampled = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	VkDescriptorType buffer_storage = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+
+
 	{
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Gloabl_Uniform,			1,		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	VK_SHADER_STAGE_ALL,										&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_0).descInfo,	VK_NULL_HANDLE }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Linear_Sampler,			1,		VK_DESCRIPTOR_TYPE_SAMPLER,			VK_SHADER_STAGE_ALL,										VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }												, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_ObjPicker_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_FRAGMENT_BIT,								&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}				, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Depth_Image,				1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PosGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }				, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_NormGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }					, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_AlbedoGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }					, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAO_Image,				1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }					, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOBlur_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }				, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_COMPUTE_BIT,								&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}				, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,			1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_ALL,										VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DirectionalShadowDepth).descInfo }	, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Image,		1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Texture,		1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredRoughMetal_Image,	1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredRoughMetal).descInfo }		, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	readTexDesInfoList.data() }														, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Gloabl_Uniform,			1,		unfirom,		all,			&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_0).descInfo,	VK_NULL_HANDLE }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Linear_Sampler,			1,		sampler,		all,			VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }												, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_ObjPicker_Storage,		1,		buffer_storage,	frag,			&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Depth_Image,				1,		image_sampled,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PosGBuf_Image,			1,		image_storage,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_NormGBuf_Image,			1,		image_storage,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }					, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_AlbedoGBuf_Image,			1,		image_storage,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }					, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAO_Image,				1,		image_storage,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }					, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOBlur_Image,			1,		image_storage,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		buffer_storage,	compute_frag,	&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,			1,		image_sampled,	all,			VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DirectionalShadowDepth).descInfo }	, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Image,		1,		image_storage,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Texture,		1,		image_sampled,	frag,			VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredRoughMetal_Image,	1,		image_storage,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredRoughMetal).descInfo }		, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,		image_sampled,	compute_frag,	VK_NULL_HANDLE,	readTexDesInfoList.data() }														, 0);
 
 		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, tr_max, BindingDest::bd_PrimaryRead_TexArray, 0));
 	}
 
 	{
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Gloabl_Uniform,			1,		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	VK_SHADER_STAGE_ALL,										&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_1).descInfo,	VK_NULL_HANDLE }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Linear_Sampler,			1,		VK_DESCRIPTOR_TYPE_SAMPLER,			VK_SHADER_STAGE_ALL,										VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }												, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_ObjPicker_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_FRAGMENT_BIT,								&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}				, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Depth_Image,				1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PosGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }				, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_NormGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }					, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_AlbedoGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }					, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAO_Image,				1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }					, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOBlur_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }				, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_COMPUTE_BIT,								&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}				, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,			1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_ALL,										VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DirectionalShadowDepth).descInfo }	, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Image,		1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Texture,		1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredRoughMetal_Image,	1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredRoughMetal).descInfo }		, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	readTexDesInfoList.data() }														, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Gloabl_Uniform,			1,		unfirom,		all,			&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_1).descInfo,	VK_NULL_HANDLE }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Linear_Sampler,			1,		sampler,		all,			VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }												, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_ObjPicker_Storage,		1,		buffer_storage,	frag,			&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Depth_Image,				1,		image_sampled,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PosGBuf_Image,			1,		image_storage,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_NormGBuf_Image,			1,		image_storage,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }					, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_AlbedoGBuf_Image,			1,		image_storage,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }					, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAO_Image,				1,		image_storage,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }					, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOBlur_Image,			1,		image_storage,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		buffer_storage,	compute_frag,	&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,			1,		image_sampled,	all,			VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DirectionalShadowDepth).descInfo }	, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Image,		1,		image_storage,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Texture,		1,		image_sampled,	frag,			VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredRoughMetal_Image,	1,		image_storage,	compute_frag,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredRoughMetal).descInfo }		, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,		image_sampled,	compute_frag,	VK_NULL_HANDLE,	readTexDesInfoList.data() }														, 1);
 
 		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, tr_max, BindingDest::bd_PrimaryRead_TexArray, 1));
 	}

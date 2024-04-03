@@ -218,7 +218,7 @@ bool CRasterRender::on_update(float delta)
 	}
 	
 	// This code path does not work ATM because we are presenting outdated
-	// descriptors hence all meshed in the scene look to be updating on delayed
+	// descriptors hence all meshes in the scene look to be updating on delayed
 	// descriptors when the camera moves
 	m_activeCmdBfrFreeFence = WaitForFinishIfNecessary(m_activeCmdBfrFreeFence);
 
