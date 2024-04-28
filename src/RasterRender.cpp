@@ -37,6 +37,30 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_debugDrawPass			= new CDebugDrawPass(m_rhi);
 	m_toneMapPass			= new CToneMapPass(m_rhi);
 	m_uiPass				= new CUIPass(m_rhi);
+
+	m_cmdBufferNames[0][cb_ShadowMap]			= "ShadowMap_0";
+	m_cmdBufferNames[0][cb_SSAO]				= "SSAO_0";
+	m_cmdBufferNames[0][cb_SSAO_Blur]			= "SSAOBlur_0";
+	m_cmdBufferNames[0][cb_Forward]				= "Forward_0";
+	m_cmdBufferNames[0][cb_Deferred_GBuf]		= "Deferred_GBuf_0";
+	m_cmdBufferNames[0][cb_Deferred_Lighting]	= "Deferred_Lighting_0";
+	m_cmdBufferNames[0][cb_DebugDraw]			= "DebugDraw_0";
+	m_cmdBufferNames[0][cb_UI]					= "UI_0";
+	m_cmdBufferNames[0][cb_PickerCopy2CPU]		= "PickerCopy2CPU_0";
+	m_cmdBufferNames[0][cb_ToneMapping]			= "ToneMapping_0";
+	m_cmdBufferNames[0][cb_Skybox]				= "Skybox_0";
+
+	m_cmdBufferNames[1][cb_ShadowMap]			= "ShadowMap_1";
+	m_cmdBufferNames[1][cb_SSAO]				= "SSAO_1";
+	m_cmdBufferNames[1][cb_SSAO_Blur]			= "SSAOBlur_1";
+	m_cmdBufferNames[1][cb_Forward]				= "Forward_1";
+	m_cmdBufferNames[1][cb_Deferred_GBuf]		= "Deferred_GBuf_1";
+	m_cmdBufferNames[1][cb_Deferred_Lighting]	= "Deferred_Lighting_1";
+	m_cmdBufferNames[1][cb_DebugDraw]			= "DebugDraw_1";
+	m_cmdBufferNames[1][cb_UI]					= "UI_1";
+	m_cmdBufferNames[1][cb_PickerCopy2CPU]		= "PickerCopy2CPU_1";
+	m_cmdBufferNames[1][cb_ToneMapping]			= "ToneMapping_1";
+	m_cmdBufferNames[1][cb_Skybox]				= "Skybox_1";
 }
 
 CRasterRender::~CRasterRender() 
@@ -106,7 +130,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 
 	for (int i = 0; i < FRAME_BUFFER_COUNT; i++)
 	{
-		RETURN_FALSE_IF_FALSE(m_rhi->CreateCommandBuffers(m_vkCmdPool, m_vkCmdBfr[i], CommandBufferId::cb_max));
+		RETURN_FALSE_IF_FALSE(m_rhi->CreateCommandBuffers(m_vkCmdPool, m_vkCmdBfr[i], CommandBufferId::cb_max, m_cmdBufferNames[i]));
 	}
 
 	RETURN_FALSE_IF_FALSE(CreateSyncPremitives());
@@ -129,15 +153,11 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 
 		RETURN_FALSE_IF_FALSE(m_rhi->EndCommandBuffer(m_vkCmdBfr[0][0]));
 
-		RETURN_FALSE_IF_FALSE(m_rhi->ResetFence(m_vkFenceCmdBfrFree[0]));
-
 		CVulkanRHI::CommandBufferList cbrList{ m_vkCmdBfr[0][0] };
 		CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
-		bool waitForFinish = false;
+		bool waitForFinish = true;
 		RETURN_FALSE_IF_FALSE(m_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish, &m_vkFenceCmdBfrFree[0]));
-	
-	if (!m_rhi->ResetFence(m_vkFenceCmdBfrFree[0]))
-		return false;
+		RETURN_FALSE_IF_FALSE(m_rhi->ResetFence(m_vkFenceCmdBfrFree[0]));
 	}
 
 	RETURN_FALSE_IF_FALSE(InitCamera());
@@ -286,6 +306,8 @@ void CRasterRender::on_present()
 	{
 		std::cerr << "vkQueueSubmit failed " << res << std::endl;
 	}
+
+	m_rhi->WaitToFinish(queue);
 }
 
 VkSemaphore CRasterRender::GetAvailableAcquireSemaphore(VkSemaphore p_in)
@@ -353,12 +375,12 @@ bool CRasterRender::CreateSyncPremitives()
 {
 	for (int i = 0; i < FRAME_BUFFER_COUNT; i++)
 	{
-		RETURN_FALSE_IF_FALSE(m_rhi->CreateSemaphor(m_vkswapchainAcquireSemaphore[i]));
-		RETURN_FALSE_IF_FALSE(m_rhi->CreateFence(VK_FENCE_CREATE_SIGNALED_BIT, m_vkFenceCmdBfrFree[i]));
+		RETURN_FALSE_IF_FALSE(m_rhi->CreateSemaphor(m_vkswapchainAcquireSemaphore[i], "Acquire Swap Chain Semaphore " + std::to_string(i)));
+		RETURN_FALSE_IF_FALSE(m_rhi->CreateFence(VK_FENCE_CREATE_SIGNALED_BIT, m_vkFenceCmdBfrFree[i], "Cmd Bfr Free Fence " + std::to_string(1)));
 		m_rhi->ResetFence(m_vkFenceCmdBfrFree[i]);
 	}
 
-	RETURN_FALSE_IF_FALSE(m_rhi->CreateSemaphor(m_vksubmitCompleteSemaphore));
+	RETURN_FALSE_IF_FALSE(m_rhi->CreateSemaphor(m_vksubmitCompleteSemaphore, "Gfx Queue Submit Complete Semaphore"));
 
 	return true;
 }

@@ -24,18 +24,26 @@
 #include <filesystem>
 
 // fwd dclr
-#if	VULKAN_DEBUG == 1
-VKAPI_ATTR VkBool32	VKAPI_CALL
-VulkanDebugCallback(
-	VkDebugReportFlagsEXT		p_msgFlags,
-	VkDebugReportObjectTypeEXT	p_ObjType,
-	uint64_t					p_SrcObj,
-	size_t						p_location,
-	int32_t						p_MesgCode,
-	const char* p_layerPrefix,
-	const char* p_Message,
-	void* pUserData);
-#endif
+//#if	VULKAN_DEBUG == 1
+//VKAPI_ATTR VkBool32 VKAPI_CALL 
+//debugUtilsMessengerCallback(
+//	VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+//	VkDebugUtilsMessageTypeFlagsEXT message_type,
+//	const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
+//	void* user_data);
+//
+//VKAPI_ATTR VkBool32	VKAPI_CALL
+//debugReportCallback(
+//	VkDebugReportFlagsEXT		p_msgFlags,
+//	VkDebugReportObjectTypeEXT	p_ObjType,
+//	uint64_t					p_SrcObj,
+//	size_t						p_location,
+//	int32_t						p_MesgCode,
+//	const char* p_layerPrefix,
+//	const char* p_Message,
+//	void* pUserData);
+//#endif
+
 char* BinaryLoader(const std::string pPath, size_t& pDataSize);
 
 class CVulkanCore
@@ -236,6 +244,7 @@ public:
 	void BeginDebugMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg);
 	void EndDebugMarker(VkCommandBuffer p_vkCmdBuff);
 	void InsertMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg);
+	void SetDebugName(uint64_t pObject, VkObjectType pObjectType, const char* pName);
 
 	VkQueue GetQueue(uint32_t p_scIdx)						{ return m_vkQueue[p_scIdx]; }
 	uint32_t GetQueueFamiliyIndex() const					{ return m_QFIndex; }
@@ -266,19 +275,15 @@ protected:
 	VkImageView												m_swapchainImageViewList[FRAME_BUFFER_COUNT];
 
 	VkPhysicalDeviceMemoryProperties m_vkPhysicalDeviceMemProp{};
-#if VULKAN_DEBUG_MARKERS == 1
-	PFN_vkDebugMarkerSetObjectTagEXT						m_fpVkDebugMarkerSetObjectTag = NULL;
-	PFN_vkDebugMarkerSetObjectNameEXT						m_fpVkDebugMarkerSetObjectName = NULL;
-	PFN_vkCmdDebugMarkerBeginEXT							m_fpVkCmdDebugMarkerBegin = NULL;
-	PFN_vkCmdDebugMarkerEndEXT								m_fpVkCmdDebugMarkerEnd = NULL;
-	PFN_vkCmdDebugMarkerInsertEXT							m_fpVkCmdDebugMarkerInsert = NULL;
-#endif
+
 #if VULKAN_DEBUG == 1
-	//PFN_vkSetDebugUtilsObjectNameEXT						m_fpVkSetDebugUtilsObjectName = NULL;
-	VkDebugReportCallbackCreateInfoEXT						m_debugCallbackCreateInfo{};
-	PFN_vkCreateDebugReportCallbackEXT						m_fpVkCreateDebugReportCallbackEXT = NULL;
-	PFN_vkDestroyDebugReportCallbackEXT						m_fpVkDestroyDebugReportCallbackEXT = NULL;
-	VkDebugReportCallbackEXT								m_vkDebugReportCallback;
+	VkDebugUtilsMessengerEXT                                m_debugUtilsMessenger{ VK_NULL_HANDLE };
+	VkDebugReportCallbackEXT                                m_debugReportCallback{ VK_NULL_HANDLE };
+
+	PFN_vkCmdBeginDebugUtilsLabelEXT						m_fpvkCmdBeginDebugUtilsLabel = NULL;
+	PFN_vkCmdEndDebugUtilsLabelEXT							m_fpvkCmdEndDebugUtilsLabelEXT = NULL;
+	PFN_vkCmdInsertDebugUtilsLabelEXT						m_fpvkCmdInsertDebugUtilsLabelEXT = NULL;
+	PFN_vkSetDebugUtilsObjectNameEXT						m_fpVkSetDebugUtilsObjectName = NULL;
 #endif
 
 public:
@@ -321,7 +326,7 @@ public:
 	bool CreateCommandPool(uint32_t p_qfIndex, VkCommandPool& p_cmdPool);
 	void DestroyCommandPool(VkCommandPool p_cmdPool);
 	
-	bool CreateCommandBuffers(VkCommandPool p_cmdPool, VkCommandBuffer* p_cmdBuffers, uint32_t p_cbCount);
+	bool CreateCommandBuffers(VkCommandPool p_cmdPool, VkCommandBuffer* p_cmdBuffers, uint32_t p_cbCount, std::string* p_debugNames);
 	bool BeginCommandBuffer(VkCommandBuffer& p_cmdBfr, const char* p_debugMarker);
 	void SetViewport(VkCommandBuffer p_cmdbfr, float p_minD, float p_maxD, float p_width, float p_height);
 	void SetScissors(VkCommandBuffer p_cmdBfr, uint32_t p_offX, uint32_t p_offY, uint32_t p_width, uint32_t p_height);
@@ -330,9 +335,9 @@ public:
 	bool ResetCommandBuffer(VkCommandBuffer p_cmdBfr);
 	
 	bool WaitToFinish(VkQueue p_queue);
-	bool CreateSemaphor(VkSemaphore& p_semaphore);
+	bool CreateSemaphor(VkSemaphore& p_semaphore, std::string p_dbgName);
 	void DestroySemaphore(VkSemaphore p_semaphore);
-	bool CreateFence(VkFenceCreateFlags p_flags, VkFence& p_fence);
+	bool CreateFence(VkFenceCreateFlags p_flags, VkFence& p_fence, std::string p_dbgName);
 	bool WaitFence(VkFence& p_fence);
 	bool ResetFence(VkFence& p_fence);
 	void DestroyFence(VkFence p_fence);
@@ -372,11 +377,4 @@ public:
 	
 	bool ListAvailableInstanceLayers(std::vector<const char*> reqList);
 	bool ListAvailableInstanceExtensions(std::vector<const char*> reqList);
-		
-#if	VULKAN_DEBUG == 1
-	void InitVulkanDebug();
-	void DestroyVulkanDebug();
-#endif
-	
-	void InitDebugMarkers();
 };

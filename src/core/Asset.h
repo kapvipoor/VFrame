@@ -132,8 +132,8 @@ public:
 	CBuffers(int p_maxSize = 0);
 	~CBuffers() {};
 
-	bool CreateBuffer(CVulkanRHI*, uint32_t p_id, VkBufferUsageFlags p_usage, VkMemoryPropertyFlags p_memProp, size_t);
-	bool CreateBuffer(CVulkanRHI*, CVulkanRHI::Buffer& stg, void* p_data, size_t p_size, CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id = -1);
+	bool CreateBuffer(CVulkanRHI*, uint32_t p_id, VkBufferUsageFlags p_usage, VkMemoryPropertyFlags p_memProp, size_t, std::string p_debugName);
+	bool CreateBuffer(CVulkanRHI*, CVulkanRHI::Buffer& stg, void* p_data, size_t p_size, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, uint32_t p_id = -1);
 	
 	const CVulkanRHI::Buffer& GetBuffer(uint32_t p_id) { return m_buffers[p_id]; }
 	const CVulkanRHI::Buffer GetBuffer(uint32_t p_id) const { return m_buffers[p_id]; }
@@ -150,9 +150,9 @@ public:
 	CTextures(int p_maxSize = 0);
 	~CTextures() {};
 
-	bool CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_format,uint32_t p_width, uint32_t p_height, VkImageLayout p_layout, VkImageUsageFlags p_usage);
-	bool CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& stg, const ImageRaw*, VkFormat p_format, CVulkanRHI::CommandBuffer& p_cmdBfr, int p_id = -1);
-	bool CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const std::vector<ImageRaw>&, const CVulkanRHI::SamplerList& p_samplers, CVulkanRHI::CommandBuffer& p_cmdBfr, int p_id = -1);
+	bool CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_format,uint32_t p_width, uint32_t p_height, VkImageLayout p_layout, std::string p_debugName, VkImageUsageFlags p_usage);
+	bool CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& stg, const ImageRaw*, VkFormat p_format, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id = -1);
+	bool CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const std::vector<ImageRaw>&, const CVulkanRHI::SamplerList& p_samplers, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id = -1);
 
 	// Pushes a specific texture index into list to repeat the usage of the texture
 	// Note: this does not reload the texture, but simply makes the texture handle available 
@@ -283,7 +283,8 @@ public:
 	// This is a clean up operation performed during shut down
 	void DestroyRenderable(CVulkanRHI*);
 
-	bool CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, int32_t index = -1);
+	bool CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw, 
+		CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index = -1);
 
 	void SetVertexBuffer(CVulkanRHI::Buffer p_vertBuf, uint32_t p_idx = 0) { m_vertexBuffers[p_idx] = p_vertBuf; }
 	void SetIndexBuffer(CVulkanRHI::Buffer p_indxBuf, uint32_t p_idx = 0) { m_indexBuffers[p_idx] = p_indxBuf; }

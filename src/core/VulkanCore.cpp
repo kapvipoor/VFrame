@@ -4,6 +4,92 @@
 
 #include "VulkanCore.h"
 
+#if	VULKAN_DEBUG == 1
+VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+	VkDebugUtilsMessageTypeFlagsEXT message_type,
+	const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
+	void* user_data)
+{
+	if (!callback_data || !callback_data->pMessageIdName || !callback_data->pMessage)
+		return VK_FALSE;
+
+	if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+	{
+		std::cerr << "Vulkan Info: "
+			<< "{" << callback_data->messageIdNumber << "} - "
+			<< "{" << callback_data->pMessageIdName << "}: "
+			<< "{" << callback_data->pMessage << std::endl;
+	}
+	else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+	{
+		std::cerr << "Vulkan Warning: "
+			<< "{" << callback_data->messageIdNumber << "} - "
+			<< "{" << callback_data->pMessageIdName << "}: "
+			<< "{" << callback_data->pMessage << std::endl;
+	}
+	else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+	{
+		std::cerr << "Vulkan Error: "
+			<< "{" << callback_data->messageIdNumber << "} - "
+			<< "{" << callback_data->pMessageIdName << "}: "
+			<< "{" << callback_data->pMessage << std::endl;
+	}
+	return VK_FALSE;
+}
+
+VKAPI_ATTR VkBool32	VKAPI_CALL
+debugReportCallback(
+	VkDebugReportFlagsEXT		p_msgFlags,
+	VkDebugReportObjectTypeEXT	p_ObjType,
+	uint64_t					p_SrcObj,
+	size_t						p_location,
+	int32_t						p_MesgCode,
+	const char* p_layerPrefix,
+	const char* p_Message,
+	void* pUserData)
+{
+	std::ostringstream stream;
+	stream << "[@ " << p_layerPrefix << "] " << p_Message;
+
+#if VULKAN_SHOW_MESSAGES == 1
+	if (p_msgFlags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
+		std::cerr << "Vulkan Error " << stream.str() << std::endl;
+
+#elif VULKAN_SHOW_MESSAGES == 2
+	if (p_msgFlags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
+		std::cerr << "Vulkan Error " << stream.str() << std::endl;
+
+	else if (p_msgFlags & VK_DEBUG_REPORT_WARNING_BIT_EXT)
+		std::cerr << "Vulkan Warning: " << stream.str() << std::endl;
+
+	else if (p_msgFlags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT)
+		std::cerr << "Vulkan Performance Warning: " << stream.str() << std::endl;
+
+#elif VULKAN_SHOW_MESSAGES == 3
+	if (p_msgFlags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT)
+		std::cerr << "Vulkan Information: " << stream.str() << std::endl;
+
+	else if (p_msgFlags & VK_DEBUG_REPORT_WARNING_BIT_EXT)
+		std::cerr << "Vulkan Warning: " << stream.str() << std::endl;
+
+	else if (p_msgFlags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT)
+		std::cerr << "Vulkan Performance Warning: " << stream.str() << std::endl;
+
+	else if (p_msgFlags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
+		std::cerr << "Vulkan Error: " << stream.str() << std::endl;
+
+	else if (p_msgFlags & VK_DEBUG_REPORT_DEBUG_BIT_EXT)
+		std::cerr << "Vulkan Debug Report: " << stream.str() << std::endl;
+
+	else
+		std::cerr << "Vulkan Info " << stream.str() << std::endl;
+#endif
+
+	return false;
+}
+
+#endif
+
 CVulkanCore::CVulkanCore(const char* p_applicaitonName, int p_renderWidth, int p_renderHeight)
 		: m_applicationName(p_applicaitonName)
 		, m_renderWidth(p_renderWidth)
@@ -24,43 +110,50 @@ CVulkanCore::~CVulkanCore()
 void CVulkanCore::BeginDebugMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg)
 {
 #if VULKAN_DEBUG_MARKERS == 1
-	if (m_fpVkCmdDebugMarkerBegin)
-	{
-		VkDebugMarkerMarkerInfoEXT markerInfo = {};
-		markerInfo.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT;
-		// Color to display this region with (if supported by debugger)
-		float color[4] = { 0.0f, 1.0f, 0.0f, 1.0f };
-		memcpy(markerInfo.color, &color[0], sizeof(float) * 4);
-		// Name of the region displayed by the debugging application
-		markerInfo.pMarkerName = pMsg;
-		m_fpVkCmdDebugMarkerBegin(p_vkCmdBuff, &markerInfo);
-	}
+	if(!m_fpvkCmdBeginDebugUtilsLabel)
+		m_fpvkCmdBeginDebugUtilsLabel = (PFN_vkCmdBeginDebugUtilsLabelEXT)vkGetDeviceProcAddr(m_vkDevice, "vkCmdBeginDebugUtilsLabelEXT");
+
+	VkDebugUtilsLabelEXT debugLabel{};
+	debugLabel.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+	debugLabel.pLabelName = pMsg;
+	m_fpvkCmdBeginDebugUtilsLabel(p_vkCmdBuff, &debugLabel);
 #endif
 }
 
 void CVulkanCore::EndDebugMarker(VkCommandBuffer p_vkCmdBuff)
 {
 #if VULKAN_DEBUG_MARKERS == 1
-	if (m_fpVkCmdDebugMarkerEnd)
-		m_fpVkCmdDebugMarkerEnd(p_vkCmdBuff);
+	if(!m_fpvkCmdEndDebugUtilsLabelEXT)
+		m_fpvkCmdEndDebugUtilsLabelEXT = (PFN_vkCmdEndDebugUtilsLabelEXT)vkGetDeviceProcAddr(m_vkDevice, "vkCmdEndDebugUtilsLabelEXT");
+
+	m_fpvkCmdEndDebugUtilsLabelEXT(p_vkCmdBuff);
 #endif
 }
 
 void CVulkanCore::InsertMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg)
 {
 #if VULKAN_DEBUG_MARKERS == 1
-	if (m_fpVkCmdDebugMarkerInsert)
-	{
-		VkDebugMarkerMarkerInfoEXT markerInfo = {};
-		markerInfo.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT;
-		// Color to display this region with (if supported by debugger)
-		float color[4] = { 0.0f, 1.0f, 0.0f, 1.0f };
-		memcpy(markerInfo.color, &color[0], sizeof(float) * 4);
-		// Name of the region displayed by the debugging application
-		markerInfo.pMarkerName = pMsg;
+	if(!m_fpvkCmdInsertDebugUtilsLabelEXT)
+		m_fpvkCmdInsertDebugUtilsLabelEXT = (PFN_vkCmdInsertDebugUtilsLabelEXT)vkGetDeviceProcAddr(m_vkDevice, "vkCmdInsertDebugUtilsLabelEXT");
 
-		m_fpVkCmdDebugMarkerInsert(p_vkCmdBuff, &markerInfo);
-	}
+	VkDebugUtilsLabelEXT debugLabel{};
+	debugLabel.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+	debugLabel.pLabelName = pMsg;
+	m_fpvkCmdInsertDebugUtilsLabelEXT(p_vkCmdBuff, &debugLabel);
+#endif
+}
+
+void CVulkanCore::SetDebugName(uint64_t pObject, VkObjectType pObjectType, const char* pName)
+{
+#if VULKAN_DEBUG_MARKERS == 1
+	if(!m_fpVkSetDebugUtilsObjectName)
+		m_fpVkSetDebugUtilsObjectName = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(m_vkDevice, "vkSetDebugUtilsObjectNameEXT");
+
+	VkDebugUtilsObjectNameInfoEXT name_info = { VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
+	name_info.objectType = pObjectType;
+	name_info.objectHandle = pObject;
+	name_info.pObjectName = pName;
+	m_fpVkSetDebugUtilsObjectName(m_vkDevice, &name_info);
 #endif
 }
 
@@ -73,8 +166,25 @@ void CVulkanCore::cleanUp()
 	vkDestroySurfaceKHR(m_vkInstance, m_vkSurface, nullptr);
 	vkDestroyDevice(m_vkDevice, nullptr);
 
-#if VULKAN_DEBUG == 1
-	DestroyVulkanDebug();
+#ifdef VULKAN_DEBUG
+	if (m_debugUtilsMessenger != VK_NULL_HANDLE)
+	{
+		PFN_vkDestroyDebugUtilsMessengerEXT pfnvkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_vkInstance, "vkDestroyDebugUtilsMessengerEXT");
+		if (!pfnvkDestroyDebugUtilsMessengerEXT)
+		{
+			std::cerr << "Could not load function pointer for vkCreateDebugReportCallbackEXT." << std::endl;
+		}
+		pfnvkDestroyDebugUtilsMessengerEXT(m_vkInstance, m_debugUtilsMessenger, nullptr);
+	}
+	if (m_debugReportCallback != VK_NULL_HANDLE)
+	{
+		PFN_vkDestroyDebugReportCallbackEXT pfnvkDestroyDebugReportCallbackEXT = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(m_vkInstance, "vkDestroyDebugReportCallbackEXT");
+		if (!pfnvkDestroyDebugReportCallbackEXT)
+		{
+			std::cerr << "Could not load function pointer for vkCreateDebugReportCallbackEXT." << std::endl;
+		}
+		pfnvkDestroyDebugReportCallbackEXT(m_vkInstance, m_debugReportCallback, nullptr);
+	}
 #endif
 	vkDestroyInstance(m_vkInstance, nullptr);
 }
@@ -84,16 +194,8 @@ bool CVulkanCore::initialize(const InitData& p_initData)
 	if (!CreateInstance(m_applicationName))
 		return false;
 
-#if VULKAN_DEBUG == 1
-	InitVulkanDebug();
-#endif
-
 	if (!CreateDevice(p_initData.queueType))
 		return false;
-
-#if VULKAN_DEBUG_MARKERS == 1
-	InitDebugMarkers();
-#endif
 
 	if (!CreateSurface(p_initData.winInstance, p_initData.winHandle))
 		return false;
@@ -109,38 +211,57 @@ bool CVulkanCore::initialize(const InitData& p_initData)
 
 bool CVulkanCore::CreateInstance(const char* p_applicaitonName)
 {
-	// Bruteforce setting up instance layers and extenions; instance creation will fail if layers are
+	bool hasDebugUtils = true;
+
+	// Brute force setting up instance layers and extenions; instance creation will fail if layers are
 	// not supported
-	std::vector<const char*> instanceExtensionList
-	{
-		"VK_KHR_win32_surface"
-		,VK_KHR_SURFACE_EXTENSION_NAME
-		,VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME
-		,"VK_EXT_debug_report"
-		,"VK_EXT_debug_utils"
-	};
+	std::vector<const char*> instanceExtensionList;
+	instanceExtensionList.push_back("VK_KHR_win32_surface");
+	instanceExtensionList.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+	instanceExtensionList.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 #if VULKAN_DEBUG == 1
-	ListAvailableInstanceExtensions(instanceExtensionList);
+		instanceExtensionList.push_back("VK_EXT_debug_utils");
+		instanceExtensionList.push_back("VK_EXT_debug_report");
 #endif
+
+	ListAvailableInstanceExtensions(instanceExtensionList);
+
 	std::vector<const char*> instanceLayerList;
-#if VULKAN_DEBUG == 0
 	instanceLayerList.push_back("VK_LAYER_RENDERDOC_Capture");
-#elif VULKAN_DEBUG == 1
+#if VULKAN_DEBUG == 1
 	instanceLayerList.push_back("VK_LAYER_LUNARG_monitor");
 	instanceLayerList.push_back("VK_LAYER_KHRONOS_validation");
 	ListAvailableInstanceLayers(instanceLayerList);
 #endif
 
+	 
+	VkInstanceCreateInfo instanceCreateInfo{};
+
 	// Set up vulkan debug callback pipeline
 #if VULKAN_DEBUG == 1
-	m_debugCallbackCreateInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
-	m_debugCallbackCreateInfo.pfnCallback = VulkanDebugCallback;
-	m_debugCallbackCreateInfo.flags =
-		VkDebugReportFlagBitsEXT::VK_DEBUG_REPORT_INFORMATION_BIT_EXT |
-		VkDebugReportFlagBitsEXT::VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT |
-		VkDebugReportFlagBitsEXT::VK_DEBUG_REPORT_WARNING_BIT_EXT |
-		VkDebugReportFlagBitsEXT::VK_DEBUG_REPORT_ERROR_BIT_EXT |
-		VkDebugReportFlagBitsEXT::VK_DEBUG_REPORT_DEBUG_BIT_EXT;;
+	VkDebugUtilsMessengerCreateInfoEXT debugUtilsCreateInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
+	VkDebugReportCallbackCreateInfoEXT debugCallbackCreateInfo;
+	if (hasDebugUtils)
+	{
+		debugUtilsCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+		debugUtilsCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+		debugUtilsCreateInfo.pfnUserCallback = debugUtilsMessengerCallback;
+
+		instanceCreateInfo.pNext = &debugUtilsCreateInfo;
+	}
+	else
+	{
+		debugCallbackCreateInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
+		debugCallbackCreateInfo.pfnCallback = debugReportCallback;
+		debugCallbackCreateInfo.flags =
+			VkDebugReportFlagBitsEXT::VK_DEBUG_REPORT_INFORMATION_BIT_EXT |
+			VkDebugReportFlagBitsEXT::VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT |
+			VkDebugReportFlagBitsEXT::VK_DEBUG_REPORT_WARNING_BIT_EXT |
+			VkDebugReportFlagBitsEXT::VK_DEBUG_REPORT_ERROR_BIT_EXT |
+			VkDebugReportFlagBitsEXT::VK_DEBUG_REPORT_DEBUG_BIT_EXT;
+
+		instanceCreateInfo.pNext = &debugCallbackCreateInfo;
+	}
 #endif
 
 	VkApplicationInfo appInfo{};
@@ -149,16 +270,13 @@ bool CVulkanCore::CreateInstance(const char* p_applicaitonName)
 	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.pApplicationName = p_applicaitonName;
 
-	VkInstanceCreateInfo instanceCreateInfo{};
 	instanceCreateInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	instanceCreateInfo.pApplicationInfo = &appInfo;
 	instanceCreateInfo.enabledLayerCount = (uint32_t)instanceLayerList.size();
 	instanceCreateInfo.ppEnabledLayerNames = instanceLayerList.data();
 	instanceCreateInfo.enabledExtensionCount = (uint32_t)instanceExtensionList.size();
 	instanceCreateInfo.ppEnabledExtensionNames = instanceExtensionList.data();
-#if	VULKAN_DEBUG == 1 
-	instanceCreateInfo.pNext = &m_debugCallbackCreateInfo;
-#endif
+
 	VkResult res = vkCreateInstance(&instanceCreateInfo, nullptr, &m_vkInstance);
 	if (res != VK_SUCCESS)
 	{
@@ -166,12 +284,47 @@ bool CVulkanCore::CreateInstance(const char* p_applicaitonName)
 		return false;
 	}
 
+#if VULKAN_DEBUG == 1
+	if (hasDebugUtils)
+	{
+		PFN_vkCreateDebugUtilsMessengerEXT pfnvkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_vkInstance, "vkCreateDebugUtilsMessengerEXT");
+		if(!pfnvkCreateDebugUtilsMessengerEXT)
+		{
+			std::cerr << "Could not load function pointer for vkCreateDebugUtilsMessengerEXT." << std::endl;
+			return false;
+		}
+
+		VkResult res = pfnvkCreateDebugUtilsMessengerEXT(m_vkInstance, &debugUtilsCreateInfo, nullptr, &m_debugUtilsMessenger);
+		if (res != VK_SUCCESS)
+		{
+			std::cerr << "Could not create debug utils messenger " << res << std::endl;
+			return false;
+		}
+	}
+	else
+	{
+		PFN_vkCreateDebugReportCallbackEXT pfnvkCreateDebugReportCallbackEXT = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(m_vkInstance, "vkCreateDebugReportCallbackEXT");
+		if (!pfnvkCreateDebugReportCallbackEXT)
+		{
+			std::cerr << "Could not load function pointer for vkCreateDebugReportCallbackEXT." << std::endl;
+			return false;
+		}
+
+		VkResult res = pfnvkCreateDebugReportCallbackEXT(m_vkInstance, &debugCallbackCreateInfo, nullptr, &m_debugReportCallback);
+		if (res != VK_SUCCESS)
+		{
+			std::cerr << "Could not create debug report callback " << res << std::endl;
+			return false;
+		}
+	}
+#endif
+
 	return true;
 }
 
 bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 {
-	// Get Active physical device - force to select the first availabel device
+	// Get Active physical device - force to select the first available device
 	{
 		uint32_t deviceCount;
 		VkResult res = vkEnumeratePhysicalDevices(m_vkInstance, &deviceCount, nullptr);
@@ -193,7 +346,7 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 		m_vkPhysicalDevice = physicalDeviceList[0];
 	}
 
-	// // Bruteforce setting up device extenions; device creation will fail if extensions are
+	// Brute-force setting up device extensions; device creation will fail if extensions are
 	// not supported 
 	std::vector<const char*> deviceExtensionList;
 	{
@@ -490,7 +643,7 @@ void CVulkanCore::DestroyCommandPool(VkCommandPool p_cmdPool)
 	vkDestroyCommandPool(m_vkDevice, p_cmdPool, nullptr);
 }
 
-bool CVulkanCore::CreateCommandBuffers(VkCommandPool p_cmdPool, VkCommandBuffer* p_cmdBuffers, uint32_t p_cbCount)
+bool CVulkanCore::CreateCommandBuffers(VkCommandPool p_cmdPool, VkCommandBuffer* p_cmdBuffers, uint32_t p_cbCount, std::string* p_debugNames)
 {
 	VkCommandBufferAllocateInfo cmdBfrAllocInfo{};
 	cmdBfrAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -503,6 +656,11 @@ bool CVulkanCore::CreateCommandBuffers(VkCommandPool p_cmdPool, VkCommandBuffer*
 		std::cerr << "vkAllocateCommandBuffers failed: " << res << std::endl;
 		return false;
 	}
+	
+	for (uint32_t i = 0; i < p_cbCount; i++)
+	{
+		SetDebugName((uint64_t)p_cmdBuffers[i], VK_OBJECT_TYPE_COMMAND_BUFFER, (p_debugNames[i] + " Command Buffer").c_str());
+	}	
 
 	return true;
 }
@@ -922,7 +1080,7 @@ void CVulkanCore::DestroyPipeline(Pipeline& p_pipeline)
 	vkDestroyPipeline(m_vkDevice, p_pipeline.pipeline, nullptr);
 }
 
-bool CVulkanCore::CreateSemaphor(VkSemaphore& p_semaphore)
+bool CVulkanCore::CreateSemaphor(VkSemaphore& p_semaphore, std::string p_dbgName)
 {
 	VkSemaphoreCreateInfo semaphoreCreateInfo{};
 	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -933,6 +1091,8 @@ bool CVulkanCore::CreateSemaphor(VkSemaphore& p_semaphore)
 		return false;
 	}
 
+	SetDebugName((uint64_t)p_semaphore, VkObjectType::VK_OBJECT_TYPE_SEMAPHORE, p_dbgName.c_str());
+
 	return true;
 }
 
@@ -941,7 +1101,7 @@ void CVulkanCore::DestroySemaphore(VkSemaphore p_semaphore)
 	vkDestroySemaphore(m_vkDevice, p_semaphore, nullptr);
 }
 
-bool CVulkanCore::CreateFence(VkFenceCreateFlags p_flags, VkFence& p_fence)
+bool CVulkanCore::CreateFence(VkFenceCreateFlags p_flags, VkFence& p_fence, std::string p_dbgName)
 {
 	VkFenceCreateInfo fenceinfo{};
 	fenceinfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -952,6 +1112,9 @@ bool CVulkanCore::CreateFence(VkFenceCreateFlags p_flags, VkFence& p_fence)
 		std::cerr << "CreateFence failed: " << res << std::endl;
 		return false;
 	}
+
+	SetDebugName((uint64_t)p_fence, VkObjectType::VK_OBJECT_TYPE_FENCE, p_dbgName.c_str());
+
 	return true;
 }
 
@@ -1574,96 +1737,6 @@ bool CVulkanCore::ListAvailableInstanceExtensions(std::vector<const char*> reqLi
 
 	return true;
 }
-
-#if	VULKAN_DEBUG == 1
-void CVulkanCore::InitVulkanDebug()
-{
-	m_fpVkCreateDebugReportCallbackEXT = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(m_vkInstance, "vkCreateDebugReportCallbackEXT");
-	m_fpVkDestroyDebugReportCallbackEXT = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(m_vkInstance, "vkDestroyDebugReportCallbackEXT");
-
-	if (m_fpVkCreateDebugReportCallbackEXT == nullptr || m_fpVkDestroyDebugReportCallbackEXT == nullptr)
-	{
-		return;
-	}
-
-	m_fpVkCreateDebugReportCallbackEXT(m_vkInstance, &m_debugCallbackCreateInfo, nullptr, &m_vkDebugReportCallback);
-}
-
-void CVulkanCore::DestroyVulkanDebug()
-{
-	if (!m_fpVkDestroyDebugReportCallbackEXT)
-		return;
-
-	m_fpVkDestroyDebugReportCallbackEXT(m_vkInstance, m_vkDebugReportCallback, nullptr);
-	m_vkDebugReportCallback = VK_NULL_HANDLE;
-}
-#endif
-
-void CVulkanCore::InitDebugMarkers()
-{
-#if VULKAN_DEBUG_MARKERS == 1
-	m_fpVkDebugMarkerSetObjectTag = (PFN_vkDebugMarkerSetObjectTagEXT)vkGetDeviceProcAddr(m_vkDevice, "vkDebugMarkerSetObjectTagEXT");
-	m_fpVkDebugMarkerSetObjectName = (PFN_vkDebugMarkerSetObjectNameEXT)vkGetDeviceProcAddr(m_vkDevice, "vkDebugMarkerSetObjectNameEXT");
-	m_fpVkCmdDebugMarkerBegin = (PFN_vkCmdDebugMarkerBeginEXT)vkGetDeviceProcAddr(m_vkDevice, "vkCmdDebugMarkerBeginEXT");
-	m_fpVkCmdDebugMarkerEnd = (PFN_vkCmdDebugMarkerEndEXT)vkGetDeviceProcAddr(m_vkDevice, "vkCmdDebugMarkerEndEXT");
-	m_fpVkCmdDebugMarkerInsert = (PFN_vkCmdDebugMarkerInsertEXT)vkGetDeviceProcAddr(m_vkDevice, "vkCmdDebugMarkerInsertEXT");
-	//m_fpVkSetDebugUtilsObjectName = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(m_vkDevice, "vkSetDebugUtilsObjectNameEXT");
-#endif
-}
-
-
-#if	VULKAN_DEBUG == 1
-VKAPI_ATTR VkBool32	VKAPI_CALL
-VulkanDebugCallback(
-	VkDebugReportFlagsEXT		p_msgFlags,
-	VkDebugReportObjectTypeEXT	p_ObjType,
-	uint64_t					p_SrcObj,
-	size_t						p_location,
-	int32_t						p_MesgCode,
-	const char* p_layerPrefix,
-	const char* p_Message,
-	void* pUserData)
-{
-	std::ostringstream stream;
-	stream << "[@ " << p_layerPrefix << "] " << p_Message;
-
-#if VULKAN_SHOW_MESSAGES == 1
-	if (p_msgFlags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
-		std::cerr << "Vulkan Error " << stream.str() << std::endl;
-
-#elif VULKAN_SHOW_MESSAGES == 2
-	if (p_msgFlags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
-		std::cerr << "Vulkan Error " << stream.str() << std::endl;
-
-	else if (p_msgFlags & VK_DEBUG_REPORT_WARNING_BIT_EXT)
-		std::cerr << "Vulkan Warning: " << stream.str() << std::endl;
-
-	else if (p_msgFlags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT)
-		std::cerr << "Vulkan Performance Warning: " << stream.str() << std::endl;
-
-#elif VULKAN_SHOW_MESSAGES == 3
-	if (p_msgFlags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT)
-		std::cerr << "Vulkan Information: " << stream.str() << std::endl;
-
-	else if (p_msgFlags & VK_DEBUG_REPORT_WARNING_BIT_EXT)
-		std::cerr << "Vulkan Warning: " << stream.str() << std::endl;
-
-	else if (p_msgFlags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT)
-		std::cerr << "Vulkan Performance Warning: " << stream.str() << std::endl;
-
-	else if (p_msgFlags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
-		std::cerr << "Vulkan Error: " << stream.str() << std::endl;
-
-	else if (p_msgFlags & VK_DEBUG_REPORT_DEBUG_BIT_EXT)
-		std::cerr << "Vulkan Debug Report: " << stream.str() << std::endl;
-
-	else
-		std::cerr << "Vulkan Info " << stream.str() << std::endl;
-#endif
-
-	return false;
-}
-#endif
 
 char* BinaryLoader(const std::string pPath, size_t& pDataSize)
 {

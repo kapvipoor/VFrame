@@ -31,9 +31,9 @@ public:
 		bool p_waitforFence = false, SemaphoreList* p_signalList = nullptr, 
 		SemaphoreList* p_waitList = nullptr);
 
-	bool CreateAllocateBindBuffer(size_t p_size, Buffer& p_buffer, VkBufferUsageFlags p_bfrUsg, VkMemoryPropertyFlags p_propFlag);
-	bool CreateTexture(Buffer& p_staging, Image& p_Image, VkImageCreateInfo p_createInfo, VkCommandBuffer& p_cmdBfr);
-	bool CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_t p_height, VkImageLayout p_iniLayout, VkImageUsageFlags p_usage, Image& p_renderTarget);
+	bool CreateAllocateBindBuffer(size_t p_size, Buffer& p_buffer, VkBufferUsageFlags p_bfrUsg, VkMemoryPropertyFlags p_propFlagm, std::string p_DebugName);
+	bool CreateTexture(Buffer& p_staging, Image& p_Image, VkImageCreateInfo p_createInfo, VkCommandBuffer& p_cmdBfr, std::string p_DebugName);
+	bool CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_t p_height, VkImageLayout p_iniLayout, VkImageUsageFlags p_usage, Image& p_renderTarget, std::string p_DebugName);
 
 	void FreeMemoryDestroyBuffer(Buffer&);
 

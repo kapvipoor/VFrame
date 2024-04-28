@@ -57,6 +57,7 @@ private:
 	VkFence								m_vkFenceCmdBfrFree[FRAME_BUFFER_COUNT];
 
 	VkCommandPool						m_vkCmdPool;
+	std::string							m_cmdBufferNames[FRAME_BUFFER_COUNT][CommandBufferId::cb_max];
 	CVulkanRHI::CommandBuffer			m_vkCmdBfr[FRAME_BUFFER_COUNT][CommandBufferId::cb_max];
 	CVulkanRHI::CommandBufferList		m_cmdBfrsInUse;
 

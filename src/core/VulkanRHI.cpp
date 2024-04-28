@@ -67,7 +67,8 @@ bool CVulkanRHI::SubmitCommandBuffers(
 	return true;
 }
 
-bool CVulkanRHI::CreateAllocateBindBuffer(size_t p_size, Buffer& p_buffer, VkBufferUsageFlags p_bfrUsg, VkMemoryPropertyFlags p_propFlag)
+bool CVulkanRHI::CreateAllocateBindBuffer(size_t p_size, Buffer& p_buffer, VkBufferUsageFlags p_bfrUsg, 
+	VkMemoryPropertyFlags p_propFlag, std::string p_DebugName)
 {
 	VkBufferCreateInfo bufferCreateInfo{};
 	bufferCreateInfo.sType							= VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -88,10 +89,13 @@ bool CVulkanRHI::CreateAllocateBindBuffer(size_t p_size, Buffer& p_buffer, VkBuf
 	if (!BindBufferMemory(p_buffer.descInfo.buffer, p_buffer.devMem))
 		return false;
 
+	SetDebugName((uint64_t)p_buffer.descInfo.buffer, VK_OBJECT_TYPE_BUFFER, (p_DebugName + "_buffer").c_str());
+
 	return true;
 }
 
-bool CVulkanRHI::CreateTexture(Buffer& p_staging, Image& p_Image, VkImageCreateInfo p_createInfo, VkCommandBuffer& p_cmdBfr)
+bool CVulkanRHI::CreateTexture(Buffer& p_staging, Image& p_Image, 
+	VkImageCreateInfo p_createInfo, VkCommandBuffer& p_cmdBfr, std::string p_DebugName)
 {
 	p_Image.descInfo.imageLayout					= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // final layout
 
@@ -105,14 +109,18 @@ bool CVulkanRHI::CreateTexture(Buffer& p_staging, Image& p_Image, VkImageCreateI
 	IssueImageLayoutBarrier(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image.layerCount, p_Image.image, p_cmdBfr);
 	UploadFromHostToDevice(p_staging, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image, p_cmdBfr);
 	IssueImageLayoutBarrier(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image.descInfo.imageLayout, p_Image.layerCount, p_Image.image, p_cmdBfr);
+	SetDebugName((uint64_t)p_Image.image, VK_OBJECT_TYPE_IMAGE, (p_DebugName + "_image").c_str());
 
 	if (!CreateImagView(p_createInfo.usage, p_Image.image, p_Image.format, p_Image.viewType, p_Image.descInfo.imageView))
 		return false;
+	
+	SetDebugName((uint64_t)p_Image.descInfo.imageView, VK_OBJECT_TYPE_IMAGE_VIEW, (p_DebugName + "_image_view").c_str());
 
 	return true;
 }
 
-bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_t p_height, VkImageLayout p_iniLayout, VkImageUsageFlags p_usage, Image& p_renderTarget)
+bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_t p_height, 
+	VkImageLayout p_iniLayout, VkImageUsageFlags p_usage, Image& p_renderTarget, std::string p_DebugName)
 {
 	VkFormatFeatureFlags feature;
 	if (p_usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
@@ -154,6 +162,8 @@ bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_
 	if (!CreateImagView(p_usage, p_renderTarget.image, p_renderTarget.format, VK_IMAGE_VIEW_TYPE_2D, p_renderTarget.descInfo.imageView))
 		return false;
 	
+	SetDebugName((uint64_t)p_renderTarget.image, VK_OBJECT_TYPE_IMAGE, (p_DebugName + "_rt").c_str());
+
 	return true;
 }
 

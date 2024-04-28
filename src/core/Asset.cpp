@@ -67,17 +67,20 @@ void CRenderable::DestroyRenderable(CVulkanRHI* p_rhi)
 	}
 }
 
-bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, int32_t p_id)
+bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, 
+	const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t p_id)
 {
 	{
 		CVulkanRHI::Buffer vertexStg;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(float) * p_meshRaw->vertexList.size(), vertexStg, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(float) * p_meshRaw->vertexList.size(), vertexStg, 
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, p_debugStr + "_vert_transfer"));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)p_meshRaw->vertexList.data(), vertexStg));
 		p_stgList.push_back(vertexStg);
 
 		CVulkanRHI::Buffer vertexBuffer;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(vertexStg.descInfo.range, vertexBuffer, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(vertexStg.descInfo.range, vertexBuffer, 
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, p_debugStr + "_vertex"));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(vertexStg, vertexBuffer, p_cmdBfr));
 		
@@ -95,13 +98,15 @@ bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferL
 
 	{
 		CVulkanRHI::Buffer indxStg;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(uint32_t) * p_meshRaw->indicesList.size(), indxStg, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(uint32_t) * p_meshRaw->indicesList.size(), indxStg, 
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, p_debugStr + "_ind_transfer"));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)p_meshRaw->indicesList.data(), indxStg));
 		p_stgList.push_back(indxStg);
 
 		CVulkanRHI::Buffer indexBuffer;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(indxStg.descInfo.range, indexBuffer, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(indxStg.descInfo.range, indexBuffer, 
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, p_debugStr + "_index"));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(indxStg, indexBuffer, p_cmdBfr));
 		
@@ -115,8 +120,6 @@ bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferL
 			m_indexBuffers[p_id] = indexBuffer;
 		else
 			m_indexBuffers.push_back(indexBuffer);
-
-
 	}
 
 	return true;
@@ -128,24 +131,26 @@ CBuffers::CBuffers(int p_maxSize)
 		m_buffers.resize(p_maxSize);
 }
 
-bool CBuffers::CreateBuffer(CVulkanRHI* p_rhi, uint32_t p_id, VkBufferUsageFlags p_usage, VkMemoryPropertyFlags p_memProp, size_t p_size)
+bool CBuffers::CreateBuffer(CVulkanRHI* p_rhi, uint32_t p_id, VkBufferUsageFlags p_usage, VkMemoryPropertyFlags p_memProp, size_t p_size, std::string p_debugName)
 {
 	CVulkanRHI::Buffer buffer;
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(p_size, buffer, p_usage, p_memProp));
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(p_size, buffer, p_usage, p_memProp, p_debugName));
 
 	m_buffers[p_id] = buffer;
 
 	return true;
 }
 
-bool CBuffers::CreateBuffer(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, void* p_data, size_t p_size, CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id)
+bool CBuffers::CreateBuffer(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, void* p_data, size_t p_size, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, uint32_t p_id)
 {
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(p_size, p_stg, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(p_size, p_stg, 
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, p_debugName + "_transfer"));
 
 	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)p_data, p_stg));
 
 	CVulkanRHI::Buffer buffer;
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(p_size, buffer, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(p_size, buffer, 
+		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, p_debugName));
 
 	RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(p_stg, buffer, p_cmdBfr));
 
@@ -177,17 +182,17 @@ CTextures::CTextures(int p_maxSize)
 		m_textures.resize(p_maxSize);
 }
 
-bool CTextures::CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_format, uint32_t p_width, uint32_t p_height, VkImageLayout p_layout, VkImageUsageFlags p_usage)
+bool CTextures::CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_format, uint32_t p_width, uint32_t p_height, VkImageLayout p_layout, std::string p_debugName, VkImageUsageFlags p_usage)
 {
 	CVulkanRHI::Image renderTarget;
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateRenderTarget(p_format, p_width, p_height, p_layout, p_usage, renderTarget));
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateRenderTarget(p_format, p_width, p_height, p_layout, p_usage, renderTarget, p_debugName));
 
 	m_textures[p_id] = renderTarget;
 
 	return true;
 }
 
-bool CTextures::CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const ImageRaw* p_rawImg, VkFormat p_format, CVulkanRHI::CommandBuffer& p_cmdBfr, int p_id)
+bool CTextures::CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const ImageRaw* p_rawImg, VkFormat p_format, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id)
 {
 	if (p_rawImg->raw != nullptr)
 	{
@@ -195,7 +200,8 @@ bool CTextures::CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 
 		size_t texSize							= p_rawImg->width * p_rawImg->height * p_rawImg->channels;
 
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(texSize, p_stg, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(texSize, p_stg, 
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, p_debugName + "_transfer"));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)p_rawImg->raw, p_stg));
 
@@ -210,7 +216,7 @@ bool CTextures::CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 		imgCrtInfo.format						= img.format;
 		imgCrtInfo.usage						= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateTexture(p_stg, img, imgCrtInfo, p_cmdBfr))
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateTexture(p_stg, img, imgCrtInfo, p_cmdBfr, p_debugName))
 
 		// Doing this because; if the id is set to -1, then the intent is to grow the image list at runtime and not a fixed size
 		if (p_id == -1)
@@ -228,7 +234,8 @@ bool CTextures::CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 	return false;
 }
 
-bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const std::vector<ImageRaw>& p_rawList, const CVulkanRHI::SamplerList& p_samplers, CVulkanRHI::CommandBuffer& p_cmdBfr, int p_id)
+bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const std::vector<ImageRaw>& p_rawList, 
+	const CVulkanRHI::SamplerList& p_samplers, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id)
 {
 	if (p_rawList.size() != 6)
 	{
@@ -243,7 +250,8 @@ bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 		megaStg_data.insert(megaStg_data.end(), p_rawList[i].raw, p_rawList[i].raw + size);
 	}
 
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(megaStg_data.size(), p_stg, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(megaStg_data.size(), p_stg, 
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, p_debugName + "_transfer"));
 
 	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)megaStg_data.data(), p_stg));
 	CVulkanRHI::Image cubemap;
@@ -264,7 +272,7 @@ bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 	imgInfo.usage									= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 	imgInfo.format									= VK_FORMAT_R8G8B8A8_UNORM;
 
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateTexture(p_stg, cubemap, imgInfo, p_cmdBfr));
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateTexture(p_stg, cubemap, imgInfo, p_cmdBfr, p_debugName));
 	// Doing this because; if the id is set to -1, then the intent is to grow the texture list at runtime and not a fixed size
 	if (p_id == -1)
 	{
@@ -379,10 +387,11 @@ bool CRenderableUI::Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_c
 
 	CVulkanRHI::CommandBuffer cmdBfr;
 	CVulkanRHI::BufferList stgList;
+	
+	std::string debugMarker = "UI Loading";
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1, &debugMarker));
 
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1));
-
-	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, "UI Loading"));
+	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
 
 	if (!LoadFonts(p_rhi, stgList, cmdBfr))
 	{
@@ -452,7 +461,7 @@ bool CRenderableUI::LoadFonts(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	if (tex.raw != nullptr)
 	{
 		CVulkanRHI::Buffer stg;
-		RETURN_FALSE_IF_FALSE(CreateTexture(p_rhi, stg, &tex, VK_FORMAT_R8G8B8A8_UNORM, p_cmdBfr));
+		RETURN_FALSE_IF_FALSE(CreateTexture(p_rhi, stg, &tex, VK_FORMAT_R8G8B8A8_UNORM, p_cmdBfr, "UI_font"));
 		p_stgList.push_back(stg);
 	}
 
@@ -467,7 +476,8 @@ bool CRenderableUI::CreateUIDescriptors(CVulkanRHI* p_rhi)
 
 	uint32_t texturesCount = (uint32_t)m_textures.size();
 
-	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_UI_TexArray, texturesCount, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,	imageInfoList.data() });
+	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_UI_TexArray, texturesCount, 
+		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,	imageInfoList.data()});
 
 	RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, texturesCount, BindingDest::bd_UI_TexArray));
 
@@ -602,8 +612,8 @@ bool CRenderableUI::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx)
 
 			// Creating vertex and index buffers and upload all data to single continuous GPU buffers respectively
 			{
-				p_rhi->CreateAllocateBindBuffer(verteSize, m_vertexBuffers[p_scIdx], VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-				p_rhi->CreateAllocateBindBuffer(indexSize, m_indexBuffers[p_scIdx], VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+				p_rhi->CreateAllocateBindBuffer(verteSize, m_vertexBuffers[p_scIdx], VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, "imgui_vert");
+				p_rhi->CreateAllocateBindBuffer(indexSize, m_indexBuffers[p_scIdx], VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, "imgui_index");
 				
 				ImDrawVert* vertexMemIdx	= nullptr;
 				ImDrawIdx* indexMemIdx		= nullptr;
@@ -725,9 +735,9 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 	CVulkanRHI::CommandBuffer cmdBfr;
 	CVulkanRHI::BufferList stgList;
 
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1));
-
-	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, "Scene Loading"));
+	std::string debugMarker = "Scene Loading";
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1, &debugMarker));
+	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
 
 	if (!LoadDefaultTexture(p_rhi, stgList, cmdBfr))
 	{
@@ -857,9 +867,9 @@ bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 		CVulkanRHI::CommandBuffer cmdBfr;
 		CVulkanRHI::BufferList stgList;
 
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_loadedUpdate.commandPool, &cmdBfr, 1));
-
-		RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, "Scene Loading"));
+		std::string debugMarker = "Lights Loading";
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_loadedUpdate.commandPool, &cmdBfr, 1, &debugMarker));
+		RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
 
 		// Every time any light is dirty(has change in transform, color or intensity), 
 		// the raw data is updated and the entire GPU resource is reloaded
@@ -913,7 +923,7 @@ bool CScene::LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg
 		ImageRaw tex;
 		
 		RETURN_FALSE_IF_FALSE(LoadRawImage((g_DefaultPath / "tex_not_found.png").string().c_str(), tex));
-		RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateTexture(p_rhi, stg, &tex, VK_FORMAT_B8G8R8A8_SRGB,p_cmdBfr));
+		RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateTexture(p_rhi, stg, &tex, VK_FORMAT_B8G8R8A8_SRGB,p_cmdBfr, "default_scene"));
 		
 		FreeRawImage(tex);
 		p_stgList.push_back(stg);
@@ -945,7 +955,7 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 		}
 
 		CVulkanRHI::Buffer stg;
-		RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateCubemap(p_rhi, stg, cubemap_raw, *p_samplerList, p_cmdBfr));
+		RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateCubemap(p_rhi, stg, cubemap_raw, *p_samplerList, p_cmdBfr, "skybox"));
 
 		p_stgList.push_back(stg);
 	}
@@ -961,7 +971,7 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 
 		MeshRaw meshraw					= sceneraw.meshList[0];
 		CRenderableMesh* mesh			= new CRenderableMesh("Skybox", MeshType::mt_Skybox, nm::Transform());
-		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr));
+		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr, "skybox"));
 		m_meshes.push_back(mesh);
 	}
 
@@ -974,8 +984,8 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 	//m_scenePaths.push_back(g_AssetPath/"shadow_test_3.gltf");																		//1
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");						//2
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
-	m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");											//4
-	m_scenePaths.push_back(g_AssetPath/"Sponza/glTF/Sponza.gltf");																//5
+	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");											//4
+	//m_scenePaths.push_back(g_AssetPath/"Sponza/glTF/Sponza.gltf");																//5
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");				//6
 	//m_scenePaths.push_back(g_AssetPath/"cube/cube.obj");																			//7
 	//m_scenePaths.push_back(g_AssetPath/"icosphere.gltf");																			//8
@@ -983,8 +993,9 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 	//m_scenePaths.push_back(g_AssetPath/"stanford_dragon_pbr/scene.gltf");															//10
 	//m_scenePaths.push_back(g_AssetPath/"mitsuba/mitsuba.obj");																	//11
 	//m_scenePaths.push_back(g_AssetPath/"wall_and_floor/wall_and_floor.gltf");														//12
-	//m_scenePaths.push_back(g_AssetPath/"main_sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");									//13
-	//m_scenePaths.push_back(g_AssetPath / "main_sponza/PKG_A_Curtains/NewSponza_Curtains_glTF.gltf");								//14
+	m_scenePaths.push_back(g_AssetPath / "main_sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");									//13
+	m_scenePaths.push_back(g_AssetPath/"main_sponza/PKG_A_Curtains/NewSponza_Curtains_glTF.gltf");								//14
+	//m_scenePaths.push_back(g_AssetPath/"an_afternoon_in_a_persian_garden/scene.obj");												//15
 
 	//std::vector<std::filesystem::path> paths;
 	////paths.push_back(m_scenePaths[5]);
@@ -1003,7 +1014,7 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 		loadData.flipUV = flipYList[i];
 		loadData.loadMeshOnly = false;
 
-		if (m_scenePaths[i].extension() == ".gltf")
+		if (m_scenePaths[i].extension() == ".gltf" || m_scenePaths[i].extension() == ".glb")
 		{
 			RETURN_FALSE_IF_FALSE(LoadGltf(m_scenePaths[i].string().c_str(), sceneraw, loadData));
 		}
@@ -1013,7 +1024,7 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 		}
 		else
 		{
-			std::cerr << "Invalid file extension - " << m_scenePaths[i] << std::endl;
+			std::cerr << "Invalid file extension - " << m_scenePaths[i].extension() << std::endl;
 			return false;
 		}
 
@@ -1038,7 +1049,7 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 			mesh->SetSubBoundingBox(bbox);
 		}
 
-		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr));
+		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr, meshraw.name));
 		m_meshes.push_back(mesh);
 	}
 	
@@ -1049,7 +1060,7 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 			if (tex.raw != nullptr)
 			{
 				CVulkanRHI::Buffer stg;
-				RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateTexture(p_rhi, stg, &tex, VK_FORMAT_R8G8B8A8_UNORM, p_cmdBfr));
+				RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateTexture(p_rhi, stg, &tex, VK_FORMAT_R8G8B8A8_UNORM, p_cmdBfr, tex.name));
 				p_stgList.push_back(stg);
 			}
 			else
@@ -1063,13 +1074,15 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 	{
 		m_materialsList = sceneraw.materialsList;
 		CVulkanRHI::Buffer matStg;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(Material) * sceneraw.materialsList.size(), matStg, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(Material) * sceneraw.materialsList.size(), matStg, 
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, "scene_materials_transfer"));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)sceneraw.materialsList.data(), matStg));
 
 		p_stgList.push_back(matStg);
 
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(matStg.descInfo.range, m_material_storage, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(matStg.descInfo.range, m_material_storage, 
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, "scene_materials"));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(matStg, m_material_storage, p_cmdBfr));
 	}
@@ -1102,7 +1115,8 @@ bool CScene::LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferLi
 		memcpy(rawData + sizeof(uint32_t), rawLightList.data(), rawLightList.size() * sizeof(CLights::LightGPUData)); // copying light raw data into buffer
 
 		CVulkanRHI::Buffer lightStg;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(bufferSize, lightStg, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(bufferSize, lightStg, 
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, "lights_transfer"));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(rawData, lightStg));
 
@@ -1110,7 +1124,8 @@ bool CScene::LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferLi
 
 		if (m_light_storage.descInfo.buffer == VK_NULL_HANDLE) 
 		{
-			RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(lightStg.descInfo.range, m_light_storage, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+			RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(lightStg.descInfo.range, m_light_storage, 
+				VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, "lights"));
 		}
 
 		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(lightStg, m_light_storage, p_cmdBfr));
@@ -1130,7 +1145,8 @@ bool CScene::CreateMeshUniformBuffer(CVulkanRHI* p_rhi)
 
 	for (int i = 0; i < FRAME_BUFFER_COUNT; i++)
 	{
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(uniBufize, m_meshInfo_uniform[i], VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(uniBufize, m_meshInfo_uniform[i], 
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, "mesh_uniform"));
 	}
 
 	return true;
@@ -1187,9 +1203,9 @@ bool CReadOnlyTextures::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers,
 	CVulkanRHI::CommandBuffer cmdBfr;
 	CVulkanRHI::BufferList stgList;
 
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_commandPool, &cmdBfr, 1));
-
-	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, "Loading Read-only Textures"));
+	std::string debugMarker = "Read-only Textures Loading";
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_commandPool, &cmdBfr, 1, &debugMarker));
+	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
 
 	CFixedBuffers::PrimaryUniformData& priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
 	RETURN_FALSE_IF_FALSE(CreateSSAOKernelTexture(p_rhi, stgList, priUnidata, cmdBfr));
@@ -1230,9 +1246,9 @@ bool CReadOnlyTextures::CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::B
 	}
 	
 	CVulkanRHI::Buffer staging;
-	ImageRaw raw{ ssaoNoise.data(), (int)ssaoNoiseDim , (int)ssaoNoiseDim, 4 };
+	ImageRaw raw{ "ssao_noise", ssaoNoise.data(), (int)ssaoNoiseDim , (int)ssaoNoiseDim, 4};
 	
-	RETURN_FALSE_IF_FALSE(CreateTexture(p_rhi, staging, &raw, VK_FORMAT_R8G8B8A8_UNORM, p_cmdBfr, CReadOnlyTextures::tr_SSAONoise));
+	RETURN_FALSE_IF_FALSE(CreateTexture(p_rhi, staging, &raw, VK_FORMAT_R8G8B8A8_UNORM, p_cmdBfr, raw.name, CReadOnlyTextures::tr_SSAONoise));
 	
 	p_stgList.push_back(staging);
 
@@ -1249,9 +1265,9 @@ bool CReadOnlyBuffers::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers, 
 	CVulkanRHI::CommandBuffer cmdBfr;
 	CVulkanRHI::BufferList stgList;
 
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_commandPool, &cmdBfr, 1));
-
-	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, "Loading Read-only Buffers"));
+	std::string debugMarker = "Read-only Buffers Loading";
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_commandPool, &cmdBfr, 1, &debugMarker));
+	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
 
 	CFixedBuffers::PrimaryUniformData& priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
 	RETURN_FALSE_IF_FALSE(CreateSSAONoiseBuffer(p_rhi, stgList, priUnidata, cmdBfr));
@@ -1303,7 +1319,7 @@ bool CReadOnlyBuffers::CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::Buff
 	}
 
 	CVulkanRHI::Buffer staging;
-	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, staging, ssaoKernel.data(), sizeof(float) * 4 * ssaoKernel.size(), p_cmdBfr, CReadOnlyBuffers::br_SSAOKernel));
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, staging, ssaoKernel.data(), sizeof(float) * 4 * ssaoKernel.size(), p_cmdBfr, "ssao_kernel", CReadOnlyBuffers::br_SSAOKernel));
 	p_stgList.push_back(staging);
 
 	return true;
@@ -1363,15 +1379,20 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	uint32_t fullResWidth = p_rhi->GetRenderWidth();
 	uint32_t fullResHeight = p_rhi->GetRenderHeight();
 
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryDepth,			VK_FORMAT_D32_SFLOAT_S8_UINT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Position,				VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Normal,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Albedo,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAO,					VK_FORMAT_R32_SFLOAT,			fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAOBlur,				VK_FORMAT_R32_SFLOAT,			fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,	VK_FORMAT_D32_SFLOAT_S8_UINT,	4096, 4096,						VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DeferredRoughMetal,		VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+	VkImageUsageFlags sample_depth = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	VkImageUsageFlags sample_storage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+	VkImageUsageFlags sample_storage_color = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryDepth,			VK_FORMAT_D32_SFLOAT_S8_UINT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, "primary_depth", sample_depth));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Position,				VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, "position", sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Normal,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, "normal", sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Albedo,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, "albedo", sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAO,					VK_FORMAT_R32_SFLOAT,			fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, "ssao", sample_storage));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAOBlur,				VK_FORMAT_R32_SFLOAT,			fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, "ssao_blur", sample_storage));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,	VK_FORMAT_D32_SFLOAT_S8_UINT,	4096, 4096,						VK_IMAGE_LAYOUT_UNDEFINED, "directional_shadow", sample_depth));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, "primary_color", sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DeferredRoughMetal,		VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight,	VK_IMAGE_LAYOUT_UNDEFINED, "deferred_RM", sample_storage_color));
 
 	return true;
 }
@@ -1486,12 +1507,20 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 	size_t objPickerBufferSize = sizeof(uint32_t) * 1; // selected mesh ID
 	size_t debugDrawUniformSize = MAX_SUPPORTED_DEBUG_DRAW_ENTITES * ((sizeof(float) * 16)); // storing transforms
 
-	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_PrimaryUniform_0,	VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,										VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, primaryUniformBufferSize));
-	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_PrimaryUniform_1,	VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,										VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, primaryUniformBufferSize));
-	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_ObjectPickerRead,	VK_BUFFER_USAGE_TRANSFER_DST_BIT,										VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,										objPickerBufferSize));
-	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_ObjectPickerWrite,	VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,	VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,										objPickerBufferSize));
-	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_DebugUniform_0,	VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,										VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, debugDrawUniformSize));
-	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_DebugUniform_1,	VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,										VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, debugDrawUniformSize));
+	VkBufferUsageFlags uniform = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	VkBufferUsageFlags dest = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	VkBufferUsageFlags src_storage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+
+	VkMemoryPropertyFlags hv_hc = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+	VkMemoryPropertyFlags hv = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+
+
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_PrimaryUniform_0,		uniform,		hv_hc,	primaryUniformBufferSize, "primary_uniform_0"));
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_PrimaryUniform_1,		uniform,		hv_hc,	primaryUniformBufferSize, "primary_uniform_1"));
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_ObjectPickerRead,		dest,			hv,		objPickerBufferSize		, "pick_read"));
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_ObjectPickerWrite,		src_storage,	hv,		objPickerBufferSize		, "pick_write"));
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_DebugUniform_0,		uniform,		hv_hc,	debugDrawUniformSize	, "debug_uniform_0"));
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_DebugUniform_1,		uniform,		hv_hc,	debugDrawUniformSize	, "debug_uniform_1"));
 
 	return true;
 }
@@ -1701,42 +1730,52 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 		readTexDesInfoList.push_back(readonlyTex->GetTexture(i).descInfo);
 	}
 
+	VkShaderStageFlags all = VK_SHADER_STAGE_ALL;
+	VkShaderStageFlags fragment = VK_SHADER_STAGE_FRAGMENT_BIT;
+	VkShaderStageFlags compute = VK_SHADER_STAGE_COMPUTE_BIT;
+	VkShaderStageFlags frag_compute = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+
+	VkDescriptorType uniform = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	VkDescriptorType sampler = VK_DESCRIPTOR_TYPE_SAMPLER;
+	VkDescriptorType storage_buf = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	VkDescriptorType sampled_img = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	VkDescriptorType storage_img = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 	{
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Gloabl_Uniform,			1,		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	VK_SHADER_STAGE_ALL,										&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_0).descInfo,	VK_NULL_HANDLE }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Linear_Sampler,			1,		VK_DESCRIPTOR_TYPE_SAMPLER,			VK_SHADER_STAGE_ALL,										VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }												, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_ObjPicker_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_FRAGMENT_BIT,								&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}				, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Depth_Image,				1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PosGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }				, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_NormGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }					, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_AlbedoGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }					, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAO_Image,				1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }					, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOBlur_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }				, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_COMPUTE_BIT,								&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}				, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,			1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_ALL,										VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DirectionalShadowDepth).descInfo }	, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Image,		1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Texture,		1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredRoughMetal_Image,	1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredRoughMetal).descInfo }		, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	readTexDesInfoList.data() }														, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Gloabl_Uniform,			1,		uniform,		all,			&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_0).descInfo,	VK_NULL_HANDLE }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Linear_Sampler,			1,		sampler,		all,			VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }												, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_ObjPicker_Storage,		1,		storage_buf,	fragment,		&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Depth_Image,				1,		sampled_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PosGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_NormGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }					, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_AlbedoGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }					, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAO_Image,				1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }					, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOBlur_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		storage_buf,	compute,		&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,			1,		sampled_img,	all,			VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DirectionalShadowDepth).descInfo }	, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Image,		1,		storage_img,	compute,		VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Texture,		1,		sampled_img,	fragment,		VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredRoughMetal_Image,	1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredRoughMetal).descInfo }		, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,		sampled_img,	compute,		VK_NULL_HANDLE,	readTexDesInfoList.data() }														, 0);
 
 		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, tr_max, BindingDest::bd_PrimaryRead_TexArray, 0));
 	}
 
 	{
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Gloabl_Uniform,			1,		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	VK_SHADER_STAGE_ALL,										&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_1).descInfo,	VK_NULL_HANDLE }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Linear_Sampler,			1,		VK_DESCRIPTOR_TYPE_SAMPLER,			VK_SHADER_STAGE_ALL,										VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }												, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_ObjPicker_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_FRAGMENT_BIT,								&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}				, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Depth_Image,				1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PosGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }				, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_NormGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }					, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_AlbedoGBuf_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }					, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAO_Image,				1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }					, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOBlur_Image,			1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }				, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,	VK_SHADER_STAGE_COMPUTE_BIT,								&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}				, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,			1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_ALL,										VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DirectionalShadowDepth).descInfo }	, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Image,		1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Texture,		1,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT,								VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredRoughMetal_Image,	1,		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,	VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_COMPUTE_BIT,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredRoughMetal).descInfo }		, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,	VK_SHADER_STAGE_COMPUTE_BIT,								VK_NULL_HANDLE,	readTexDesInfoList.data() }														, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Gloabl_Uniform,			1,		uniform,		all,			&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_1).descInfo,	VK_NULL_HANDLE }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Linear_Sampler,			1,		sampler,		all,			VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }												, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_ObjPicker_Storage,		1,		storage_buf,	fragment,		&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Depth_Image,				1,		sampled_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PosGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_NormGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }					, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_AlbedoGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }					, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAO_Image,				1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }					, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOBlur_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		storage_buf,	compute,		&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,			1,		sampled_img,	all,			VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DirectionalShadowDepth).descInfo }	, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Image,		1,		storage_img,	compute,		VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Texture,		1,		sampled_img,	fragment,		VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredRoughMetal_Image,	1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredRoughMetal).descInfo }		, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,		sampled_img,	compute,		VK_NULL_HANDLE,	readTexDesInfoList.data() }														, 1);
 
 		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, tr_max, BindingDest::bd_PrimaryRead_TexArray, 1));
 	}
@@ -1774,8 +1813,9 @@ bool CRenderableDebug::Create(CVulkanRHI* p_rhi, const CFixedBuffers* p_fixedBuf
 {
 	CVulkanRHI::CommandBuffer cmdBfr;
 	CVulkanRHI::BufferList stgList;
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1));
-	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, "Debug Resources Loading"));
+	std::string debugMarker = "Debug Resources Loading";
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1, &debugMarker));
+	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
 
 	RETURN_FALSE_IF_FALSE(CreateBoxSphereBuffers(p_rhi, stgList, cmdBfr))
 
@@ -1999,7 +2039,7 @@ bool CRenderableDebug::CreateBoxSphereBuffers(CVulkanRHI* p_rhi, CVulkanRHI::Buf
 		std::copy(rawVertexData.begin(), rawVertexData.end(), std::back_inserter(debugMeshes.vertexList.getRaw()));
 	}
 		
-	RETURN_FALSE_IF_FALSE(CreateVertexIndexBuffer(p_rhi, p_stgList, &debugMeshes, p_cmdBfr));
+	RETURN_FALSE_IF_FALSE(CreateVertexIndexBuffer(p_rhi, p_stgList, &debugMeshes, p_cmdBfr, "renderable_debug"));
 
 	return true;
 }
