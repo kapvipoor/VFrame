@@ -1563,6 +1563,28 @@ namespace nm {
                  vec<S, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
      }
 
+     /*
+        created this because this is how glm does it
+     */
+     template<class S>
+     auto quat2mat_glm(const quat<S>& q) {
+         S qxx(q.x() * q.x());
+         S qyy(q.y() * q.y());
+         S qzz(q.z() * q.z());
+         S qxz(q.x() * q.z());
+         S qxy(q.x() * q.y());
+         S qyz(q.y() * q.z());
+         S qwx(q.w() * q.x());
+         S qwy(q.w() * q.y());
+         S qwz(q.w() * q.z());
+
+         return mat4x4<S>::from_rows(
+             vec<S, 4>{ 1.0f - 2.0f * (qyy + qzz),      2.0f * (qxy + qwz),             2.0f * (qxz - qwy),             0.0f },
+             vec<S, 4>{ 2.0f * (qxy - qwz),             1.0f - 2.0f * (qxx + qzz),      2.0f * (qyz + qwx),             0.0f },
+             vec<S, 4>{ 2.0f * (qxz + qwy),             2.0f * (qyz - qwx),             1.0f - 2.0f * (qxx + qyy),      0.0f },
+             vec<S, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
+     }
+
      template <class S>
      inline constexpr void Decompose2Translation(const mat<S, 4>& mat,
          vec<S, 3>& translation) {     

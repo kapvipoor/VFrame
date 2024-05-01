@@ -123,6 +123,8 @@ void GenerateSphere(int p_stackCount, int p_sectorCount, RawSphere& p_sphere, fl
 
 bool LoadRawImage(const char* p_path, ImageRaw& p_data)
 {
+	GetFileName(p_path, p_data.name);
+
 	p_data.raw = stbi_load(p_path, &p_data.width, &p_data.height, &p_data.channels, STBI_rgb_alpha);
 	
 	// forcing this for now; as STBI Image returns the number of available channels in the image and not in loaded raw data; which is irrelevant for now
@@ -139,8 +141,236 @@ bool LoadRawImage(const char* p_path, ImageRaw& p_data)
 
 void FreeRawImage(ImageRaw& p_data)
 {
-	stbi_image_free(p_data.raw);
+	free(p_data.raw);
 	p_data = ImageRaw{};
+}
+
+bool LoadMaterials(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, uint32_t p_texOffset)
+{
+	// load materials
+	for (auto& gltf_mat : p_gltfInput.materials)
+	{
+		Material mat;
+		if (gltf_mat.values.find("baseColorTexture") != gltf_mat.values.end())
+		{
+			mat.color_id = p_texOffset + gltf_mat.values["baseColorTexture"].TextureIndex();
+		}
+
+		if (gltf_mat.additionalValues.find("normalTexture") != gltf_mat.additionalValues.end())
+		{
+			mat.normal_id = p_texOffset + gltf_mat.additionalValues["normalTexture"].TextureIndex();
+		}
+
+		mat.pbr_color = nm::float3(1.0f); // nm::float3((float)gltf_mat.pbrMetallicRoughness.baseColorFactor[0], (float)gltf_mat.pbrMetallicRoughness.baseColorFactor[1], (float)gltf_mat.pbrMetallicRoughness.baseColorFactor[2]);
+		mat.metallic = (float)gltf_mat.pbrMetallicRoughness.metallicFactor;
+		mat.roughness = (float)gltf_mat.pbrMetallicRoughness.roughnessFactor;
+		mat.roughMetal_id = p_texOffset + ((gltf_mat.pbrMetallicRoughness.metallicRoughnessTexture.index < 0) ? MAX_SUPPORTED_TEXTURES : gltf_mat.pbrMetallicRoughness.metallicRoughnessTexture.index);
+
+		p_objScene.materialsList.push_back(mat);
+	}
+
+	return true;
+}
+
+bool LoadTextures(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, std::string p_folder)
+{
+	for (const auto& image : p_gltfInput.images)
+	{
+		ImageRaw iraw{ "", nullptr, 0, 0, 0 };
+		std::string path = (p_folder + "/" + image.uri);
+
+		if (image.image.empty())
+		{
+			iraw.raw = stbi_load(path.c_str(), &iraw.width, &iraw.height, &iraw.channels, STBI_rgb_alpha);
+			iraw.channels = STBI_rgb_alpha;
+
+			if (iraw.raw == nullptr)
+			{
+				std::cerr << "stbi_load Failed - " << path << std::endl;
+				return false;
+			}
+		}
+		else
+		{
+			unsigned char* test = nullptr;
+			iraw.name = image.name;
+			iraw.width = image.width;
+			iraw.height = image.height;
+			iraw.channels = image.component;
+
+			iraw.raw = static_cast<unsigned char*>(malloc(image.image.size()));
+			memcpy(iraw.raw, image.image.data(), image.image.size());
+		}		
+		p_objScene.textureList.push_back(iraw);
+	}
+
+	if (p_gltfInput.images.empty())
+	{
+		ImageRaw iraw{ nullptr, 0, 0, 0 };
+		p_objScene.textureList.push_back(iraw);
+	}
+
+	return true;
+}
+
+bool LoadNode(const tinygltf::Node node, tinygltf::Model input, MeshRaw& objMesh, const ObjLoadData& p_loadData, uint32_t p_matOffset, nm::float4x4 transform)
+{
+	nm::float4x4 temp_transform = transform;
+	if (node.translation.size() == 3) {
+		temp_transform = temp_transform * nm::translation(nm::float3((float)node.translation[0], (float)node.translation[1], (float)node.translation[2]));
+	}
+	if (node.rotation.size() == 4) {
+		nm::quatf  q((float)node.rotation[0], (float)node.rotation[1], (float)node.rotation[2], (float)node.rotation[3]);
+		nm::float4x4 q_mat = nm::transpose(nm::quat2mat_glm(q));
+		temp_transform = temp_transform * q_mat;
+	}
+	if (node.scale.size() == 3) {
+		temp_transform = temp_transform * nm::scale(nm::float4((float)node.scale[0], (float)node.scale[1], (float)node.scale[2], 1.0));
+	}
+
+	// Load node's children
+	if (node.children.size() > 0) {
+		for (size_t i = 0; i < node.children.size(); i++) {
+			LoadNode(input.nodes[node.children[i]], input, objMesh, p_loadData, p_matOffset, temp_transform);
+		}
+	}
+
+	if (node.mesh > -1)
+	{
+		const tinygltf::Mesh mesh = input.meshes[node.mesh];
+		for (size_t i = 0; i < mesh.primitives.size(); i++)
+		{
+			const tinygltf::Primitive& glTFPrimitive = mesh.primitives[i];
+			uint32_t firstIndex = static_cast<uint32_t>(objMesh.indicesList.size());
+			uint32_t vertexStart = static_cast<uint32_t>(objMesh.vertexList.size() / objMesh.vertexList.GetVertexSize());
+			uint32_t indexCount = 0;
+			nm::float3 bbMin{ 0, 0, 0 };
+			nm::float3 bbMax{ 0, 0, 0 };
+
+			//Vertices
+			{
+				const float* positionBuffer = nullptr;
+				const float* normalsBuffer = nullptr;
+				const float* texCoordsBuffer = nullptr;
+				const float* tangentsBuffer = nullptr;
+				size_t vertexCount = 0;
+
+				// Get buffer data for vertex normals
+				if (glTFPrimitive.attributes.find("POSITION") != glTFPrimitive.attributes.end()) {
+					const tinygltf::Accessor& accessor = input.accessors[glTFPrimitive.attributes.find("POSITION")->second];
+					const tinygltf::BufferView& view = input.bufferViews[accessor.bufferView];
+					positionBuffer = reinterpret_cast<const float*>(&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
+					vertexCount = accessor.count;
+				}
+				// Get buffer data for vertex normals
+				if (glTFPrimitive.attributes.find("NORMAL") != glTFPrimitive.attributes.end()) {
+					const tinygltf::Accessor& accessor = input.accessors[glTFPrimitive.attributes.find("NORMAL")->second];
+					const tinygltf::BufferView& view = input.bufferViews[accessor.bufferView];
+					normalsBuffer = reinterpret_cast<const float*>(&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
+				}
+				// Get buffer data for vertex texture coordinates
+				// glTF supports multiple sets, we only load the first one
+				if (glTFPrimitive.attributes.find("TEXCOORD_0") != glTFPrimitive.attributes.end()) {
+					const tinygltf::Accessor& accessor = input.accessors[glTFPrimitive.attributes.find("TEXCOORD_0")->second];
+					const tinygltf::BufferView& view = input.bufferViews[accessor.bufferView];
+					texCoordsBuffer = reinterpret_cast<const float*>(&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
+				}
+				// POI: This sample uses normal mapping, so we also need to load the tangents from the glTF file
+				if (glTFPrimitive.attributes.find("TANGENT") != glTFPrimitive.attributes.end()) {
+					const tinygltf::Accessor& accessor = input.accessors[glTFPrimitive.attributes.find("TANGENT")->second];
+					const tinygltf::BufferView& view = input.bufferViews[accessor.bufferView];
+					tangentsBuffer = reinterpret_cast<const float*>(&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
+				}
+
+				for (size_t v = 0; v < vertexCount; v++) {
+					Vertex vert = objMesh.vertexList.CreateVertex();
+					vert.AddAttribute(Vertex::AttributeFlag::position, &((temp_transform * 
+						nm::float4(positionBuffer[(v * 3) + 0], positionBuffer[(v * 3) + 1], positionBuffer[(v * 3) + 2], 1.0f)).xyz())[0]);
+					
+					vert.AddAttribute(Vertex::AttributeFlag::normal, 
+						&(normalsBuffer ? 
+							nm::normalize(nm::float3(normalsBuffer[(v * 3) + 0], normalsBuffer[(v * 3) + 1], normalsBuffer[(v * 3) + 2])) : 
+							nm::float3(0.0f))[0]);
+					
+					vert.AddAttribute(Vertex::AttributeFlag::uv, 
+						&(texCoordsBuffer ? 
+							nm::float2(texCoordsBuffer[(v * 2) + 0], texCoordsBuffer[(v * 2) + 1]) : 
+							nm::float2(0.0f))[0]);
+					
+					vert.AddAttribute(Vertex::AttributeFlag::tangent, 
+						&(tangentsBuffer ? 
+							nm::float4(tangentsBuffer[(v * 4) + 0], tangentsBuffer[(v * 4) + 1], tangentsBuffer[(v * 4) + 2], tangentsBuffer[(v * 4) + 3]) : 
+							nm::float4(0.0))[0]);
+
+					if (p_loadData.flipUV == true)
+					{
+						float* uv = vert.GetAttribute(Vertex::AttributeFlag::uv);
+						uv[1] = 1.0f - uv[1];
+					}
+
+					float* position = vert.GetAttribute(Vertex::AttributeFlag::position);
+					bbMin[0] = std::min(bbMin[0], position[0]);
+					bbMin[1] = std::min(bbMin[1], position[1]);
+					bbMin[2] = std::min(bbMin[2], position[2]);
+
+					bbMax[0] = std::max(bbMax[0], position[0]);
+					bbMax[1] = std::max(bbMax[1], position[1]);
+					bbMax[2] = std::max(bbMax[2], position[2]);
+
+					objMesh.vertexList.AddVertex(vert);
+				}
+			}
+
+			{
+				const tinygltf::Accessor& accessor = input.accessors[glTFPrimitive.indices];
+				const tinygltf::BufferView& bufferView = input.bufferViews[accessor.bufferView];
+				const tinygltf::Buffer& buffer = input.buffers[bufferView.buffer];
+
+				indexCount += static_cast<uint32_t>(accessor.count);
+
+				// glTF supports different component types of indices
+				switch (accessor.componentType) {
+				case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT: {
+					const uint32_t* buf = reinterpret_cast<const uint32_t*>(&buffer.data[accessor.byteOffset + bufferView.byteOffset]);
+					for (size_t index = 0; index < accessor.count; index++) {
+						objMesh.indicesList.push_back(buf[index] + vertexStart);
+					}
+					break;
+				}
+				case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT: {
+					const uint16_t* buf = reinterpret_cast<const uint16_t*>(&buffer.data[accessor.byteOffset + bufferView.byteOffset]);
+					for (size_t index = 0; index < accessor.count; index++) {
+						objMesh.indicesList.push_back(buf[index] + vertexStart);
+					}
+					break;
+				}
+				case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE: {
+					const uint8_t* buf = reinterpret_cast<const uint8_t*>(&buffer.data[accessor.byteOffset + bufferView.byteOffset]);
+					for (size_t index = 0; index < accessor.count; index++) {
+						objMesh.indicesList.push_back(buf[index] + vertexStart);
+					}
+					break;
+				}
+				default:
+					std::cerr << "Index component type " << accessor.componentType << " not supported!" << std::endl;
+					return false;
+				}
+			}
+
+			SubMesh submesh{};
+			submesh.name = mesh.name + "_" + std::to_string(objMesh.submeshes.size());	// this is to make sure all names are unique
+			submesh.firstIndex = firstIndex;
+			submesh.indexCount = indexCount;
+			submesh.materialId = p_matOffset + glTFPrimitive.material;
+			objMesh.submeshes.push_back(submesh);
+
+			BBox meshbox(BBox::Type::Custom, BBox::Origin::Center, bbMin, bbMax);
+			objMesh.submeshesBbox.push_back(meshbox);
+
+		}
+	}
+
+	return true;
 }
 
 bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loadData)
@@ -158,19 +388,42 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 	}
 	std::string folderPath = strPath.substr(0, found);
 
-	if (!gltfContext.LoadASCIIFromFile(&input, &error, &warning, p_path))
+	std::string fileExtn;
+	if(!GetFileExtention(p_path, fileExtn))
 	{
-		std::cout << "Failed to load Gltf - " << p_path << std::endl;
+		std::cout << "Failed to Get Extn - " << p_path << std::endl;
 		return false;
+	}
+
+	if (fileExtn == "gltf")
+	{
+		if (!gltfContext.LoadASCIIFromFile(&input, &error, &warning, p_path))
+		{
+			std::cerr << "Failed to load Gltf - " << p_path << std::endl;
+			std::cerr << error << std::endl;
+			return false;
+		}
+	}
+	else if (fileExtn == "glb")
+	{
+		if (!gltfContext.LoadBinaryFromFile(&input, &error, &warning, p_path))
+		{
+			std::cerr << "Failed to load Gltf - " << p_path << std::endl;
+			std::cerr << error << std::endl;
+			return false;
+			return false;
+		}
 	}
 
 	uint32_t material_offset = (uint32_t)p_objScene.materialsList.size();
 	uint32_t texture_offset = (uint32_t)p_objScene.textureList.size();
 
+	RETURN_FALSE_IF_FALSE(LoadMaterials(input, p_objScene, texture_offset));
+	RETURN_FALSE_IF_FALSE(LoadTextures(input, p_objScene, folderPath));
+			
 	MeshRaw objMesh;
 	objMesh.vertexList = VertexList(Vertex::AttributeFlag::position | Vertex::AttributeFlag::normal | Vertex::AttributeFlag::uv | Vertex::AttributeFlag::tangent);
-	bool fileName = GetFileName(p_path, objMesh.name);
-	if (!fileName)
+	if (!GetFileName(p_path, objMesh.name))
 	{
 		std::cout << "Failed to Get Filename - " << p_path << std::endl;
 		return false;
@@ -179,152 +432,10 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 	const tinygltf::Scene& scene = input.scenes[0];
 	for (size_t n_id = 0; n_id < scene.nodes.size(); n_id++)
 	{
-		const tinygltf::Node node = input.nodes[scene.nodes[n_id]];
-
-		//if (node.translation.size() == 3) {
-		//	objMesh.transform = objMesh.transform * nm::translation(nm::float3((float)node.translation[0], (float)node.translation[1], (float)node.translation[2]));
-		//}
-		//if (node.rotation.size() == 4) {
-		//	nm::quatf  q((float)node.rotation[0], (float)node.rotation[1], (float)node.rotation[2], (float)node.rotation[3]);
-		//	nm::float4x4 q_mat = nm::quat2mat(q);
-		//	objMesh.transform = objMesh.transform * q_mat;
-		//}
-		////if (node.scale.size() == 3) {
-		////	objMesh.transform = objMesh.transform * nm::scale(nm::float4((float)node.scale[0], (float)node.scale[1], (float)node.scale[2], 1.0));
-		////}
-		//if (node.matrix.size() == 16) {
-		//	objMesh.transform.from_rows(
-		//		nm::float4((float)node.matrix[0], (float)node.matrix[1], (float)node.matrix[2], (float)node.matrix[3])
-		//		, nm::float4((float)node.matrix[4], (float)node.matrix[5], (float)node.matrix[6], (float)node.matrix[7])
-		//		, nm::float4((float)node.matrix[8], (float)node.matrix[9], (float)node.matrix[10], (float)node.matrix[11])
-		//		, nm::float4((float)node.matrix[12], (float)node.matrix[13], (float)node.matrix[14], (float)node.matrix[15]));
-		//}
-
-		nm::float4x4 translation = (node.translation.size() == 3) ? nm::translation(nm::float3((float)node.translation[0], (float)node.translation[1], (float)node.translation[2])) : nm::translation(nm::float3(1.0f));
-		nm::float4x4 scale = (node.scale.size() == 3) ? nm::scale(nm::float4((float)node.scale[0], (float)node.scale[1], (float)node.scale[2], 1.0f)) : nm::scale(nm::float4(1.0f));
-		nm::float4x4 transform = translation * scale;
-
-		if (node.mesh > -1)
-		{
-			const tinygltf::Mesh mesh = input.meshes[node.mesh];
-			for (size_t i = 0; i < mesh.primitives.size(); i++)
-			{
-				const tinygltf::Primitive& glTFPrimitive = mesh.primitives[i];
-				uint32_t firstIndex = static_cast<uint32_t>(objMesh.indicesList.size());
-				uint32_t vertexStart = static_cast<uint32_t>(objMesh.vertexList.size()/objMesh.vertexList.GetVertexSize());
-				uint32_t indexCount = 0;
-				nm::float3 bbMin{ 0, 0, 0 };
-				nm::float3 bbMax{ 0, 0, 0 };
-
-				//Vertices
-				{
-					const float* positionBuffer = nullptr;
-					const float* normalsBuffer = nullptr;
-					const float* texCoordsBuffer = nullptr;
-					const float* tangentsBuffer = nullptr;
-					size_t vertexCount = 0;
-
-					// Get buffer data for vertex normals
-					if (glTFPrimitive.attributes.find("POSITION") != glTFPrimitive.attributes.end()) {
-						const tinygltf::Accessor& accessor = input.accessors[glTFPrimitive.attributes.find("POSITION")->second];
-						const tinygltf::BufferView& view = input.bufferViews[accessor.bufferView];
-						positionBuffer = reinterpret_cast<const float*>(&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
-						vertexCount = accessor.count;
-					}
-					// Get buffer data for vertex normals
-					if (glTFPrimitive.attributes.find("NORMAL") != glTFPrimitive.attributes.end()) {
-						const tinygltf::Accessor& accessor = input.accessors[glTFPrimitive.attributes.find("NORMAL")->second];
-						const tinygltf::BufferView& view = input.bufferViews[accessor.bufferView];
-						normalsBuffer = reinterpret_cast<const float*>(&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
-					}
-					// Get buffer data for vertex texture coordinates
-					// glTF supports multiple sets, we only load the first one
-					if (glTFPrimitive.attributes.find("TEXCOORD_0") != glTFPrimitive.attributes.end()) {
-						const tinygltf::Accessor& accessor = input.accessors[glTFPrimitive.attributes.find("TEXCOORD_0")->second];
-						const tinygltf::BufferView& view = input.bufferViews[accessor.bufferView];
-						texCoordsBuffer = reinterpret_cast<const float*>(&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
-					}
-					// POI: This sample uses normal mapping, so we also need to load the tangents from the glTF file
-					if (glTFPrimitive.attributes.find("TANGENT") != glTFPrimitive.attributes.end()) {
-						const tinygltf::Accessor& accessor = input.accessors[glTFPrimitive.attributes.find("TANGENT")->second];
-						const tinygltf::BufferView& view = input.bufferViews[accessor.bufferView];
-						tangentsBuffer = reinterpret_cast<const float*>(&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
-					}
-
-					for (size_t v = 0; v < vertexCount; v++) {
-						Vertex vert = objMesh.vertexList.CreateVertex();
-						vert.AddAttribute(Vertex::AttributeFlag::position, &((transform * nm::float4(positionBuffer[(v * 3) + 0], positionBuffer[(v * 3) + 1], positionBuffer[(v * 3) + 2], 1.0f)).xyz())[0]);
-						vert.AddAttribute(Vertex::AttributeFlag::normal, &nm::float3(normalsBuffer ? nm::float3(normalsBuffer[(v * 3) + 0], normalsBuffer[(v * 3) + 1], normalsBuffer[(v * 3) + 2]) : nm::float3(0.0f))[0]);
-						vert.AddAttribute(Vertex::AttributeFlag::uv, &(texCoordsBuffer ? nm::float2(texCoordsBuffer[(v * 2) + 0], texCoordsBuffer[(v * 2) + 1]) : nm::float2(0.0f))[0]);
-						vert.AddAttribute(Vertex::AttributeFlag::tangent, &(tangentsBuffer ? nm::float4(tangentsBuffer[(v * 4) + 0], tangentsBuffer[(v * 4) + 1], tangentsBuffer[(v * 4) + 2], tangentsBuffer[(v * 4) + 3]) : nm::float4(0.0))[0]);
-						if (p_loadData.flipUV == true)
-						{
-							float* uv = vert.GetAttribute(Vertex::AttributeFlag::uv);
-							uv[1] = 1.0f - uv[1];
-						}
-
-						float* position = vert.GetAttribute(Vertex::AttributeFlag::position);
-						bbMin[0] = std::min(bbMin[0], position[0]);
-						bbMin[1] = std::min(bbMin[1], position[1]);
-						bbMin[2] = std::min(bbMin[2], position[2]);
-
-						bbMax[0] = std::max(bbMax[0], position[0]);
-						bbMax[1] = std::max(bbMax[1], position[1]);
-						bbMax[2] = std::max(bbMax[2], position[2]);
-
-						objMesh.vertexList.AddVertex(vert);
-					}
-				}
-
-				{
-					const tinygltf::Accessor& accessor = input.accessors[glTFPrimitive.indices];
-					const tinygltf::BufferView& bufferView = input.bufferViews[accessor.bufferView];
-					const tinygltf::Buffer& buffer = input.buffers[bufferView.buffer];
-
-					indexCount += static_cast<uint32_t>(accessor.count);
-
-					// glTF supports different component types of indices
-					switch (accessor.componentType) {
-					case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT: {
-						const uint32_t* buf = reinterpret_cast<const uint32_t*>(&buffer.data[accessor.byteOffset + bufferView.byteOffset]);
-						for (size_t index = 0; index < accessor.count; index++) {
-							objMesh.indicesList.push_back(buf[index] + vertexStart);
-						}
-						break;
-					}
-					case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT: {
-						const uint16_t* buf = reinterpret_cast<const uint16_t*>(&buffer.data[accessor.byteOffset + bufferView.byteOffset]);
-						for (size_t index = 0; index < accessor.count; index++) {
-							objMesh.indicesList.push_back(buf[index] + vertexStart);
-						}
-						break;
-					}
-					case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE: {
-						const uint8_t* buf = reinterpret_cast<const uint8_t*>(&buffer.data[accessor.byteOffset + bufferView.byteOffset]);
-						for (size_t index = 0; index < accessor.count; index++) {
-							objMesh.indicesList.push_back(buf[index] + vertexStart);
-						}
-						break;
-					}
-					default:
-						std::cerr << "Index component type " << accessor.componentType << " not supported!" << std::endl;
-						return false;
-					}
-				}
-
-				SubMesh submesh{};
-				submesh.name		= mesh.name + "_" + std::to_string(objMesh.submeshes.size());	// this is to make sure all names are unique
-				submesh.firstIndex	= firstIndex;
-				submesh.indexCount	= indexCount;
-				submesh.materialId	= material_offset + glTFPrimitive.material;
-				objMesh.submeshes.push_back(submesh);
-
-				BBox meshbox(BBox::Type::Custom, BBox::Origin::Center, bbMin, bbMax);
-				objMesh.submeshesBbox.push_back(meshbox);
-				
-			}
-		}
+		const tinygltf::Node node = input.nodes[n_id];
+		LoadNode(node, input, objMesh, p_loadData, material_offset, nm::float4x4::identity());
 	}
+			
 
 	nm::float3 bbMin = nm::float3{ 0.0f, 0.0f, 0.0f };
 	nm::float3 bbMax = nm::float3{ 0.0f, 0.0f, 0.0f };
@@ -342,8 +453,6 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 	objMesh.bbox = BBox(BBox::Type::Custom, BBox::Origin::Center, bbMin, bbMax);
 	BBox* meshBBox = &objMesh.bbox;
 	//ComputeBBox(*meshBBox);
-
-	
 	{
 		// correcting the translation of the mesh based on its min and max 
 		//nm::float3 translationFactor = -(objMesh.bbox.bbMin + objMesh.bbox.bbMax) / 2.0f;
@@ -351,50 +460,6 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 	}
 
 	p_objScene.meshList.push_back(objMesh);
-
-	// load materials
-	for (auto& gltf_mat : input.materials)
-	{
-		Material mat;
-		if (gltf_mat.values.find("baseColorTexture") != gltf_mat.values.end())
-		{
-			mat.color_id = texture_offset + gltf_mat.values["baseColorTexture"].TextureIndex();
-		}
-
-		if (gltf_mat.additionalValues.find("normalTexture") != gltf_mat.additionalValues.end())
-		{
-			mat.normal_id = texture_offset + gltf_mat.additionalValues["normalTexture"].TextureIndex();
-		}
-		
-		mat.pbr_color		= nm::float3(1.0f); // nm::float3((float)gltf_mat.pbrMetallicRoughness.baseColorFactor[0], (float)gltf_mat.pbrMetallicRoughness.baseColorFactor[1], (float)gltf_mat.pbrMetallicRoughness.baseColorFactor[2]);
-		mat.metallic		= (float)gltf_mat.pbrMetallicRoughness.metallicFactor;
-		mat.roughness		= (float)gltf_mat.pbrMetallicRoughness.roughnessFactor;
-		mat.roughMetal_id	= texture_offset + ((gltf_mat.pbrMetallicRoughness.metallicRoughnessTexture.index < 0) ? MAX_SUPPORTED_TEXTURES : gltf_mat.pbrMetallicRoughness.metallicRoughnessTexture.index);
-
-		p_objScene.materialsList.push_back(mat);
-	}
-
-	// load images
-	for (const auto& image : input.images)
-	{
-		ImageRaw iraw{ nullptr, 0, 0, 0 };
-		std::string path = (folderPath + "/" + image.uri);
-		iraw.raw = stbi_load(path.c_str(), &iraw.width, &iraw.height, &iraw.channels, STBI_rgb_alpha);
-		if (iraw.raw == nullptr)
-		{
-			std::cout << "stbi_load Failed - " << path << std::endl;
-			return false;
-		}
-
-		iraw.channels = STBI_rgb_alpha;
-		p_objScene.textureList.push_back(iraw);
-	}
-
-	if (input.images.empty())
-	{
-		ImageRaw iraw{ nullptr, 0, 0, 0 };
-		p_objScene.textureList.push_back(iraw);
-	}
 
 	return true;
 }

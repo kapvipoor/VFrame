@@ -11,6 +11,7 @@
 
 struct ImageRaw
 {
+	std::string					name;
 	unsigned char*				raw;
 	int							width;
 	int							height;
@@ -371,6 +372,7 @@ bool LoadRawImage(const char* p_path, ImageRaw& p_data);
 void FreeRawImage(ImageRaw& p_data);
 
 bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loadData);
+
 bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loadData);
 
 bool WriteToDisk(const std::filesystem::path& pPath, size_t pDataSize, char* pData);
