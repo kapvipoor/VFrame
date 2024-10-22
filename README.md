@@ -14,7 +14,7 @@ External Tools/Packages Used
 6. Imimgui-filebrowser (fork, module)
 
 Feature Integrated
-1.	[Vulkan Array Of Textures, Non-Uniform Descriptor Indexing and Bindless](https://github.com/kapvipoor/VFrame/blob/main/notes/Async%20Asset%20Loading.md)
+1.	[Vulkan Array Of Textures, Non-Uniform Descriptor Indexing and Bindless](https://github.com/kapvipoor/VFrame/blob/main/notes/Bindless%20Descriptor%20and%20Material%20Management.md)
 2. 	[Asynchronous Asset Loading](https://github.com/kapvipoor/VFrame/blob/main/notes/Async%20Asset%20Loading.md)
  
 2.	Forward Rendering
