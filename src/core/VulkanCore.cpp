@@ -213,7 +213,7 @@ bool CVulkanCore::CreateInstance(const char* p_applicaitonName)
 {
 	bool hasDebugUtils = true;
 
-	// Brute force setting up instance layers and extenions; instance creation will fail if layers are
+	// Brute force setting up instance layers and extensions; instance creation will fail if layers are
 	// not supported
 	std::vector<const char*> instanceExtensionList;
 	instanceExtensionList.push_back("VK_KHR_win32_surface");
@@ -227,7 +227,7 @@ bool CVulkanCore::CreateInstance(const char* p_applicaitonName)
 	ListAvailableInstanceExtensions(instanceExtensionList);
 
 	std::vector<const char*> instanceLayerList;
-	instanceLayerList.push_back("VK_LAYER_RENDERDOC_Capture");
+	//instanceLayerList.push_back("VK_LAYER_RENDERDOC_Capture");
 #if VULKAN_DEBUG == 1
 	instanceLayerList.push_back("VK_LAYER_LUNARG_monitor");
 	instanceLayerList.push_back("VK_LAYER_KHRONOS_validation");
@@ -362,8 +362,9 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	}
 
 	// Getting compute queue details only only
-	float queuePriority[] = { 1.0f };
-	VkDeviceQueueCreateInfo deviceQueueCreateInfo{};
+	float queuePriority[] = { 1.0f, 1.0f };
+	std::vector<VkDeviceQueueCreateInfo> deviceQueueCreateInfos;
+	deviceQueueCreateInfos.resize(1);
 	{
 		vkGetPhysicalDeviceMemoryProperties(m_vkPhysicalDevice, &m_vkPhysicalDeviceMemProp);
 
@@ -374,15 +375,15 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 
 		for (uint32_t qfIndex = 0; qfIndex < queueFamilyCount; qfIndex++)
 		{
-			if (queueFamilyList[qfIndex].queueFlags & p_queueType)
+			if (queueFamilyList[qfIndex].queueFlags & p_queueType &&
+				queueFamilyList[qfIndex].queueFlags & VK_QUEUE_TRANSFER_BIT)
 			{
 				m_QFIndex = qfIndex;
-
-				deviceQueueCreateInfo = VkDeviceQueueCreateInfo{};
-				deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-				deviceQueueCreateInfo.queueCount = 1;
-				deviceQueueCreateInfo.queueFamilyIndex = m_QFIndex;
-				deviceQueueCreateInfo.pQueuePriorities = queuePriority;
+				deviceQueueCreateInfos[0] = VkDeviceQueueCreateInfo{};
+				deviceQueueCreateInfos[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+				deviceQueueCreateInfos[0].queueCount = 2;
+				deviceQueueCreateInfos[0].queueFamilyIndex = m_QFIndex;
+				deviceQueueCreateInfos[0].pQueuePriorities = queuePriority;
 				break;
 			}
 		}
@@ -395,30 +396,35 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	enabledFeatures.geometryShader = true;
 	enabledFeatures.fragmentStoresAndAtomics = true;
 
-	if (	enabledFeatures.geometryShader != supportedFeatures.geometryShader 
-		&&	enabledFeatures.fragmentStoresAndAtomics != supportedFeatures.fragmentStoresAndAtomics)
+	if (enabledFeatures.geometryShader != supportedFeatures.geometryShader &&
+		enabledFeatures.fragmentStoresAndAtomics != supportedFeatures.fragmentStoresAndAtomics)
 	{
 		std::cout << "vkGetPhysicalDeviceFeatures: Requested features not supported by device. " << std::endl;
 		return false;
 	}
 
-	VkPhysicalDeviceDescriptorIndexingFeaturesEXT descIndexingFeatures{};
-	descIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
-	descIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
-	descIndexingFeatures.runtimeDescriptorArray = VK_TRUE;
-	descIndexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
+	// Enable support for bindless
+	VkPhysicalDeviceDescriptorIndexingFeaturesEXT bindlessDescFeatures{};
+	bindlessDescFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+	bindlessDescFeatures.shaderSampledImageArrayNonUniformIndexing		= VK_TRUE;
+	bindlessDescFeatures.runtimeDescriptorArray							= VK_TRUE;
+	bindlessDescFeatures.descriptorBindingVariableDescriptorCount		= VK_TRUE;
+	bindlessDescFeatures.descriptorBindingPartiallyBound				= VK_TRUE;
+	bindlessDescFeatures.descriptorBindingSampledImageUpdateAfterBind	= VK_TRUE;
+	bindlessDescFeatures.descriptorBindingUniformBufferUpdateAfterBind	= VK_TRUE;
+	bindlessDescFeatures.descriptorBindingStorageBufferUpdateAfterBind  = VK_TRUE;
 
 	VkPhysicalDeviceFeatures2 physicalDeviceFeatures2{};
 	physicalDeviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 	physicalDeviceFeatures2.features = enabledFeatures;
-	physicalDeviceFeatures2.pNext = (void*)&descIndexingFeatures;
+	physicalDeviceFeatures2.pNext = (void*)&bindlessDescFeatures;
 		
 	VkDeviceCreateInfo deviceCreateInfo{};
 	deviceCreateInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceCreateInfo.pNext = &physicalDeviceFeatures2;
 	deviceCreateInfo.pEnabledFeatures = nullptr;
-	deviceCreateInfo.queueCreateInfoCount = 1;
-	deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
+	deviceCreateInfo.queueCreateInfoCount = (uint32_t)deviceQueueCreateInfos.size();
+	deviceCreateInfo.pQueueCreateInfos = deviceQueueCreateInfos.data();
 	deviceCreateInfo.enabledExtensionCount = (uint32_t)deviceExtensionList.size();
 	deviceCreateInfo.ppEnabledExtensionNames = deviceExtensionList.data();
 	deviceCreateInfo.enabledLayerCount = 0;
@@ -431,9 +437,20 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 		return false;
 	}
 
-	VkDeviceQueueInfo2 queueInfo{};
-	queueInfo.queueFamilyIndex = m_QFIndex;
-	vkGetDeviceQueue(m_vkDevice, m_QFIndex, 0, &m_vkQueue[0]);
+	// Primary Render Queue
+	{
+		vkGetDeviceQueue(m_vkDevice, m_QFIndex, 0, &m_vkQueue[0]);
+	}
+
+	// Secondary Queue
+	{
+		vkGetDeviceQueue(m_vkDevice, m_QFIndex, 1, &m_secondaryQueue);
+		if(m_secondaryQueue == VK_NULL_HANDLE)
+		{
+			std::cerr << "vkGetDeviceQueue failed for secondary queue" << std::endl;
+			return false;
+		}
+	}
 
 	return true;
 }
@@ -580,7 +597,7 @@ bool CVulkanCore::LoadShader(const char* p_shaderpath, VkShaderModule& p_shader)
 }
 
 // as the draw will happen using the compute queue, there is not going to be any renderpass
-// when creatign the frame buffer
+// when creating the frame buffer
 bool CVulkanCore::CreateFramebuffer(VkRenderPass p_renderPass, VkFramebuffer& p_frameBuffer, 
 	VkImageView* p_imageViewList, uint32_t p_fbCount, uint32_t p_width, uint32_t p_height)
 {
@@ -638,6 +655,18 @@ bool CVulkanCore::CreateCommandPool(uint32_t p_qfIndex, VkCommandPool& p_cmdPool
 	return true;
 }
 
+bool CVulkanCore::ResetCommandPool(VkCommandPool& p_cmdPool)
+{
+	VkResult res = vkResetCommandPool(m_vkDevice, p_cmdPool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT);
+	if (res != VK_SUCCESS)
+	{
+		std::cerr << "vkResetCommandPool failed: " << res << std::endl;
+		return false;
+	}
+
+	return true;
+}
+
 void CVulkanCore::DestroyCommandPool(VkCommandPool p_cmdPool)
 {
 	vkDestroyCommandPool(m_vkDevice, p_cmdPool, nullptr);
@@ -669,6 +698,9 @@ bool CVulkanCore::CreateDescriptorPool(VkDescriptorPoolSize* p_dpSizeList, uint3
 {
 	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo{};
 	descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	// This is a bindless feature that enables us to write-update the descriptor after binding.
+	// The latest write-update is then considered valid.
+	descriptorPoolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT_EXT;
 	descriptorPoolCreateInfo.maxSets = p_dpSizeCount;
 	descriptorPoolCreateInfo.poolSizeCount = p_dpSizeCount;
 	descriptorPoolCreateInfo.pPoolSizes = p_dpSizeList;
@@ -707,13 +739,19 @@ bool CVulkanCore::AllocateDescriptorSets(VkDescriptorPool p_dPool, VkDescriptorS
 	return true;
 }
 
-bool CVulkanCore::CreateDescriptorSetLayout(VkDescriptorSetLayoutBinding* p_dsLayoutList, uint32_t p_dsLayoutCount, VkDescriptorSetLayout& p_vkdsLayout, void* p_next)
+bool CVulkanCore::CreateDescriptorSetLayout(VkDescriptorSetLayoutBinding* p_dsLayoutList, uint32_t p_dsLayoutCount, 
+											VkDescriptorSetLayout& p_vkdsLayout, void* p_next, bool p_isBindless)
 {
 	VkDescriptorSetLayoutCreateInfo dsLayoutCreateInfo{};
 	dsLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	dsLayoutCreateInfo.pNext = p_next;
 	dsLayoutCreateInfo.bindingCount = p_dsLayoutCount;
 	dsLayoutCreateInfo.pBindings = p_dsLayoutList;
+
+	if (p_isBindless)
+	{
+		dsLayoutCreateInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+	}
 
 	VkResult res = vkCreateDescriptorSetLayout(m_vkDevice, &dsLayoutCreateInfo, nullptr, &p_vkdsLayout);
 	if (res != VK_SUCCESS)

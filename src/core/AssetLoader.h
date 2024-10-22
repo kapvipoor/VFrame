@@ -347,6 +347,8 @@ struct SceneRaw
 	std::vector<ImageRaw>		textureList;
 	std::vector<MeshRaw>		meshList;
 	std::vector<Material>		materialsList;
+	uint32_t					materialOffset;
+	uint32_t					textureOffset;
 };
 
 struct ObjLoadData

@@ -13,6 +13,7 @@ public:
 
 	struct DescriptorData
 	{
+		uint32_t							arrayDestIndex;
 		int									bindingDest;
 		uint32_t							count;
 		VkDescriptorType					type;
@@ -29,7 +30,7 @@ public:
 		CommandBufferList* p_commndBfrList, PipelineStageFlagsList* p_psfList, 
 		bool p_waitForFinish = false, VkFence* p_fence = VK_NULL_HANDLE, 
 		bool p_waitforFence = false, SemaphoreList* p_signalList = nullptr, 
-		SemaphoreList* p_waitList = nullptr);
+		SemaphoreList* p_waitList = nullptr, QueueType p_queueType = QueueType::qt_Primary);
 
 	bool CreateAllocateBindBuffer(size_t p_size, Buffer& p_buffer, VkBufferUsageFlags p_bfrUsg, VkMemoryPropertyFlags p_propFlagm, std::string p_DebugName);
 	bool CreateTexture(Buffer& p_staging, Image& p_Image, VkImageCreateInfo p_createInfo, VkCommandBuffer& p_cmdBfr, std::string p_DebugName);
@@ -37,8 +38,9 @@ public:
 
 	void FreeMemoryDestroyBuffer(Buffer&);
 
-	bool CreateDescriptors(const DescDataList& p_descdataList, VkDescriptorPool& p_descPool,VkDescriptorSetLayout* p_descLayout, uint32_t p_layoutCount, VkDescriptorSet* p_desc, void* p_next = VK_NULL_HANDLE);
-	bool CreateDescriptors(uint32_t p_varDescCount, const DescDataList& p_descDataList, VkDescriptorPool& p_descPool,VkDescriptorSetLayout& p_descSetLayout, VkDescriptorSet& p_descSet, uint32_t p_texArrayIndex);
+	bool CreateDescriptors(const DescDataList& p_descdataList, VkDescriptorPool& p_descPool,VkDescriptorSetLayout* p_descLayout, uint32_t p_layoutCount, VkDescriptorSet* p_desc, void* p_next = VK_NULL_HANDLE, bool p_bindless = false, std::string p_DebugName = "");
+	bool CreateDescriptors(uint32_t p_varDescCount, const DescDataList& p_descDataList, VkDescriptorPool& p_descPool, VkDescriptorSetLayout& p_descSetLayout, VkDescriptorSet& p_descSet, uint32_t p_texArrayIndex, bool p_bindless = false, std::string p_DebugName = "");
+	void WriteUpdateDescriptors(VkDescriptorSet* p_desc, const DescDataList& p_descDataList);
 
 	RendererType GetRendererType() { return m_rendererType; }
 	void SetRenderType(RendererType p_type) { m_rendererType = p_type; }

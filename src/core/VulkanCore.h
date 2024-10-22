@@ -49,7 +49,7 @@ char* BinaryLoader(const std::string pPath, size_t& pDataSize);
 class CVulkanCore
 {
 public:
-		struct InitData
+	struct InitData
 	{
 		HINSTANCE											winInstance;
 		HWND												winHandle;
@@ -224,6 +224,12 @@ public:
 		return p_createInfo;
 	}
 
+	enum QueueType
+	{
+			qt_Primary = 0
+		,	qt_Secondary
+	};
+
 	typedef std::vector<VkFramebuffer>						FrameBuffer;
 	typedef	VkQueue											Queue;
 	typedef VkCommandPool									CommandPool;
@@ -247,6 +253,7 @@ public:
 	void SetDebugName(uint64_t pObject, VkObjectType pObjectType, const char* pName);
 
 	VkQueue GetQueue(uint32_t p_scIdx)						{ return m_vkQueue[p_scIdx]; }
+	VkQueue GetSecondaryQueue()								{ return m_secondaryQueue;}
 	uint32_t GetQueueFamiliyIndex() const					{ return m_QFIndex; }
 	VkImageView GetSCImageView(uint32_t p_scIdx)			{ return m_swapchainImageViewList[p_scIdx]; }
 	uint32_t GetRenderWidth()								{ return m_renderWidth; }
@@ -262,13 +269,13 @@ protected:
 	uint32_t												m_screenWidth;
 	uint32_t												m_screenHeight;
 
-
 	const char*												m_applicationName;
 	VkInstance												m_vkInstance;
 	VkDevice												m_vkDevice;
 	VkPhysicalDevice										m_vkPhysicalDevice;
 	uint32_t												m_QFIndex;
 	VkQueue													m_vkQueue[FRAME_BUFFER_COUNT];
+	VkQueue													m_secondaryQueue;
 	VkSurfaceKHR											m_vkSurface;
 	VkSwapchainKHR											m_vkSwapchain;
 	VkImage													m_swapchainImageList[FRAME_BUFFER_COUNT];
@@ -306,7 +313,7 @@ public:
 	void DestroyDescriptorPool(VkDescriptorPool p_descPool);
 
 	bool AllocateDescriptorSets(VkDescriptorPool p_dPool, VkDescriptorSetLayout* p_dslList, uint32_t p_dslCount, VkDescriptorSet* p_vkDescriptorSet, void* p_next = VK_NULL_HANDLE);
-	bool CreateDescriptorSetLayout(VkDescriptorSetLayoutBinding* p_dsLayoutList, uint32_t p_dsLayoutCount, VkDescriptorSetLayout& p_vkdsLayout, void* p_next = VK_NULL_HANDLE);
+	bool CreateDescriptorSetLayout(VkDescriptorSetLayoutBinding* p_dsLayoutList, uint32_t p_dsLayoutCount, VkDescriptorSetLayout& p_vkdsLayout, void* p_next = VK_NULL_HANDLE, bool p_isBindless = false);
 	void DestroyDescriptorSetLayout(VkDescriptorSetLayout p_descLayput);
 
 	bool CreatePipelineLayout(VkPushConstantRange* p_pushConstants, uint32_t p_pcCount,
@@ -324,6 +331,7 @@ public:
 	void DestroyPipeline(Pipeline& p_pipeline);
 		
 	bool CreateCommandPool(uint32_t p_qfIndex, VkCommandPool& p_cmdPool);
+	bool ResetCommandPool(VkCommandPool& p_cmdPool);
 	void DestroyCommandPool(VkCommandPool p_cmdPool);
 	
 	bool CreateCommandBuffers(VkCommandPool p_cmdPool, VkCommandBuffer* p_cmdBuffers, uint32_t p_cbCount, std::string* p_debugNames);

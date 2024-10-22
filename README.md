@@ -11,12 +11,11 @@ External Tools/Packages Used
 3. tiny_obj_loader
 4. ImGui (fork, module)
 5. ImGuizmo (fork, module)
+6. Imimgui-filebrowser (fork, module)
 
 Feature Integrated
-1.	Vulkan Bindless - Descriptor Indexing
-	- Challanges Faced: - 
-	- Algorithm Limitations: - 
-	- Bugs: - 
+1.	Vulkan Array Of Textures, Non-Uniform Descriptor Indexing and Bindless
+2. 	Asynchronous Asset Loading
  
 2.	Forward Rendering
 	- Challanges Faced: -

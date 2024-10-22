@@ -148,8 +148,11 @@ void FreeRawImage(ImageRaw& p_data)
 bool LoadMaterials(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, uint32_t p_texOffset)
 {
 	// load materials
+	int materialCount = 0;
 	for (auto& gltf_mat : p_gltfInput.materials)
 	{
+		std::cout << "Loading Material: " << materialCount << " of " << p_gltfInput.materials.size() << std::endl;
+
 		Material mat;
 		if (gltf_mat.values.find("baseColorTexture") != gltf_mat.values.end())
 		{
@@ -167,6 +170,7 @@ bool LoadMaterials(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, uint32_t p
 		mat.roughMetal_id = p_texOffset + ((gltf_mat.pbrMetallicRoughness.metallicRoughnessTexture.index < 0) ? MAX_SUPPORTED_TEXTURES : gltf_mat.pbrMetallicRoughness.metallicRoughnessTexture.index);
 
 		p_objScene.materialsList.push_back(mat);
+		materialCount++;
 	}
 
 	return true;
@@ -174,8 +178,11 @@ bool LoadMaterials(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, uint32_t p
 
 bool LoadTextures(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, std::string p_folder)
 {
+	int textureCount = 0;
 	for (const auto& image : p_gltfInput.images)
 	{
+		std::cout << "Loading Texture: " << textureCount << " of " << p_gltfInput.images.size() << std::endl;
+
 		ImageRaw iraw{ "", nullptr, 0, 0, 0 };
 		std::string path = (p_folder + "/" + image.uri);
 
@@ -202,11 +209,13 @@ bool LoadTextures(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, std::string
 			memcpy(iraw.raw, image.image.data(), image.image.size());
 		}		
 		p_objScene.textureList.push_back(iraw);
+		
+		textureCount++;
 	}
 
 	if (p_gltfInput.images.empty())
 	{
-		ImageRaw iraw{ nullptr, 0, 0, 0 };
+		ImageRaw iraw{ "", nullptr, 0, 0, 0};
 		p_objScene.textureList.push_back(iraw);
 	}
 
@@ -383,8 +392,12 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 	std::size_t found = strPath.find_last_of("/");
 	if (found == std::string::npos)
 	{
-		std::cerr << "Invalid gltf path - " << p_path << std::endl;
-		return false;
+		found = strPath.find_last_of("\\");
+		if (found == std::string::npos)
+		{
+			std::cerr << "Invalid gltf path - " << p_path << std::endl;
+			return false;
+		}
 	}
 	std::string folderPath = strPath.substr(0, found);
 
@@ -415,28 +428,31 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 		}
 	}
 
-	uint32_t material_offset = (uint32_t)p_objScene.materialsList.size();
-	uint32_t texture_offset = (uint32_t)p_objScene.textureList.size();
+	//uint32_t material_offset = (uint32_t)p_objScene.materialsList.size();
+	//uint32_t texture_offset = (uint32_t)p_objScene.textureList.size();
 
-	RETURN_FALSE_IF_FALSE(LoadMaterials(input, p_objScene, texture_offset));
+	RETURN_FALSE_IF_FALSE(LoadMaterials(input, p_objScene, p_objScene.textureOffset));
 	RETURN_FALSE_IF_FALSE(LoadTextures(input, p_objScene, folderPath));
 			
 	MeshRaw objMesh;
 	objMesh.vertexList = VertexList(Vertex::AttributeFlag::position | Vertex::AttributeFlag::normal | Vertex::AttributeFlag::uv | Vertex::AttributeFlag::tangent);
-	if (!GetFileName(p_path, objMesh.name))
+	if (!GetFileName(p_path, objMesh.name, "/"))
 	{
-		std::cout << "Failed to Get Filename - " << p_path << std::endl;
-		return false;
+		if (!GetFileName(p_path, objMesh.name, "\\"))
+		{
+			std::cerr << "Failed to Get Filename - " << p_path << std::endl;
+			return false;
+		}
 	}
 
 	const tinygltf::Scene& scene = input.scenes[0];
 	for (size_t n_id = 0; n_id < scene.nodes.size(); n_id++)
 	{
+		std::cout << "Loading GLTF Node: " << n_id << " of " << scene.nodes.size() << std::endl;
 		const tinygltf::Node node = input.nodes[n_id];
-		LoadNode(node, input, objMesh, p_loadData, material_offset, nm::float4x4::identity());
+		LoadNode(node, input, objMesh, p_loadData, p_objScene.materialOffset, nm::float4x4::identity());
 	}
 			
-
 	nm::float3 bbMin = nm::float3{ 0.0f, 0.0f, 0.0f };
 	nm::float3 bbMax = nm::float3{ 0.0f, 0.0f, 0.0f };
 	for(int i = 0; i < objMesh.submeshesBbox.size(); i++)
@@ -460,6 +476,9 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 	}
 
 	p_objScene.meshList.push_back(objMesh);
+
+	p_objScene.materialOffset = (uint32_t)p_objScene.materialsList.size();
+	p_objScene.textureOffset = (uint32_t)p_objScene.textureList.size();
 
 	return true;
 }
@@ -560,7 +579,7 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 		int width, height, channels;
 		// loading diffuse textures
 		{
-			ImageRaw diffuse{ nullptr, 0, 0, 0 };		// initializing diffuse raw texture
+			ImageRaw diffuse{ "", nullptr, 0, 0, 0};		// initializing diffuse raw texture
 			if (!material.diffuse_texname.empty())
 			{
 				std::string diffusePath = folderPath + "/" + material.diffuse_texname.c_str();
@@ -575,7 +594,7 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 			p_objScene.textureList.push_back(diffuse);
 		}
 		{
-			ImageRaw normal{ nullptr, 0, 0, 0 };	// initialized normal raw texture
+			ImageRaw normal{ "", nullptr, 0, 0, 0};	// initialized normal raw texture
 			if (!material.bump_texname.empty())
 			{
 				std::string normalPath = folderPath + "/" + material.bump_texname.c_str();

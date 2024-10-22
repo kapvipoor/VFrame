@@ -1,7 +1,9 @@
 #include "Asset.h"
 #include "SceneGraph.h"
 #include "RandGen.h"
+
 #include <algorithm>
+#include <thread>
 
 #include "external/imgui/imgui.h"
 #include "external/imguizmo/ImGuizmo.h"
@@ -13,9 +15,15 @@ void CDescriptor::AddDescriptor(CVulkanRHI::DescriptorData p_dData, uint32_t p_i
 	m_descList[p_id].descDataList.push_back(p_dData);
 }
 
-bool CDescriptor::CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_varDescCount, uint32_t p_texArrayIndex, uint32_t p_id)
+CDescriptor::CDescriptor(bool isBindless, uint32_t p_descSetCount)
+	: m_isBindless(isBindless)
 {
-	if (!p_rhi->CreateDescriptors(p_varDescCount, m_descList[p_id].descDataList, m_descPool, m_descList[p_id].descLayout, m_descList[p_id].descSet, p_texArrayIndex))
+	m_descList.resize(p_descSetCount);
+}
+
+bool CDescriptor::CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_varDescCount, uint32_t p_texArrayIndex, uint32_t p_id, std::string p_debugName)
+{
+	if (!p_rhi->CreateDescriptors(p_varDescCount, m_descList[p_id].descDataList, m_descPool, m_descList[p_id].descLayout, m_descList[p_id].descSet, p_texArrayIndex, m_isBindless, p_debugName))
 		return false;
 
 	return true;
@@ -70,6 +78,8 @@ void CRenderable::DestroyRenderable(CVulkanRHI* p_rhi)
 bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, 
 	const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t p_id)
 {
+	std::cout << "Creating Vertex and Index Buffer for " << p_debugStr << std::endl;
+
 	{
 		CVulkanRHI::Buffer vertexStg;
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(float) * p_meshRaw->vertexList.size(), vertexStg, 
@@ -192,8 +202,11 @@ bool CTextures::CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_
 	return true;
 }
 
-bool CTextures::CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const ImageRaw* p_rawImg, VkFormat p_format, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id)
+bool CTextures::CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const ImageRaw* p_rawImg, VkFormat p_format, 
+							  CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id)
 {
+	std::cout << "Creating GPU Texture Buffer for " << p_debugName << std::endl;
+
 	if (p_rawImg->raw != nullptr)
 	{
 		CVulkanRHI::Image img;
@@ -326,7 +339,7 @@ CRenderableUI::~CRenderableUI()
 	delete m_participantManager;
 }
 
-void CRenderableUI::Show()
+void CRenderableUI::Show(CVulkanRHI* p_rhi)
 {
 	ImGui::TextUnformatted("VFrame Analysis");
 	{
@@ -476,7 +489,7 @@ bool CRenderableUI::CreateUIDescriptors(CVulkanRHI* p_rhi)
 
 	uint32_t texturesCount = (uint32_t)m_textures.size();
 
-	AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_UI_TexArray, texturesCount, 
+	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_UI_TexArray, texturesCount, 
 		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,	imageInfoList.data()});
 
 	RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, texturesCount, BindingDest::bd_UI_TexArray));
@@ -580,7 +593,7 @@ bool CRenderableUI::ShowUI(CVulkanRHI* p_rhi)
 {
 	p_rhi->SetRenderType(m_curRenderType);
 
-	m_participantManager->Show();
+	m_participantManager->Show(p_rhi);
 	return true;
 }
 
@@ -662,9 +675,9 @@ CRenderableMesh::~CRenderableMesh()
 		delete m_boundingVolume;
 }
 
-void CRenderableMesh::Show()
+void CRenderableMesh::Show(CVulkanRHI* p_rhi)
 {
-	CEntity::Show();
+	CEntity::Show(p_rhi);
 
 	ImGui::Indent();
 
@@ -717,11 +730,12 @@ void CRenderableMesh::SetTransform(nm::Transform p_transform, bool p_bRecomputeS
 
 CScene::CScene(CSceneGraph* p_sceneGraph)
 	: CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_new, "Scene")
-	, CDescriptor(FRAME_BUFFER_COUNT)
+	, CDescriptor(true /* is bindless */, FRAME_BUFFER_COUNT)
 	, m_sceneGraph(p_sceneGraph)
 {
 	m_sceneTextures = new CTextures();
 	m_sceneLights = new CLights();
+	m_materialsList.reserve(MAX_SUPPORTED_MATERIALS);
 }
 
 CScene::~CScene()
@@ -732,6 +746,8 @@ CScene::~CScene()
 
 bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, const CVulkanRHI::CommandPool& p_cmdPool)
 {
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandPool(p_rhi->GetQueueFamiliyIndex(), m_assetLoaderCommandPool));
+
 	CVulkanRHI::CommandBuffer cmdBfr;
 	CVulkanRHI::BufferList stgList;
 
@@ -751,7 +767,7 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 		return false;
 	}
 
-	if (!LoadScene(p_rhi, stgList, cmdBfr))
+	if (!LoadDefaultScene(p_rhi, stgList, cmdBfr))
 	{
 		std::cout << "Error: Failed to Load Scene" << std::endl;
 		return false;
@@ -797,14 +813,33 @@ void CScene::Destroy(CVulkanRHI* p_rhi)
 
 	for(int i =0; i< FRAME_BUFFER_COUNT; i++)
 		p_rhi->FreeMemoryDestroyBuffer(m_meshInfo_uniform[i]);
+
+	p_rhi->DestroyCommandPool(m_assetLoaderCommandPool);
 }
 
-void CScene::Show()
+void CScene::Show(CVulkanRHI* p_rhi)
 {
 	bool doubleClickedEntity = false;
 	int32_t sceneIndex = 0;
-	if(Header("Entity Settings"))
+	if (Header("Entity Settings"))
 	{
+		if (ImGui::Button("Load Asset"))
+		{
+			m_fileDialog.Open();
+		}
+
+		m_fileDialog.Display();
+
+		if (m_fileDialog.HasSelected())
+		{	
+			if (!m_fileDialog.GetSelected().string().empty())
+			{
+				ImGui::OpenPopup("Create Entity");
+			}
+		}
+
+		AddEntity(p_rhi, m_fileDialog.GetSelected().string());
+
 		bool drawSGBBox = m_sceneGraph->IsDebugDrawEnabled();
 		ImGui::Checkbox(" ", &drawSGBBox);
 		m_sceneGraph->SetDebugDrawEnable(drawSGBBox);
@@ -839,7 +874,7 @@ void CScene::Show()
 
 				if (m_selectedEntity == entity)
 				{
-					entity->Show();
+					entity->Show(p_rhi);
 					if (mesh)
 					{
 						m_sceneGraph->SetCurSelectedSubMeshId(mesh->GetSelectedSubMeshId());
@@ -894,6 +929,7 @@ bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 	}
 
 	std::vector<float> perMeshUniformData;
+	perMeshUniformData.reserve(m_meshInfo_uniform[p_loadedUpdate.swapchainIndex].reqMemSize);
 	for (auto& mesh : m_meshes)
 	{
 		mesh->SetDirty(false);
@@ -978,62 +1014,63 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 	return true;
 }
 
-bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr, bool p_dumpBinaryToDisk)
+bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr, bool p_dumpBinaryToDisk)
 {
+	std::vector<std::filesystem::path>		defaultScenePaths;
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels / 2.0 / DragonAttenuation / glTF / DragonAttenuation.gltf");				//0
 	//m_scenePaths.push_back(g_AssetPath/"shadow_test_3.gltf");																		//1
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");						//2
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
-	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");											//4
-	//m_scenePaths.push_back(g_AssetPath/"Sponza/glTF/Sponza.gltf");																//5
+	defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
+	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");											//4													//5
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");				//6
-	//m_scenePaths.push_back(g_AssetPath/"cube/cube.obj");																			//7
-	//m_scenePaths.push_back(g_AssetPath/"icosphere.gltf");																			//8
+	//m_scenePaths.push_back("D:/Projects/MyPersonalProjects/assets/cube/cube.obj");																			//7
+	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/icosphere.gltf");																			//8
 	//m_scenePaths.push_back(g_AssetPath/"dragon/dragon.obj");																		//9
 	//m_scenePaths.push_back(g_AssetPath/"stanford_dragon_pbr/scene.gltf");															//10
 	//m_scenePaths.push_back(g_AssetPath/"mitsuba/mitsuba.obj");																	//11
 	//m_scenePaths.push_back(g_AssetPath/"wall_and_floor/wall_and_floor.gltf");														//12
-	m_scenePaths.push_back(g_AssetPath / "main_sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");									//13
-	m_scenePaths.push_back(g_AssetPath/"main_sponza/PKG_A_Curtains/NewSponza_Curtains_glTF.gltf");								//14
+	//m_scenePaths.push_back(g_AssetPath / "main_sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");								//13
+	//m_scenePaths.push_back(g_AssetPath/"main_sponza/PKG_A_Curtains/NewSponza_Curtains_glTF.gltf");								//14
 	//m_scenePaths.push_back(g_AssetPath/"an_afternoon_in_a_persian_garden/scene.obj");												//15
-
-	//std::vector<std::filesystem::path> paths;
-	////paths.push_back(m_scenePaths[5]);
-	////paths.push_back(m_scenePaths[2]);
-	//paths.push_back(m_scenePaths[12]);
-	////paths.push_back(m_scenePaths[8]);
 
 	std::vector<bool> flipYList{ false, false, false };
 
 	SceneRaw sceneraw;
-	for (unsigned int i = 0; i < m_scenePaths.size(); i++)
+	sceneraw.materialOffset = 0;
+	sceneraw.textureOffset = 0;
+	
+	for (unsigned int i = 0; i < defaultScenePaths.size(); i++)
 	{
-		std::cout << "Loading Scene Resources - " << m_scenePaths[i] << std::endl;
+		std::cout << "Loading Scene Resources - " << defaultScenePaths[i] << std::endl;
 
 		ObjLoadData loadData{};
 		loadData.flipUV = flipYList[i];
 		loadData.loadMeshOnly = false;
 
-		if (m_scenePaths[i].extension() == ".gltf" || m_scenePaths[i].extension() == ".glb")
+		if (defaultScenePaths[i].extension() == ".gltf" || defaultScenePaths[i].extension() == ".glb")
 		{
-			RETURN_FALSE_IF_FALSE(LoadGltf(m_scenePaths[i].string().c_str(), sceneraw, loadData));
+			RETURN_FALSE_IF_FALSE(LoadGltf(defaultScenePaths[i].string().c_str(), sceneraw, loadData));
 		}
-		else if (m_scenePaths[i].extension() == ".obj")
+		else if (defaultScenePaths[i].extension() == ".obj")
 		{
-			RETURN_FALSE_IF_FALSE(LoadObj(m_scenePaths[i].string().c_str(), sceneraw, loadData));
+			RETURN_FALSE_IF_FALSE(LoadObj(defaultScenePaths[i].string().c_str(), sceneraw, loadData));
 		}
 		else
 		{
-			std::cerr << "Invalid file extension - " << m_scenePaths[i].extension() << std::endl;
+			std::cerr << "Invalid file extension - " << defaultScenePaths[i].extension() << std::endl;
 			return false;
 		}
 
 		if (p_dumpBinaryToDisk)
 		{
-			std::string outName = "D:/" + m_scenePaths[i].stem().string();
+			std::string outName = "D:/" + defaultScenePaths[i].stem().string();
 			WriteToDisk(std::filesystem::path(outName + "_vertex_float_p3_n3_uv2_t4.charp"), sizeof(Vertex) * sceneraw.meshList[i].vertexList.size(), (char*)sceneraw.meshList[i].vertexList.data());
 			WriteToDisk(std::filesystem::path(outName + "_index_uint32.charp"), sizeof(uint32_t) * sceneraw.meshList[i].indicesList.size(), (char*)sceneraw.meshList[i].indicesList.data());
 		}
+
+		m_textureOffset = sceneraw.textureOffset;
+		m_materialOffset = sceneraw.materialOffset;
 	}
 	
 	for (auto& meshraw : sceneraw.meshList)
@@ -1071,13 +1108,14 @@ bool CScene::LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVu
 	}
 
 	// storage buffer for materials
+	std::copy(sceneraw.materialsList.begin(), sceneraw.materialsList.end(), std::back_inserter(m_materialsList));
+	if(!m_materialsList.empty())
 	{
-		m_materialsList = sceneraw.materialsList;
 		CVulkanRHI::Buffer matStg;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(Material) * sceneraw.materialsList.size(), matStg, 
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(Material) * MAX_SUPPORTED_MATERIALS, matStg,
 			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, "scene_materials_transfer"));
 
-		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)sceneraw.materialsList.data(), matStg));
+		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)m_materialsList.data(), matStg));
 
 		p_stgList.push_back(matStg);
 
@@ -1138,7 +1176,7 @@ bool CScene::LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferLi
 
 bool CScene::CreateMeshUniformBuffer(CVulkanRHI* p_rhi)
 {
-	size_t uniBufize = m_meshes.size() * (
+	size_t uniBufize = MAX_SUPPORTED_MESHES * (
 		(sizeof(float) * 16)	// model matrix
 	+	(sizeof(float) * 16)	// transpose(inverse(model)) for transforming normal to world space
 		);
@@ -1154,43 +1192,342 @@ bool CScene::CreateMeshUniformBuffer(CVulkanRHI* p_rhi)
 
 bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
 {
+	// We are allocating these descriptors from a bindless pool.
+	// This does not need demand we create valid buffers/textures or write-update these descriptors 
+	// at the time of their creation. All we need to ensure is that we dont access these "unbound resource"
+	// descriptors at run-time. The strategy is to pre-allocate a large chunk of bindless-array of texture
+	// descriptors. Load few textures and provide their IDs to the material_storage buffer and access the 
+	// de-ref bindless array of textures to access the texture. When a new asset is added, its associated
+	// textures are upload to device visible heap to new indices of the bindless array of textures. Their
+	// Ids are updated to the material-storage buffer. And then write-update is called on this descriptor.
+
 	std::vector<VkDescriptorImageInfo> imageInfoList;
-	CVulkanRHI::ImageList sceneTexturesList = m_sceneTextures->GetTextures();
-	uint32_t texturesCount = 0;
-	for (int i = TextureType::tt_scene; i < sceneTexturesList.size(); i++)
+	for (int i = TextureType::tt_scene; i < m_sceneTextures->GetTextures().size(); i++)
 	{
-		imageInfoList.push_back(sceneTexturesList[i].descInfo);
-		texturesCount++;
+		imageInfoList.push_back(m_sceneTextures->GetTextures()[i].descInfo);
 	}
 
-	VkShaderStageFlags vertex_frag = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-	
-	// We do this because we have 2 frames in flights. And during 
+	// We are creating 2 descriptors because we have 2 frames in flights. And during 
 	// that process we need to update 1 uniform buffer while the 
 	// other is getting updated. Not doing this leads to undefined
 	// behavior.
-	
+
 	// Creating descriptor set for swap chain utility 0
+	VkShaderStageFlags vertex_frag = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	{
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_MeshInfo_Uniform,	1,				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag,					&m_meshInfo_uniform[0].descInfo,	VK_NULL_HANDLE},										0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_CubeMap_Texture,			1,				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,						&sceneTexturesList[TextureType::tt_skybox].descInfo},	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Material_Storage,			1,				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			VK_SHADER_STAGE_FRAGMENT_BIT,	&m_material_storage.descInfo,		VK_NULL_HANDLE},										0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_Lights,				1,				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vertex_frag,					&m_light_storage.descInfo,			VK_NULL_HANDLE},										0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SceneRead_TexArray,		texturesCount,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,						imageInfoList.data()},									0);
-		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, texturesCount, BindingDest::bd_SceneRead_TexArray, 0));
+		//AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_MeshInfo_Uniform,	1,				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag,					&m_meshInfo_uniform[0].descInfo,	VK_NULL_HANDLE},										0);
+		//AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_CubeMap_Texture,			1,				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,						&sceneTexturesList[TextureType::tt_skybox].descInfo},	0);
+		//AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Material_Storage,			1,				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			VK_SHADER_STAGE_FRAGMENT_BIT,	&m_material_storage.descInfo,		VK_NULL_HANDLE},										0);
+		//AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_Lights,				1,				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vertex_frag,					&m_light_storage.descInfo,			VK_NULL_HANDLE},										0);
+		//AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SceneRead_TexArray,		texturesCount,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,						imageInfoList.data()},									0);
+
+		// Creating Descriptors and descriptor set based on following type and count
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag,					VK_NULL_HANDLE,	VK_NULL_HANDLE }, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_CubeMap_Texture,			1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,	VK_NULL_HANDLE }, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,	VK_NULL_HANDLE }, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vertex_frag,					VK_NULL_HANDLE,	VK_NULL_HANDLE }, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,	VK_NULL_HANDLE }, 0);
+		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, MAX_SUPPORTED_TEXTURES, BindingDest::bd_SceneRead_TexArray, 0, "SceneDescriptorSet_0"));
+
+		// Calling for Descriptor Write and Update since we are using Bindless for this descriptor
+		m_descList[0].descDataList[BindingDest::bd_Scene_MeshInfo_Uniform].bufDesInfo	= &m_meshInfo_uniform[0].descInfo;
+		m_descList[0].descDataList[BindingDest::bd_CubeMap_Texture].imgDesinfo			= &m_sceneTextures->GetTexture(TextureType::tt_skybox).descInfo;
+		m_descList[0].descDataList[BindingDest::bd_Material_Storage].bufDesInfo			= &m_material_storage.descInfo;
+		m_descList[0].descDataList[BindingDest::bd_Scene_Lights].bufDesInfo				= &m_light_storage.descInfo;
+		
+		m_descList[0].descDataList[BindingDest::bd_SceneRead_TexArray].count			= (uint32_t)imageInfoList.size();
+		m_descList[0].descDataList[BindingDest::bd_SceneRead_TexArray].imgDesinfo		= imageInfoList.data();
+		p_rhi->WriteUpdateDescriptors(&m_descList[0].descSet, m_descList[0].descDataList);
 	}
 
 	// Creating descriptor set for swap chain utility 1
 	{
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_MeshInfo_Uniform,	1,				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag,					&m_meshInfo_uniform[1].descInfo,	VK_NULL_HANDLE},										1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_CubeMap_Texture,			1,				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,						&sceneTexturesList[TextureType::tt_skybox].descInfo},	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Material_Storage,			1,				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			VK_SHADER_STAGE_FRAGMENT_BIT,	&m_material_storage.descInfo,		VK_NULL_HANDLE},										1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Scene_Lights,				1,				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vertex_frag,					&m_light_storage.descInfo,			VK_NULL_HANDLE},										1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SceneRead_TexArray,		texturesCount,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,						imageInfoList.data()},									1);
-		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, texturesCount, BindingDest::bd_SceneRead_TexArray, 1));
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag,					VK_NULL_HANDLE,	VK_NULL_HANDLE}, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_CubeMap_Texture,			1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,	VK_NULL_HANDLE}, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,	VK_NULL_HANDLE}, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vertex_frag,					VK_NULL_HANDLE,	VK_NULL_HANDLE}, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			VK_SHADER_STAGE_FRAGMENT_BIT,	VK_NULL_HANDLE,	VK_NULL_HANDLE}, 1);
+		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, MAX_SUPPORTED_TEXTURES, BindingDest::bd_SceneRead_TexArray, 1, "SceneDescriptorSet_1"));
+
+		// Calling for Descriptor Write and Update since we are using Bindless for this descriptor
+		m_descList[1].descDataList[BindingDest::bd_Scene_MeshInfo_Uniform].bufDesInfo	= &m_meshInfo_uniform[0].descInfo;
+		m_descList[1].descDataList[BindingDest::bd_CubeMap_Texture].imgDesinfo			= &m_sceneTextures->GetTexture(TextureType::tt_skybox).descInfo;
+		m_descList[1].descDataList[BindingDest::bd_Material_Storage].bufDesInfo			= &m_material_storage.descInfo;
+		m_descList[1].descDataList[BindingDest::bd_Scene_Lights].bufDesInfo				= &m_light_storage.descInfo;
+		
+		m_descList[1].descDataList[BindingDest::bd_SceneRead_TexArray].count			= (uint32_t)imageInfoList.size();
+		m_descList[1].descDataList[BindingDest::bd_SceneRead_TexArray].imgDesinfo		= imageInfoList.data();
+		p_rhi->WriteUpdateDescriptors(&m_descList[1].descSet, m_descList[1].descDataList);
 	}
 
 	return true;
+}
+
+bool showLoadButtons = true;
+bool showLoadCompleteButtons = false;
+
+bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
+{
+	std::string fileExtn;
+	std::string assetName;
+	if (ImGui::BeginPopupModal("Create Entity", NULL, ImGuiWindowFlags_MenuBar))
+	{
+		// Basic path formatting
+		std::string strPath = std::string(p_path);
+		std::size_t found = strPath.find_last_of("\\");
+		if (found == std::string::npos)
+		{
+			std::cerr << "Invalid gltf path - " << p_path << std::endl;
+			return false;
+		}
+		std::string folderPath = strPath.substr(0, found);
+
+		if (!GetFileExtention(p_path, fileExtn))
+		{
+			std::cout << "Failed to Get Extn - " << p_path << std::endl;
+			return false;
+		}
+				
+		if (!GetFileName(p_path, assetName, "\\"))
+		{
+			std::cout << "Failed to Get Filename - " << p_path << std::endl;
+			return false;
+		}
+
+		ImGui::Text("Asset Path: %s", p_path.c_str());
+		ImGui::Text("Asset Type: %s", fileExtn.c_str());
+		ImGui::Text("Asset Name: %s", assetName.c_str());
+		
+		// Show buttons to load and cancel until Load is clicked
+		// once Load is clicked, show progress bar only
+		if (showLoadButtons)
+		{
+			bool loadButton = ImGui::Button("Load");
+			ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+			bool cancelButton = ImGui::Button("Cancel");
+
+			if (loadButton)
+			{
+				m_assetLoadingTracker.state = AssetLoadingState::als_ReadyToLoad;
+				showLoadButtons = false;
+			}
+			else if (cancelButton)
+			{
+				m_assetLoadingTracker.state = AssetLoadingState::als_WaitForRequest;
+				ImGui::CloseCurrentPopup();
+				m_fileDialog.ClearSelected();
+			}
+		}
+
+		// Lets start loading the asset
+		if (m_assetLoadingTracker.state >= AssetLoadingState::als_ReadyToLoad)
+		{
+			ImGui::ProgressBar(m_assetLoadingTracker.progress, ImVec2(0.0f, 0.0f));
+			ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+			ImGui::Text("Loading..");
+
+			if (m_assetLoadingTracker.state == AssetLoadingState::als_ReadyToLoad)
+			{
+				m_assetLoadingTracker.state = AssetLoadingState::als_Loading;
+
+				// Spawning a new CPU thread to load the asset to RAM, prepare buffers and textures and 
+				// upload to GPU. Wait for Command buffer execution to complete.
+				std::thread assetLoaderThread([=]() {
+					CVulkanRHI::CommandBuffer cmdBfr;
+					CVulkanRHI::BufferList stgList;
+
+					std::string debugMarker = "Entity Loading";
+					RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(m_assetLoaderCommandPool, &cmdBfr, 1, &debugMarker));
+					RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
+
+					std::vector<VkDescriptorImageInfo> imageInfoList;
+					uint32_t arrayDestIndex = (uint32_t)m_sceneTextures->GetTextures().size() - TextureType::tt_scene;
+					{
+						SceneRaw sceneraw;
+						sceneraw.materialOffset = m_materialOffset;
+						sceneraw.textureOffset = m_textureOffset;
+												
+						ObjLoadData loadData{};
+						loadData.flipUV = false;
+						loadData.loadMeshOnly = false;
+
+						if (fileExtn == "gltf" || fileExtn == "glb")
+						{
+							RETURN_FALSE_IF_FALSE(LoadGltf(p_path.c_str(), sceneraw, loadData));
+							m_assetLoadingTracker.progress = 0.3f;
+						}
+						else if (fileExtn == "obj")
+						{
+							RETURN_FALSE_IF_FALSE(LoadObj(p_path.c_str(), sceneraw, loadData));
+							m_assetLoadingTracker.progress = 0.3f;
+						}
+						else
+						{
+							std::cerr << "Invalid file extension - " << fileExtn << std::endl;
+							return false;
+						}
+
+						m_textureOffset += sceneraw.textureOffset;
+						m_materialOffset += sceneraw.materialOffset;
+
+						// Load vertex and index buffers
+						for (auto& meshraw : sceneraw.meshList)
+						{
+							CRenderableMesh* mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform);
+							mesh->m_submeshes = meshraw.submeshes;
+
+							std::cout << "Setting Bounding Volume" << std::endl;
+							BVolume* bVol = new BBox(meshraw.bbox);
+							mesh->SetBoundingVolume(bVol);
+
+							for (auto& bbox : meshraw.submeshesBbox)
+							{
+								mesh->SetSubBoundingBox(bbox);
+							}
+
+							RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, stgList, &meshraw, cmdBfr, meshraw.name));
+							m_meshes.push_back(mesh);
+						}
+
+						m_assetLoadingTracker.progress = 0.4f;
+						// Load textures
+						for (const auto& tex : sceneraw.textureList)
+						{
+							CVulkanRHI::Image img;
+							{
+								if (tex.raw != nullptr)
+								{
+									CVulkanRHI::Buffer stg;
+									RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateTexture(p_rhi, stg, &tex, VK_FORMAT_R8G8B8A8_UNORM, cmdBfr, tex.name));
+									stgList.push_back(stg);
+
+									uint32_t texIndex = (uint32_t)m_sceneTextures->GetTextures().size() - 1;
+									imageInfoList.push_back(m_sceneTextures->GetTextures()[texIndex].descInfo);
+								}
+								else
+								{
+									m_sceneTextures->PushBackPreLoadedTexture(TextureType::tt_default);
+								}
+							}
+						}
+
+						m_assetLoadingTracker.progress = 0.5;
+						// Load Materials
+						std::copy(sceneraw.materialsList.begin(), sceneraw.materialsList.end(), std::back_inserter(m_materialsList));
+						if (!m_materialsList.empty())
+						{
+							if (m_materialsList.size() > MAX_SUPPORTED_MATERIALS)
+							{
+								std::cerr << "Max Supported Material Size has been exceeded. Loading failed." << std::endl;
+								return false;
+							}
+
+							std::cout << "Creating GPU Material buffer" << std::endl;
+
+							CVulkanRHI::Buffer matStg;
+							RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(Material) * m_materialsList.size(), matStg,
+								VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, "scene_materials_transfer"));
+
+							RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)m_materialsList.data(), matStg));
+
+							stgList.push_back(matStg);
+
+							if (m_material_storage.descInfo.buffer == VK_NULL_HANDLE)
+							{
+								std::cerr << "Material Storage Buffer is VK_NULL. Loading failed." << std::endl;
+								return false;
+							}
+
+							RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(matStg, m_material_storage, cmdBfr));
+						}
+
+						std::cout << "Cleaning Raw Vertex and Index resource from RAM" << std::endl;
+						sceneraw.meshList.clear();
+
+						for (auto& tex : sceneraw.textureList)
+						{
+							std::cout << "Cleaning Raw Texture resource from RAM - " << tex.name << std::endl;
+							FreeRawImage(tex);
+						}
+
+						sceneraw.textureList.clear();
+					}
+
+					std::cout << "Preparing to transfer resources to Device visible memory locations" << std::endl;
+					if (!p_rhi->EndCommandBuffer(cmdBfr))
+						return false;
+
+					CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
+					CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
+
+					// Submit command buffer and wait for completion
+					bool waitForFinish = true;
+					std::cout << "Submitting command buffer" << std::endl;
+					RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish,
+						VK_NULL_HANDLE, false, nullptr, nullptr, CVulkanRHI::QueueType::qt_Secondary));
+					m_assetLoadingTracker.progress = 0.8f;
+
+					// Destroy local staging resources
+					std::cout << "Cleaning all Staging buffers" << std::endl;
+					for (auto& stg : stgList)
+						p_rhi->FreeMemoryDestroyBuffer(stg);
+
+					// Reset the command pool
+					std::cout << "Resetting Command Pool" << std::endl;
+					p_rhi->ResetCommandPool(m_assetLoaderCommandPool);
+					m_assetLoadingTracker.progress = 1.0f;
+					
+					// Update the bindless descriptors
+					std::cout << "Updating Scene's Bindless Texture Descriptors" << std::endl;
+					if(!imageInfoList.empty())
+					{
+						// For frame 0 in flight
+						m_descList[0].descDataList[BindingDest::bd_SceneRead_TexArray].arrayDestIndex	= arrayDestIndex;
+						m_descList[0].descDataList[BindingDest::bd_SceneRead_TexArray].count			= (uint32_t)imageInfoList.size();
+						m_descList[0].descDataList[BindingDest::bd_SceneRead_TexArray].imgDesinfo		= imageInfoList.data();
+						p_rhi->WriteUpdateDescriptors(&m_descList[0].descSet, m_descList[0].descDataList);
+
+						// For frame 1 in flight
+						m_descList[1].descDataList[BindingDest::bd_SceneRead_TexArray].arrayDestIndex	= arrayDestIndex;
+						m_descList[1].descDataList[BindingDest::bd_SceneRead_TexArray].count			= (uint32_t)imageInfoList.size();
+						m_descList[1].descDataList[BindingDest::bd_SceneRead_TexArray].imgDesinfo		= imageInfoList.data();
+						p_rhi->WriteUpdateDescriptors(&m_descList[1].descSet, m_descList[1].descDataList);
+					}					
+
+					std::cout << "Asset Loading Successful." << std::endl;
+					m_assetLoadingTracker.state = AssetLoadingState::als_RequestComplete;
+
+					return true;
+				});				
+				assetLoaderThread.detach();
+			}
+		}
+
+		if (m_assetLoadingTracker.state == AssetLoadingState::als_RequestComplete)
+		{
+			ImGui::Text("Loading Complete.");
+			if (ImGui::Button("Ok"))
+			{
+				m_assetLoadingTracker.log = "";
+				m_assetLoadingTracker.progress = 0.0f;
+				m_assetLoadingTracker.state = AssetLoadingState::als_WaitForRequest;
+
+				ImGui::CloseCurrentPopup();
+				m_fileDialog.ClearSelected();
+
+				showLoadButtons = true;
+				showLoadCompleteButtons = false;
+			}
+		}
+
+		ImGui::EndPopup();
+	}
+	return true;
+}
+
+bool CScene::DeleteEntity()
+{
+	return false;
 }
 
 CReadOnlyTextures::CReadOnlyTextures()
@@ -1402,7 +1739,7 @@ void CRenderTargets::Destroy(CVulkanRHI* p_rhi)
 	DestroyTextures(p_rhi);
 }
 
-void CRenderTargets::Show()
+void CRenderTargets::Show(CVulkanRHI* p_rhi)
 {
 	CVulkanRHI::ImageList rendTargetList = GetTextures();
 	ImGui::Indent();
@@ -1525,7 +1862,7 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 	return true;
 }
 
-void CFixedBuffers::Show()
+void CFixedBuffers::Show(CVulkanRHI* p_rhi)
 {
 	if (Header("Uniforms"))
 	{
@@ -1652,7 +1989,7 @@ bool CFixedAssets::Update(CVulkanRHI* p_rhi, const FixedUpdateData& p_updateData
 	return true;
 }
 
-void CFixedAssets::Show()
+void CFixedAssets::Show(CVulkanRHI* p_rhi)
 {
 	bool doubleClickedEntity = false;
 	int32_t sceneIndex = 0;
@@ -1661,7 +1998,7 @@ void CFixedAssets::Show()
 		ImGui::Indent();
 		if (ImGui::TreeNode("Render Targets"))
 		{
-			m_renderTargets.Show();
+			m_renderTargets.Show(p_rhi);
 			ImGui::TreePop();
 		}
 		ImGui::Unindent();
@@ -1691,7 +2028,7 @@ bool CFixedAssets::CreateSamplers(CVulkanRHI* p_rhi)
 }
 
 CPrimaryDescriptors::CPrimaryDescriptors()
-	:CDescriptor(FRAME_BUFFER_COUNT)
+	:CDescriptor(false /*is bindless*/, FRAME_BUFFER_COUNT)
 {
 }
 
@@ -1741,43 +2078,43 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 	VkDescriptorType sampled_img = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	VkDescriptorType storage_img = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 	{
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Gloabl_Uniform,			1,		uniform,		all,			&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_0).descInfo,	VK_NULL_HANDLE }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Linear_Sampler,			1,		sampler,		all,			VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }												, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_ObjPicker_Storage,		1,		storage_buf,	fragment,		&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}				, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Depth_Image,				1,		sampled_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PosGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }				, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_NormGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }					, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_AlbedoGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }					, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAO_Image,				1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }					, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOBlur_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }				, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		storage_buf,	compute,		&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}				, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,			1,		sampled_img,	all,			VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DirectionalShadowDepth).descInfo }	, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Image,		1,		storage_img,	compute,		VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Texture,		1,		sampled_img,	fragment,		VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredRoughMetal_Image,	1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredRoughMetal).descInfo }		, 0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,		sampled_img,	compute,		VK_NULL_HANDLE,	readTexDesInfoList.data() }														, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Gloabl_Uniform,			1,		uniform,		all,			&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_0).descInfo,	VK_NULL_HANDLE }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Linear_Sampler,			1,		sampler,		all,			VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }												, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_ObjPicker_Storage,			1,		storage_buf,	fragment,		&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Depth_Image,				1,		sampled_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_PosGBuf_Image,				1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_NormGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }					, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_AlbedoGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }					, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SSAO_Image,				1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }					, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SSAOBlur_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SSAOKernel_Storage,		1,		storage_buf,	compute,		&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}				, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_LightDepth_Image,			1,		sampled_img,	all,			VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DirectionalShadowDepth).descInfo }	, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_PrimaryColor_Image,		1,		storage_img,	compute,		VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_PrimaryColor_Texture,		1,		sampled_img,	fragment,		VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_DeferredRoughMetal_Image,	1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredRoughMetal).descInfo }		, 0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_PrimaryRead_TexArray,	tr_max,		sampled_img,	compute,		VK_NULL_HANDLE,	readTexDesInfoList.data() }														, 0);
 
-		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, tr_max, BindingDest::bd_PrimaryRead_TexArray, 0));
+		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, tr_max, BindingDest::bd_PrimaryRead_TexArray, 0, "PrimaryDescriptors_0"));
 	}
 
 	{
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Gloabl_Uniform,			1,		uniform,		all,			&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_1).descInfo,	VK_NULL_HANDLE }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Linear_Sampler,			1,		sampler,		all,			VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }												, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_ObjPicker_Storage,		1,		storage_buf,	fragment,		&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}				, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Depth_Image,				1,		sampled_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PosGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }				, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_NormGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }					, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_AlbedoGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }					, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAO_Image,				1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }					, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOBlur_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }				, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_SSAOKernel_Storage,		1,		storage_buf,	compute,		&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}				, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_LightDepth_Image,			1,		sampled_img,	all,			VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DirectionalShadowDepth).descInfo }	, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Image,		1,		storage_img,	compute,		VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryColor_Texture,		1,		sampled_img,	fragment,		VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_DeferredRoughMetal_Image,	1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredRoughMetal).descInfo }		, 1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_PrimaryRead_TexArray,	tr_max,		sampled_img,	compute,		VK_NULL_HANDLE,	readTexDesInfoList.data() }														, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Gloabl_Uniform,			1,		uniform,		all,			&fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_1).descInfo,	VK_NULL_HANDLE }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Linear_Sampler,			1,		sampler,		all,			VK_NULL_HANDLE,	&(*samplers)[s_Linear].descInfo }												, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_ObjPicker_Storage,			1,		storage_buf,	fragment,		&fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo,	VK_NULL_HANDLE}				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Depth_Image,				1,		sampled_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryDepth).descInfo }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_PosGBuf_Image,				1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Position).descInfo }				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_NormGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Normal).descInfo }					, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_AlbedoGBuf_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_Albedo).descInfo }					, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SSAO_Image,				1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAO).descInfo }					, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SSAOBlur_Image,			1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_SSAOBlur).descInfo }				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SSAOKernel_Storage,		1,		storage_buf,	compute,		&readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo,	VK_NULL_HANDLE}				, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_LightDepth_Image,			1,		sampled_img,	all,			VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DirectionalShadowDepth).descInfo }	, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_PrimaryColor_Image,		1,		storage_img,	compute,		VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_PrimaryColor_Texture,		1,		sampled_img,	fragment,		VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_PrimaryColor).descInfo }			, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_DeferredRoughMetal_Image,	1,		storage_img,	frag_compute,	VK_NULL_HANDLE,	&rendTargets->GetTexture(CRenderTargets::rt_DeferredRoughMetal).descInfo }		, 1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_PrimaryRead_TexArray,	tr_max,		sampled_img,	compute,		VK_NULL_HANDLE,	readTexDesInfoList.data() }														, 1);
 
-		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, tr_max, BindingDest::bd_PrimaryRead_TexArray, 1));
+		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, tr_max, BindingDest::bd_PrimaryRead_TexArray, 1, "PrimaryDescriptors_1"));
 	}
 
 	UnSetLayoutForDescriptorCreation(rendTargets);
@@ -1804,7 +2141,7 @@ void CPrimaryDescriptors::Destroy(CVulkanRHI* p_rhi)
 }
 
 CRenderableDebug::CRenderableDebug()
-	: CDescriptor(FRAME_BUFFER_COUNT)
+	: CDescriptor(false/* is bindless */, FRAME_BUFFER_COUNT)
 	, CRenderable(0)
 {
 }
@@ -1850,6 +2187,9 @@ bool CRenderableDebug::PreDrawInstanced(CVulkanRHI* p_rhi, uint32_t p_scIdx, con
 	std::vector<float>			selectedSphereTransformData;
 	std::vector<float>			selectedFrustumTransformData;
 	uint32_t					currentCount = 0;
+
+	//Reserve vector with the buffer's memory range to avoid any memcpy access violation
+	allSelectedTransformData.reserve(p_fixedBuffers->GetBuffer(CFixedBuffers::fb_DebugUniform_0).reqMemSize);
 	
 	m_bBoxDetails.instanceOffset = 0;
 	m_bBoxDetails.instanceCount = 0;
@@ -1974,14 +2314,14 @@ bool CRenderableDebug::CreateDebugDescriptors(CVulkanRHI* p_rhi, const CFixedBuf
 	VkShaderStageFlags vertex_frag = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	{
 		CVulkanRHI::Buffer uniformBuffer = p_fixedBuffers->GetBuffer(CFixedBuffers::fb_DebugUniform_0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Debug_Transforms_Uniform,	1,	VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	vertex_frag,	&uniformBuffer.descInfo,	VK_NULL_HANDLE}, 0);
-		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 0, BindingDest::bd_Debug_Transforms_Uniform, 0));
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Debug_Transforms_Uniform,	1,	VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	vertex_frag,	&uniformBuffer.descInfo,	VK_NULL_HANDLE}, 0);
+		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 0, BindingDest::bd_Debug_Transforms_Uniform, 0, "UIDescriptorSet_0"));
 	}
 
 	{
 		CVulkanRHI::Buffer uniformBuffer = p_fixedBuffers->GetBuffer(CFixedBuffers::fb_DebugUniform_1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ BindingDest::bd_Debug_Transforms_Uniform,	1,	VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	vertex_frag,	&uniformBuffer.descInfo,	VK_NULL_HANDLE }, 1);
-		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 0, BindingDest::bd_Debug_Transforms_Uniform, 1));
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Debug_Transforms_Uniform,	1,	VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	vertex_frag,	&uniformBuffer.descInfo,	VK_NULL_HANDLE }, 1);
+		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 0, BindingDest::bd_Debug_Transforms_Uniform, 1, "UIDescriptorSet_1"));
 	}
 
 	return true;

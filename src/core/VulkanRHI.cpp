@@ -12,8 +12,8 @@ CVulkanRHI::~CVulkanRHI()
 
 bool CVulkanRHI::SubmitCommandBuffers(
 	CommandBufferList* p_commndBfrList, PipelineStageFlagsList* p_psfList, bool p_waitForFinish, 
-	VkFence* p_fence, bool p_waitforFence,
-	SemaphoreList* p_signalList, SemaphoreList* p_waitList)
+	VkFence* p_fence, bool p_waitforFence, SemaphoreList* p_signalList, SemaphoreList* p_waitList, 
+	QueueType p_queueType)
 {
 	if (!p_commndBfrList || !p_psfList)
 	{
@@ -33,10 +33,16 @@ bool CVulkanRHI::SubmitCommandBuffers(
 		return false;
 	}
 
-	// we do not have a multi-queue infrastructure at the moment so we are only
-	// going to submit to the default (Gfx) queue.
-	CVulkanRHI::Queue queue = GetQueue(0);
-
+	CVulkanRHI::Queue queue = VK_NULL_HANDLE;
+	if (p_queueType == QueueType::qt_Secondary)
+	{
+		queue = GetSecondaryQueue();
+	}
+	else // defaulting to executing to primary (graphics) queue if none provided
+	{
+		queue = GetQueue(0);
+	}
+		
 	//VkPipelineStageFlags waitstage{ VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -174,13 +180,28 @@ void CVulkanRHI::FreeMemoryDestroyBuffer(Buffer& p_buffer)
 	p_buffer.descInfo.buffer = VK_NULL_HANDLE;
 }
 
-bool CVulkanRHI::CreateDescriptors(const DescDataList& p_descdataList, VkDescriptorPool& p_descPool, VkDescriptorSetLayout* p_descLayout, uint32_t p_layoutCount, VkDescriptorSet* p_desc, void* p_next)
+bool CVulkanRHI::CreateDescriptors(	const DescDataList& p_descdataList, VkDescriptorPool& p_descPool, 
+									VkDescriptorSetLayout* p_descLayout, uint32_t p_layoutCount,
+									VkDescriptorSet* p_desc, void* p_next, bool p_bindless, std::string p_DebugName)
 {
 	if (!AllocateDescriptorSets(p_descPool, p_descLayout, p_layoutCount, p_desc, p_next))
 		return false;
 
+	SetDebugName((uint64_t)*p_desc, VK_OBJECT_TYPE_DESCRIPTOR_SET, (p_DebugName).c_str());
+
+	// If not bindless; we choose to write and update these descriptors
+	if (!p_bindless)
+	{
+		WriteUpdateDescriptors(p_desc, p_descdataList);
+	}
+
+	return true;
+}
+
+void CVulkanRHI::WriteUpdateDescriptors(VkDescriptorSet* p_desc, const DescDataList& p_descDataList)
+{
 	std::vector<VkWriteDescriptorSet> writeDescList;
-	for (const auto& desc : p_descdataList)
+	for (const auto& desc : p_descDataList)
 	{
 		//for (int i = 0; i < desc.count; i++)
 		{
@@ -188,13 +209,14 @@ bool CVulkanRHI::CreateDescriptors(const DescDataList& p_descdataList, VkDescrip
 				|| desc.type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
 			{
 				VkWriteDescriptorSet wdSet{};
-				wdSet.sType						= VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				wdSet.pNext						= nullptr;
-				wdSet.dstSet					= *p_desc;
-				wdSet.descriptorCount			= desc.count;
-				wdSet.descriptorType			= desc.type;
-				wdSet.dstBinding				= desc.bindingDest;
-				wdSet.pBufferInfo				= desc.bufDesInfo; // since we need 1 uniform descripotr per frame buffer; setting accordinigly
+				wdSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				wdSet.pNext = nullptr;
+				wdSet.dstSet = *p_desc;
+				wdSet.descriptorCount = desc.count;
+				wdSet.descriptorType = desc.type;
+				wdSet.dstBinding = desc.bindingDest;
+				wdSet.pBufferInfo = desc.bufDesInfo; // since we need 1 uniform descriptor per frame buffer; setting accordingly
+				wdSet.dstArrayElement = desc.arrayDestIndex;
 
 				writeDescList.push_back(wdSet);
 			}
@@ -205,13 +227,14 @@ bool CVulkanRHI::CreateDescriptors(const DescDataList& p_descdataList, VkDescrip
 				|| desc.type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
 			{
 				VkWriteDescriptorSet wdSet{};
-				wdSet.sType						= VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				wdSet.pNext						= nullptr;
-				wdSet.dstSet					= *p_desc;
-				wdSet.descriptorCount			= desc.count;
-				wdSet.descriptorType			= desc.type;
-				wdSet.dstBinding				= desc.bindingDest;
-				wdSet.pImageInfo				= desc.imgDesinfo;
+				wdSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				wdSet.pNext = nullptr;
+				wdSet.dstSet = *p_desc;
+				wdSet.descriptorCount = desc.count;
+				wdSet.descriptorType = desc.type;
+				wdSet.dstBinding = desc.bindingDest;
+				wdSet.pImageInfo = desc.imgDesinfo;
+				wdSet.dstArrayElement = desc.arrayDestIndex;
 
 				writeDescList.push_back(wdSet);
 			}
@@ -219,11 +242,12 @@ bool CVulkanRHI::CreateDescriptors(const DescDataList& p_descdataList, VkDescrip
 	}
 
 	vkUpdateDescriptorSets(m_vkDevice, (uint32_t)writeDescList.size(), writeDescList.data(), 0, nullptr);
-
-	return true;
 }
 
-bool CVulkanRHI::CreateDescriptors(uint32_t p_varDescCount, const DescDataList& p_descDataList, VkDescriptorPool& p_descPool, VkDescriptorSetLayout& p_descSetLayout, VkDescriptorSet& p_descSet, uint32_t p_texArrayIndex)
+bool CVulkanRHI::CreateDescriptors(	uint32_t p_varDescCount, const DescDataList& p_descDataList, 
+									VkDescriptorPool& p_descPool, VkDescriptorSetLayout& p_descSetLayout, 
+									VkDescriptorSet& p_descSet, uint32_t p_texArrayIndex, bool p_bindless,
+									std::string p_DebugName)
 {
 	std::vector<VkDescriptorPoolSize> dPSize;
 	std::vector<VkDescriptorSetLayoutBinding> dsLayoutBinding;
@@ -233,11 +257,22 @@ bool CVulkanRHI::CreateDescriptors(uint32_t p_varDescCount, const DescDataList& 
 		dsLayoutBinding.push_back(VkDescriptorSetLayoutBinding{ (uint32_t)desc.bindingDest, desc.type, desc.count, desc.shaderStage });
 	}
 
+	// We are creating a descriptor pool with UPDATE_AFTER_BIND_BIT bit set but that shouldn't stop us
+	// from using the pool in a traditional way either.
 	if (!CreateDescriptorPool(dPSize.data(), (uint32_t)dPSize.size(), p_descPool))
 		return false;
 
-	std::vector<VkDescriptorBindingFlagsEXT> descBindFlags(p_descDataList.size(), 0);
+	std::vector<VkDescriptorBindingFlags> descBindFlags(p_descDataList.size(), 0);
 	descBindFlags[p_texArrayIndex]				= VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT;
+		
+	if (p_bindless)
+	{
+		for (uint32_t i = 0; i < (uint32_t)p_descDataList.size(); i++)
+		{
+			descBindFlags[i] |= VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
+				VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT;
+		}
+	}
 
 	VkDescriptorSetLayoutBindingFlagsCreateInfoEXT layoutBindFlags{};
 	layoutBindFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
@@ -245,7 +280,8 @@ bool CVulkanRHI::CreateDescriptors(uint32_t p_varDescCount, const DescDataList& 
 	layoutBindFlags.pBindingFlags				= descBindFlags.data();
 
 	void* layoutFlags = (p_varDescCount == 0) ? nullptr : &layoutBindFlags;
-	if (!CreateDescriptorSetLayout(dsLayoutBinding.data(), (uint32_t)dsLayoutBinding.size(), p_descSetLayout, layoutFlags))
+	if (!CreateDescriptorSetLayout(dsLayoutBinding.data(), (uint32_t)dsLayoutBinding.size(), 
+									p_descSetLayout, layoutFlags, p_bindless))
 		return false;
 
 	uint32_t varDescCount[] = { p_varDescCount };
@@ -255,10 +291,8 @@ bool CVulkanRHI::CreateDescriptors(uint32_t p_varDescCount, const DescDataList& 
 	varDescCountAllocInfo.pDescriptorCounts		= varDescCount;
 
 	void* allocInfo = (p_varDescCount == 0) ? nullptr : &varDescCountAllocInfo;
-	if (!CreateDescriptors(p_descDataList, p_descPool, &p_descSetLayout, 1, &p_descSet, allocInfo))
-		return false;
-
+	if (!CreateDescriptors(p_descDataList, p_descPool, &p_descSetLayout, 1, &p_descSet, allocInfo, p_bindless, p_DebugName))
+			return false;
+	
 	return true;
 }
-
-

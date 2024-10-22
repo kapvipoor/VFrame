@@ -7,3 +7,6 @@
 [submodule "external/tinygltf"]
 	path = external/tinygltf
 	url = https://github.com/kapvipoor/tinygltf.git
+[submodule "imgui-filebrowser"]
+	path = imgui-filebrowser
+	url = D:/Projects/MyPersonalProjects/VFrame/external/imgui-filebrowser

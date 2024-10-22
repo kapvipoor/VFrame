@@ -4,8 +4,15 @@
 #include "SceneGraph.h"
 #include "AssetLoader.h"
 #include "Camera.h"
+#include "Light.h"
+
 #include "external/NiceMath.h"
+
 #include <list>
+
+#define MAX_SUPPORTED_MESHES 100
+#define MAX_SUPPORTED_MATERIALS 1000000
+#define MAX_SUPPORTED_TEXTURES 2048
 
 class CCircularList
 {
@@ -111,7 +118,7 @@ public:
 	// but there can be more than 1 descDataList and descriptor set pairs
 	// provided they are based on the same descriptor set layout and 
 	// created from the same Descriptor pool
-	CDescriptor(uint32_t p_descSetCount = 1) { m_descList.resize(p_descSetCount); };
+	CDescriptor(bool isBindless = false, uint32_t p_descSetCount = 1);
 	~CDescriptor() {};
 
 	const VkDescriptorSet* GetDescriptorSet(uint32_t p_id = 0) const{ return &m_descList[p_id].descSet; }
@@ -120,9 +127,11 @@ protected:
 	std::vector<Descriptor>				m_descList;
 	VkDescriptorPool					m_descPool;
 
-	bool CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_varDescCount, uint32_t p_texArrayIndex, uint32_t p_id = 0);
+	bool CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_varDescCount, uint32_t p_texArrayIndex, uint32_t p_id = 0, std::string p_debugName = "");
 	void DestroyDescriptors(CVulkanRHI* p_rhi);
 	void AddDescriptor(CVulkanRHI::DescriptorData p_dData, uint32_t p_id = 0);
+
+	bool m_isBindless;
 };
 
 class CBuffers
@@ -218,7 +227,7 @@ public:
 
 	bool Update(CVulkanRHI*, uint32_t p_scId);
 
-	virtual void Show() override;
+	virtual void Show(CVulkanRHI* p_rhi) override;
 
 private:
 	PrimaryUniformData				m_primaryUniformData;
@@ -254,7 +263,7 @@ public:
 	bool Create(CVulkanRHI*);
 	void Destroy(CVulkanRHI*);
 
-	void Show() override;
+	void Show(CVulkanRHI* p_rhi) override;
 
 	// temporary hack - to create the primary descriptor set, the render targets
 	// need to be in a specific layout as some of them are required in compute
@@ -327,7 +336,7 @@ public:
 	CRenderableUI();
 	~CRenderableUI();
 
-	void virtual Show() override;
+	void virtual Show(CVulkanRHI* p_rhi) override;
 
 	bool Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool);
 	void Destroy(CVulkanRHI* p_rhi);
@@ -356,7 +365,7 @@ public:
 	CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat);
 	~CRenderableMesh();
 	
-	virtual void Show() override; //CUIParticipant virtual override
+	virtual void Show(CVulkanRHI* p_rhi) override; //CUIParticipant virtual override
 	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox) override;
 
 	uint32_t GetMeshId() const { return m_mesh_id; }
@@ -455,7 +464,7 @@ public:
 	bool Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, const CVulkanRHI::CommandPool& p_cmdPool);
 	void Destroy(CVulkanRHI* p_rhi);
 
-	virtual void Show() override;
+	virtual void Show(CVulkanRHI* p_rhi) override;
 
 	bool Update(CVulkanRHI* p_rhi, const LoadedUpdateData&);
 	void SetSelectedRenderableMesh(int p_id) { m_curSelecteRenderableMesh = p_id; }
@@ -463,6 +472,26 @@ public:
 	const CRenderableMesh* GetRenderableMesh(uint32_t p_idx) const { return m_meshes[p_idx]; }
 
 private:
+	enum AssetLoadingState
+	{
+		als_WaitForRequest = 0
+		, als_ReadyToLoad
+		, als_Loading
+		, als_RequestComplete
+	};
+
+	struct AssetLoadingTracker
+	{
+		AssetLoadingState state;
+		float progress;
+		std::string log;
+
+		AssetLoadingTracker()
+			: state(AssetLoadingState::als_WaitForRequest)
+			, progress(0.0f)
+			, log("") {}
+	};
+
 	CSceneGraph*							m_sceneGraph;
 	std::vector<CRenderableMesh*>			m_meshes;			// list of all meshes used by the scene
 	CTextures*                              m_sceneTextures;	// list of all the textures used by the scene
@@ -471,22 +500,27 @@ private:
 	
 	// TODO: need to fix the current selected render-able mesh 
 	// it is used by object picker pass and is not the best way to do.
-	int										m_curSelecteRenderableMesh;		
-
+	int										m_curSelecteRenderableMesh;
 	CVulkanRHI::Buffer						m_meshInfo_uniform[FRAME_BUFFER_COUNT];	// stores all meshes uniform data
 	CVulkanRHI::Buffer						m_material_storage;
-	CVulkanRHI::Buffer						m_light_storage;				// buffer for holding light count, raw light list data
-
+	CVulkanRHI::Buffer						m_light_storage;						// buffer for holding light count, raw light list data
 		
-	std::vector<std::filesystem::path>		m_scenePaths;					// list of all scene paths
+	VkCommandPool							m_assetLoaderCommandPool;				// specially for transfer queues
+	AssetLoadingTracker						m_assetLoadingTracker;
+
+	uint32_t m_textureOffset;
+	uint32_t m_materialOffset;
 
 	bool LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 	bool LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList , CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
-	bool LoadScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
+	bool LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
 	bool LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
 
 	bool CreateMeshUniformBuffer(CVulkanRHI* p_rhi);
 	bool CreateSceneDescriptors(CVulkanRHI* p_rhi);
+
+	bool AddEntity(CVulkanRHI* p_rhi, std::string p_path);
+	bool DeleteEntity();
 };
 
 class CReadOnlyTextures : public CTextures
@@ -580,7 +614,7 @@ public:
 	void Destroy(CVulkanRHI*);
 	bool Update(CVulkanRHI*, const FixedUpdateData&);
 
-	void Show() override;
+	void Show(CVulkanRHI* p_rhi) override;
 
 	CFixedBuffers* GetFixedBuffers() { return &m_fixedBuffers; }
 	const CFixedBuffers* GetFixedBuffers() const { return &m_fixedBuffers; }

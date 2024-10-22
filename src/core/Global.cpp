@@ -21,10 +21,10 @@ bool GetFileExtention(const std::string fileName, std::string& pExtentionn)
 	return true;
 }
 
-bool GetFileName(const std::string fileName, std::string& pFilename)
+bool GetFileName(const std::string fileName, std::string& pFilename, const char pDelimiter[2])
 {
 	// find the last occurance of "."
-	std::size_t found = fileName.find_last_of("/");
+	std::size_t found = fileName.find_last_of(pDelimiter);
 
 	// if doesnt exist
 	if (found == std::string::npos)
