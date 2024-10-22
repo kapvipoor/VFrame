@@ -4,3 +4,5 @@
 * There is no explicit synchronization between the Primary and Secondary queue submission at the moment.
 * Maximum supported Texture count is 2048 at the moment. New textures are asynchronously updated to next available index in the Array of Textures. The material storage buffer is then updated with the new sub-mesh's material properties including indices to Albedo, Normal and Roughness_Metal maps
 * The Id of the submesh itself is updated via a push constant when the sub-mesh is drawn from the primary queue
+
+* https://github.com/kapvipoor/VFrame/blob/main/notes/assets/Async%20Asset%20Loading.PNG
