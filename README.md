@@ -6,7 +6,7 @@
  A compilation of few rasterization techniques using Vulkan API and C++
 
 External Tools/Packages Used
-1. tinygltf
+1. tinygltf (fork, module)
 2. NiceMath
 3. tiny_obj_loader
 4. ImGui (fork, module)
