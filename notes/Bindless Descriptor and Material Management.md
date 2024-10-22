@@ -10,3 +10,5 @@
 * All textures in the scene are loaded as an array of textures and also assigned the flag - VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT
 * This descriptor is write-updated at runtime when assets are loaded. Index of the texture in the array of texture is its index mentioned in the material storage buffer
 * Material data is stored in a Storage Buffer. Each entry associates to the submesh in the scenegraph. Includes PBR coeffs and texture indices to Albedo, Normal and Roughness Metal maps
+
+<img width="1444" alt="BindlessDescriptorandMaterialManagement" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/Bindless%20Descriptor%20and%20Material%20Management.PNG">
