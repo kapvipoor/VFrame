@@ -85,7 +85,7 @@ bool CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	m_pipeline.cullMode										= VK_CULL_MODE_BACK_BIT;
 	m_pipeline.enableDepthTest								= true;
 	m_pipeline.enableDepthWrite								= true;
-	if (!m_rhi->CreateGraphicsPipeline(shadowPassShaderpaths, m_pipeline))
+	if (!m_rhi->CreateGraphicsPipeline(shadowPassShaderpaths, m_pipeline, "StaticShadowGfxPipeline"))
 	{
 		std::cout << "Error Creating Static Shadow Pipeline" << std::endl;
 		return false;

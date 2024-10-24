@@ -50,7 +50,7 @@ bool CForwardPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 	m_pipeline.cullMode										= VK_CULL_MODE_BACK_BIT;
 	m_pipeline.enableDepthTest								= true;
 	m_pipeline.enableDepthWrite								= true;
-	if (!m_rhi->CreateGraphicsPipeline(fwdShaderpaths, m_pipeline))
+	if (!m_rhi->CreateGraphicsPipeline(fwdShaderpaths, m_pipeline, "ForwardGfxPipeline"))
 	{
 		std::cout << "Error Creating Forward Pipeline" << std::endl;
 		return false;
@@ -73,50 +73,40 @@ bool CForwardPass::Render(RenderData* p_renderData)
 	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
 
 	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Forward"));
-
 	{
-		//CVulkanRHI::Image primaryColorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
-		//CVulkanRHI::Image primaryDepthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
-		//CVulkanRHI::Image PositionhRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Position);
-		//CVulkanRHI::Image NormalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Normal);
-		//
-		//m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, primaryColorRT, cmdBfr);
-		//m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, primaryDepthRT, cmdBfr);
-		//m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, PositionhRT, cmdBfr);
-		//m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, NormalRT, cmdBfr);
-	}
-
-	m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
-
-	m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
-	m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
-
-	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
-
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(0), 0, nullptr);
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
-
-	// Bind Index and Vertices buffers
-	VkDeviceSize offsets[1] = { 0 };
-	for (unsigned int i = CScene::MeshType::mt_Scene; i < scene->GetRenderableMeshCount(); i++)
-	{
-		const CRenderableMesh* mesh = scene->GetRenderableMesh(i);;
-
-		vkCmdBindVertexBuffers(cmdBfr, 0, 1, &mesh->GetVertexBuffer()->descInfo.buffer, offsets);
-		vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer()->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-		for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
+		m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
 		{
-			const SubMesh* submesh							= mesh->GetSubmesh(j);
-			VkPipelineStageFlags pipelineStage				= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-			CScene::MeshPushConst pc{ mesh->GetMeshId(), submesh->materialId};
-			
-			vkCmdPushConstants(cmdBfr, m_pipeline.pipeLayout, pipelineStage, 0, sizeof(CScene::MeshPushConst), (void*)&pc);
-			vkCmdDrawIndexed(cmdBfr, submesh->indexCount, 1, submesh->firstIndex, 0, 1);
-		}
-	}
 
-	m_rhi->EndRenderPass(cmdBfr);
+			m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
+			m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
+
+			vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
+
+			vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(0), 0, nullptr);
+			vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
+
+			// Bind Index and Vertices buffers
+			VkDeviceSize offsets[1] = { 0 };
+			for (unsigned int i = CScene::MeshType::mt_Scene; i < scene->GetRenderableMeshCount(); i++)
+			{
+				const CRenderableMesh* mesh = scene->GetRenderableMesh(i);;
+
+				vkCmdBindVertexBuffers(cmdBfr, 0, 1, &mesh->GetVertexBuffer()->descInfo.buffer, offsets);
+				vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer()->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+				for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
+				{
+					const SubMesh* submesh = mesh->GetSubmesh(j);
+					VkPipelineStageFlags pipelineStage = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+					CScene::MeshPushConst pc{ mesh->GetMeshId(), submesh->materialId };
+
+					vkCmdPushConstants(cmdBfr, m_pipeline.pipeLayout, pipelineStage, 0, sizeof(CScene::MeshPushConst), (void*)&pc);
+					vkCmdDrawIndexed(cmdBfr, submesh->indexCount, 1, submesh->firstIndex, 0, 1);
+				}
+			}
+		}
+		m_rhi->EndRenderPass(cmdBfr);
+	}
 	m_rhi->EndCommandBuffer(cmdBfr);
 	
 	return true;
@@ -180,7 +170,7 @@ bool CSkyboxPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 	m_pipeline.cullMode										= VK_CULL_MODE_NONE;
 	m_pipeline.enableDepthTest								= false;
 	m_pipeline.enableDepthWrite								= false;
-	if (!m_rhi->CreateGraphicsPipeline(skyBoxShaderpaths, m_pipeline))
+	if (!m_rhi->CreateGraphicsPipeline(skyBoxShaderpaths, m_pipeline, "SkyboxGfxPipeline"))
 	{
 		std::cout << "Error Creating Skybox Pipeline" << std::endl;
 		return false;
@@ -299,7 +289,7 @@ bool CDeferredPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 	m_pipeline.enableDepthWrite								= true;
 	m_pipeline.depthCmpOp									= VK_COMPARE_OP_LESS_OR_EQUAL;
 	m_pipeline.pipeLayout									= p_pipeline.pipeLayout;
-	if (!m_rhi->CreateGraphicsPipeline(dfrdShaderpaths, m_pipeline))
+	if (!m_rhi->CreateGraphicsPipeline(dfrdShaderpaths, m_pipeline, "DeferredGfxPipeline"))
 	{
 		std::cout << "Error Creating Deferred Pipeline" << std::endl;
 		return false;
@@ -398,7 +388,7 @@ bool CDeferredLightingPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 	dfrdLightingShaderpaths.shaderpath_compute					= g_EnginePath /"shaders/spirv/Deferred_Lighting.comp.spv";
 	m_pipeline.pipeLayout										= p_pipeline.pipeLayout;
 
-	RETURN_FALSE_IF_FALSE(m_rhi->CreateComputePipeline(dfrdLightingShaderpaths, m_pipeline));
+	RETURN_FALSE_IF_FALSE(m_rhi->CreateComputePipeline(dfrdLightingShaderpaths, m_pipeline, "DeferredLightingComputePipeline"));
 
 	return true;
 }
@@ -413,20 +403,24 @@ bool CDeferredLightingPass::Render(RenderData* p_renderData)
 	uint32_t scId												= p_renderData->scIdx;
 	CVulkanRHI::CommandBuffer cmdBfr							= p_renderData->cmdBfr;
 	const CPrimaryDescriptors* primaryDesc						= p_renderData->primaryDescriptors;
+	const CScene* scene											= p_renderData->loadedAssets->GetScene();
 
 	uint32_t dispatchDim_x										= m_rhi->GetRenderWidth() / 8;
 	uint32_t dispatchDim_y										= m_rhi->GetRenderHeight() / 8;
 
 	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Compute Deferred Lighting"));
+	{
+		// issue a layout barrier on Primary Depth to set as Shader Read so it can be used in this compute shader
+		CVulkanRHI::Image primaryDepthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
+		m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, primaryDepthRT, cmdBfr);
 
-	// issue a layout barrier on Primary Depth to set as Shader Read so it can be used in this compute shader
-	CVulkanRHI::Image primaryDepthRT							= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
-	m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, primaryDepthRT, cmdBfr);
+		vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeline);
 
-	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeline);
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-	vkCmdDispatch(cmdBfr, dispatchDim_x, dispatchDim_y, 1);
+		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
 
+		vkCmdDispatch(cmdBfr, dispatchDim_x, dispatchDim_y, 1);
+	}
 	m_rhi->EndCommandBuffer(cmdBfr);
 
 	return true;
@@ -489,7 +483,7 @@ bool CSkyboxDeferredPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 	m_pipeline.cullMode										= VK_CULL_MODE_NONE;
 	m_pipeline.enableDepthTest								= false;
 	m_pipeline.enableDepthWrite								= false;
-	if (!m_rhi->CreateGraphicsPipeline(skyBoxShaderpaths, m_pipeline))
+	if (!m_rhi->CreateGraphicsPipeline(skyBoxShaderpaths, m_pipeline, "SkyboxDeferredGfxPipeline"))
 	{
 		std::cout << "Error Creating CSkyboxDeferredPass Pipeline" << std::endl;
 		return false;

@@ -774,7 +774,7 @@ void CVulkanCore::DestroyDescriptorSetLayout(VkDescriptorSetLayout p_descLayput)
 
 bool CVulkanCore::CreatePipelineLayout(VkPushConstantRange* p_pushConstants, uint32_t p_pcCount,
 	VkDescriptorSetLayout* p_descLayouts, uint32_t p_dlCount,
-	VkPipelineLayout& p_vkPipelineLayout)
+	VkPipelineLayout& p_vkPipelineLayout, std::string p_debugName)
 {
 	VkPipelineLayoutCreateInfo layoutCreateInfo{};
 	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -789,6 +789,8 @@ bool CVulkanCore::CreatePipelineLayout(VkPushConstantRange* p_pushConstants, uin
 		std::cerr << "vkCreatePipelineLayout failed: " << res << std::endl;
 		return false;
 	}
+
+	SetDebugName((uint64_t)p_vkPipelineLayout, VK_OBJECT_TYPE_PIPELINE_LAYOUT, p_debugName.c_str());
 
 	return true;
 }
@@ -903,7 +905,7 @@ void CVulkanCore::SetScissors(VkCommandBuffer p_cmdBfr, uint32_t p_offX, uint32_
 	vkCmdSetScissor(p_cmdBfr, 0, 1, &l_vkScissor);
 }
 
-bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipeline& pData)
+bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipeline& pData, std::string p_debugName)
 {
 	pData.vertexShader = VK_NULL_HANDLE;
 	if (p_shaderPaths.shaderpath_vertex == "" || !LoadShader(p_shaderPaths.shaderpath_vertex.string().c_str(), pData.vertexShader))
@@ -1074,10 +1076,12 @@ bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipel
 		return false;
 	}
 
+	SetDebugName((uint64_t)pData.pipeline, VK_OBJECT_TYPE_PIPELINE, p_debugName.c_str());
+
 	return true;
 }
 
-bool CVulkanCore::CreateComputePipeline(const ShaderPaths& p_shaderPaths, Pipeline& p_pData)
+bool CVulkanCore::CreateComputePipeline(const ShaderPaths& p_shaderPaths, Pipeline& p_pData, std::string p_debugName)
 {
 	// load shader and get shader module
 	p_pData.computeShader = VK_NULL_HANDLE;
@@ -1102,6 +1106,8 @@ bool CVulkanCore::CreateComputePipeline(const ShaderPaths& p_shaderPaths, Pipeli
 		std::cerr << "vkCreateComputePipelines failed: " << res << std::endl;
 		return false;
 	}
+
+	SetDebugName((uint64_t)p_pData.pipeline, VK_OBJECT_TYPE_PIPELINE, p_debugName.c_str());
 
 	return true;
 }

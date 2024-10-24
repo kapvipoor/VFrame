@@ -297,7 +297,8 @@ public:
 	void DestroyDescriptorSetLayout(VkDescriptorSetLayout p_descLayput);
 
 	bool CreatePipelineLayout(VkPushConstantRange* p_pushConstants, uint32_t p_pcCount,
-		VkDescriptorSetLayout* p_descLayouts, uint32_t p_dlCount, VkPipelineLayout& p_vkPipelineLayout);
+		VkDescriptorSetLayout* p_descLayouts, uint32_t p_dlCount, 
+		VkPipelineLayout& p_vkPipelineLayout, std::string p_debugName);
 	void DestroyPipelineLayout(VkPipelineLayout p_pipeLayout);
 	
 	bool CreateRenderpass(Renderpass& p_rpData);
@@ -306,8 +307,8 @@ public:
 	void EndRenderPass(VkCommandBuffer& p_cmdBfr);
 	void DestroyRenderpass(VkRenderPass p_renderpass);
 	
-	bool CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipeline& pData);
-	bool CreateComputePipeline(const ShaderPaths& p_shaderPaths, Pipeline& );
+	bool CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipeline& pData, std::string p_debugName);
+	bool CreateComputePipeline(const ShaderPaths& p_shaderPaths, Pipeline& pData, std::string p_debugName);
 	void DestroyPipeline(Pipeline& p_pipeline);
 		
 	bool CreateCommandPool(uint32_t p_qfIndex, VkCommandPool& p_cmdPool);

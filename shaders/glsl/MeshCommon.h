@@ -1,6 +1,3 @@
-#define DIRECTIONAL_LIGHT_TYPE 0
-#define POINT_LIGHT_TYPE 1
-
 layout(push_constant) uniform MeshID
 {
 	uint mesh_id;

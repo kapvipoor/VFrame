@@ -22,8 +22,6 @@ layout (location = 0) out vec4 outPosition;
 layout (location = 1) out vec4 outNormal;
 layout (location = 2) out vec4 outFragColor;
 
-#define SHADOW_BIAS 0.005
-
 void PickMeshID()
 {
 	vec4 fragCoord = gl_FragCoord;
@@ -93,8 +91,6 @@ void main()
 	for(int i = 0; i < g_lights.count; i++)
 	{
 		Light light = g_lights.lights[i];
-		
-		// Unpacking light type
 		uint lightType = light.type_castShadow >> 16;
 
 		// As light color is over 1, the result will be over 1, hence will need tone mapping
@@ -139,11 +135,11 @@ void main()
 			// commenting this part of code
 			//float distance = length(lightDir);
 			//float attenuation = 1.0/(distance * distance);
-			vec3 radiance 					= lightColor;																									// * attenuation;
+			vec3 radiance 					= lightColor;	// * attenuation;
 
 			// calculating fresnel value to get the reflection to refraction ratio
 			vec3 F0 						= vec3(0.04);
-			F0 								= mix(F0, color.xyz, roughMetal.y); 																			// revisit this if necessary as the color here needs to be the metal's color for fresnel effect
+			F0 								= mix(F0, color.xyz, roughMetal.y); 	// revisit this if necessary as the color here needs to be the metal's color for fresnel effect
 			vec3 F 							= FresnelSchlick(max(dot(H, V), 0.0) , F0);
 
 			// calculating Geometry factor and Normal Distribution Function

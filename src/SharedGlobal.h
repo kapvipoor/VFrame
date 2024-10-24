@@ -26,3 +26,8 @@
 #define STORE_PRIMARY_COLOR				        5
 #define STORE_DEFERRED_ROUGH_METAL		        6
 #define STORE_MAX_RENDER_TARGETS			    7
+
+#define SHADOW_BIAS                             0.005
+
+#define DIRECTIONAL_LIGHT_TYPE                  0
+#define POINT_LIGHT_TYPE                        1

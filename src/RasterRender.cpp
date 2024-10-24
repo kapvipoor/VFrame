@@ -406,24 +406,24 @@ bool CRasterRender::CreatePasses()
 	std::vector<VkDescriptorSetLayout> descLayouts;
 	descLayouts.push_back(m_primaryDescriptors->GetDescriptorSetLayout(0));					// Set 0 - BindingSet::Primary
 	descLayouts.push_back(m_loadableAssets->GetScene()->GetDescriptorSetLayout());			// Set 1 - BindingSet::Mesh
-	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&meshPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), primaryAndSceneLayout));
+	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&meshPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), primaryAndSceneLayout, "PrimaryAndScenePipelineLayout"));
 
 	VkPipelineLayout primaryLayout;
 	descLayouts.clear();
 	descLayouts.push_back(m_primaryDescriptors->GetDescriptorSetLayout(0));					// Set 0 - BindingSet::Primary
-	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&meshPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), primaryLayout));
+	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&meshPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), primaryLayout, "PrimaryPipelineLayout"));
 
 	VkPipelineLayout uiLayout;
 	descLayouts.clear();
 	descLayouts.push_back(m_primaryDescriptors->GetDescriptorSetLayout(0));					// Set 0 - BindingSet::Primary
 	descLayouts.push_back(m_loadableAssets->GetUI()->GetDescriptorSetLayout());				// Set 1 - BindingSet::UI
-	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&uiPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), uiLayout));
+	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&uiPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), uiLayout, "UIPipelineLayout"));
 
 	VkPipelineLayout debugLayout;
 	descLayouts.clear();
 	descLayouts.push_back(m_primaryDescriptors->GetDescriptorSetLayout(0));					// Set 0 - BindingSet::Primary
 	descLayouts.push_back(m_fixedAssets->GetDebugRenderer()->GetDescriptorSetLayout());		// Set 1 - BindingSet::Debug
-	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&debugDrawPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), debugLayout));
+	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&debugDrawPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), debugLayout, "DebugPipelineLayout"));
 
 
 	CPass::RenderData renderData{};
@@ -470,6 +470,9 @@ bool CRasterRender::CreatePasses()
 	pipeline.pipeLayout						= primaryLayout;
 	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Initalize(nullptr, pipeline));
 	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Initalize(nullptr, pipeline));
+
+	pipeline								= CVulkanRHI::Pipeline{};
+	pipeline.pipeLayout						= primaryAndSceneLayout;
 	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Initalize(nullptr, pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
@@ -574,7 +577,7 @@ bool CRasterRender::RenderDeferred()
 	renderData.sceneGraph					= m_sceneGraph;
 	renderData.rendererType					= m_rhi->GetRendererType();
 
-	if (!m_staticShadowPass->ReuseShadowMap())
+	//if (!m_staticShadowPass->ReuseShadowMap())
 	{
 		renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ShadowMap];
 		RETURN_FALSE_IF_FALSE(m_staticShadowPass->Render(&renderData));

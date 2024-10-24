@@ -1261,24 +1261,26 @@ bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
 	// behavior.
 
 	// Creating descriptor set for swap chain utility 0
-	VkShaderStageFlags vertex_frag = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	VkShaderStageFlags vertex_frag		= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	VkShaderStageFlags frag				= VK_SHADER_STAGE_FRAGMENT_BIT;
+	VkShaderStageFlags vert_frag_comp	= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
 	{
 		// Creating Descriptors and descriptor set based on following type and count
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag},					0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_CubeMap_Texture,			1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	VK_SHADER_STAGE_FRAGMENT_BIT},	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			VK_SHADER_STAGE_FRAGMENT_BIT},	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vertex_frag},					0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			VK_SHADER_STAGE_FRAGMENT_BIT},	0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag},	0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_CubeMap_Texture,			1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	frag },			0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			frag },			0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vert_frag_comp},0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			frag },	        0);
 		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 0, "SceneDescriptorSet_0"));
 	}
 
 	// Creating descriptor set for swap chain utility 1
 	{
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag},					1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_CubeMap_Texture,			1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	VK_SHADER_STAGE_FRAGMENT_BIT},	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			VK_SHADER_STAGE_FRAGMENT_BIT},	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vertex_frag},					1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			VK_SHADER_STAGE_FRAGMENT_BIT},	1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag},	1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_CubeMap_Texture,			1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	frag },			1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			frag },			1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vert_frag_comp},1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			frag },			1);
 		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 1, "SceneDescriptorSet_1"));
 	}
 
