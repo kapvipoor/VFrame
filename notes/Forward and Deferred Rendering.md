@@ -4,3 +4,4 @@
 * Deferred rendering is broken into differed pass that writes to GBuffers (Position, Normal, Albedo, Roughness Metal, Depth) and resolved in view space in a subsequent compute pass that performs Lighting (PBR), Shadows Computation, Point and Directional light implementation.
 
 [![Watch the video]](https://github.com/kapvipoor/VFrame/blob/main/notes/assets/Forward%20and%20Deferred%20Rendering.mp4)
+Forward and Deferred Rendering.mp4
