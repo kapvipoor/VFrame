@@ -2,12 +2,6 @@
 
 <img width="1444" alt="FixedShadowSceneFitting_2" src="https://user-images.githubusercontent.com/7133245/201559782-e4a9f4fd-1cc3-4093-8c4c-896b1de31adb.PNG">
 
-
-
-https://github.com/user-attachments/assets/f3ddbf37-a2eb-41a9-94ae-14e4217b55f2
-
-
-
 # VFrame
  A compilation of few rasterization techniques using Vulkan API and C++
 
