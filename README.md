@@ -16,23 +16,7 @@ External Tools/Packages Used
 Feature Integrated
 * [Array Of Textures, Non-Uniform Descriptor Indexing and Bindless](https://github.com/kapvipoor/VFrame/blob/main/notes/Bindless%20Descriptor%20and%20Material%20Management.md)
 * [Asynchronous Asset Loading](https://github.com/kapvipoor/VFrame/blob/main/notes/Async%20Asset%20Loading.md)
- 
-2.	Forward Rendering
-	- Challanges Faced: -
-	- Algorithm Limitations: -
-	- Bugs:
-		1. Potentially not calculing correct light direction for specular computation
-
-3.	Deferred Rendering
-	- Features:
-		1. Runtime toggle to switch between rendering techniques
-	- Challanges Faced:
-		1. Had to manually implement depth test in compute shader during lighting resolve for correct skybox compositing
-	- Algorithm Limitations:
-		1. Deferred Lighting Resolve compute shader has not been evalauted for performance
-	- Bugs:
-		1. PCF is not correct in this pass
-		2. There also seems to be some problem with Specular computation as it is not identicial with forward pass (assuming Light Vector)
+* [Fordward and Deferred Rendering](https://github.com/kapvipoor/VFrame/blob/main/notes/Forward%20and%20Deferred%20Rendering.md)
 
 4.	Object Picker
 	- Challanges Faced:	- 
