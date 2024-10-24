@@ -2,6 +2,8 @@
 
 <img width="1444" alt="FixedShadowSceneFitting_2" src="https://user-images.githubusercontent.com/7133245/201559782-e4a9f4fd-1cc3-4093-8c4c-896b1de31adb.PNG">
 
+https://github.com/kapvipoor/VFrame/blob/main/notes/assets/Forward%20and%20Deferred%20Rendering.mp4
+
 # VFrame
  A compilation of few rasterization techniques using Vulkan API and C++
 
