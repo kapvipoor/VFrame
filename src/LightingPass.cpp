@@ -18,10 +18,10 @@ bool CForwardPass::CreateRenderpass(RenderData* p_renderData)
 	CVulkanRHI::Image primaryColorRT						= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
 	CVulkanRHI::Image primaryDepthRT						= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
 
-	renderPass->AttachColor(positionRT.format,			VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE,	VK_IMAGE_LAYOUT_UNDEFINED,	VK_IMAGE_LAYOUT_GENERAL,	VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachColor(normalRT.format,			VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE,	VK_IMAGE_LAYOUT_UNDEFINED,	VK_IMAGE_LAYOUT_GENERAL,	VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachColor(primaryColorRT.format,		VK_ATTACHMENT_LOAD_OP_LOAD,		VK_ATTACHMENT_STORE_OP_STORE,   VK_IMAGE_LAYOUT_GENERAL,	VK_IMAGE_LAYOUT_GENERAL,	VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachDepth(primaryDepthRT.format,		VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE,	VK_IMAGE_LAYOUT_UNDEFINED,	VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+	renderPass->AttachColor(positionRT.format,			VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED,						VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	renderPass->AttachColor(normalRT.format,			VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED,						VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	renderPass->AttachColor(primaryColorRT.format,		VK_ATTACHMENT_LOAD_OP_LOAD,		VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	renderPass->AttachDepth(primaryDepthRT.format,		VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,	VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
 	if (!m_rhi->CreateRenderpass(*renderPass))
 		return false;
@@ -73,6 +73,19 @@ bool CForwardPass::Render(RenderData* p_renderData)
 	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
 
 	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Forward"));
+
+	{
+		//CVulkanRHI::Image primaryColorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
+		//CVulkanRHI::Image primaryDepthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
+		//CVulkanRHI::Image PositionhRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Position);
+		//CVulkanRHI::Image NormalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Normal);
+		//
+		//m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, primaryColorRT, cmdBfr);
+		//m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, primaryDepthRT, cmdBfr);
+		//m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, PositionhRT, cmdBfr);
+		//m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, NormalRT, cmdBfr);
+	}
+
 	m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
 
 	m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
@@ -406,10 +419,9 @@ bool CDeferredLightingPass::Render(RenderData* p_renderData)
 
 	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Compute Deferred Lighting"));
 
-	// issue a layout barrier on Primary Color to set as general so it can be used in this compute shader
-	// This is temporary; once we find a better way to add the skybox; that pass will take care of initializing the primary color layout
-	//CVulkanRHI::Image primaryColorRT							= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
-	//m_rhi->IssueImageLayoutBarrier(primaryColorRT.descInfo.imageLayout, VK_IMAGE_LAYOUT_GENERAL, primaryColorRT.layerCount, primaryColorRT.image, cmdBfr);
+	// issue a layout barrier on Primary Depth to set as Shader Read so it can be used in this compute shader
+	CVulkanRHI::Image primaryDepthRT							= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
+	m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, primaryDepthRT, cmdBfr);
 
 	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeline);
 	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);

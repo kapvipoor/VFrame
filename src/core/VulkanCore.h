@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../SharedGlobal.h"
+
 // 0 disable vulkan debug
 // 1 enable vulkan debug
 #define VULKAN_DEBUG 1
@@ -14,35 +16,11 @@
 
 #define VK_USE_PLATFORM_WIN32_KHR
 
-#define FRAME_BUFFER_COUNT 2
-#define MAX_SUPPORTED_DEBUG_DRAW_ENTITES 256
-
 #include <assert.h>
 #include <iostream>
 #include <vector>
 #include <vulkan/vulkan.h>
 #include <filesystem>
-
-// fwd dclr
-//#if	VULKAN_DEBUG == 1
-//VKAPI_ATTR VkBool32 VKAPI_CALL 
-//debugUtilsMessengerCallback(
-//	VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-//	VkDebugUtilsMessageTypeFlagsEXT message_type,
-//	const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
-//	void* user_data);
-//
-//VKAPI_ATTR VkBool32	VKAPI_CALL
-//debugReportCallback(
-//	VkDebugReportFlagsEXT		p_msgFlags,
-//	VkDebugReportObjectTypeEXT	p_ObjType,
-//	uint64_t					p_SrcObj,
-//	size_t						p_location,
-//	int32_t						p_MesgCode,
-//	const char* p_layerPrefix,
-//	const char* p_Message,
-//	void* pUserData);
-//#endif
 
 char* BinaryLoader(const std::string pPath, size_t& pDataSize);
 
@@ -182,6 +160,8 @@ public:
 
 	struct Image
 	{
+		VkImageUsageFlags									usage;
+
 		VkDescriptorImageInfo								descInfo;
 		VkImage												image;
 		VkDeviceMemory										devMem;
@@ -351,7 +331,7 @@ public:
 	void DestroyFence(VkFence p_fence);
 
 	void IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr);
-	void IssueImageLayoutBarrier(VkImageLayout p_old, VkImageLayout p_new, uint32_t layerCount, VkImage& p_image, VkCommandBuffer p_cmdBfr);
+	void IssueImageLayoutBarrier(VkImageLayout p_old, VkImageLayout p_new, uint32_t layerCount, VkImage& p_image, VkImageUsageFlags p_usage, VkCommandBuffer p_cmdBfr);
 	void IssueBufferBarrier(VkAccessFlags p_srcAcc, VkAccessFlags p_dstAcc, VkPipelineStageFlags p_srcStg, VkPipelineStageFlags p_dstStg, VkBuffer& p_buffer, VkCommandBuffer p_cmdBfr);
 
 	bool IsFormatSupported(VkFormat p_format, VkFormatFeatureFlags p_featureflag);

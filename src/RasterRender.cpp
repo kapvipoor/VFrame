@@ -193,10 +193,6 @@ bool CRasterRender::on_update(float delta)
 		uniformData.mousePos						= nm::float2((float)mousepos_x, (float)mousepos_y);
 		uniformData.renderRes						= nm::float2((float)m_rhi->GetRenderWidth(), (float)m_rhi->GetRenderHeight());
 		uniformData.skyboxModelView					= m_primaryCamera->GetView();
-		//uniformData.sunDirViewSpace					= (m_primaryCamera->GetView() * nm::float4(m_sunLight->GetShadowCamera()->GetLookAt(), 1.0f)).xyz();
-		//uniformData.sunDirWorldSpace				= m_sunLight->GetShadowCamera()->GetLookAt();
-		//uniformData.sunViewProj						= m_sunLight->GetShadowCamera()->GetViewProj();
-		//uniformData.sunIntensity					= 10.0f; // no need for update, this is updated from the user interface
 
 		FixedUpdateData fixedUpdate{};
 		fixedUpdate.primaryUniData					= &uniformData;
@@ -297,7 +293,7 @@ void CRasterRender::on_present()
 	presentInfo.sType							= VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.waitSemaphoreCount				= 1;
 	presentInfo.pWaitSemaphores					= &m_vksubmitCompleteSemaphore;
-	presentInfo.swapchainCount					= 1;										// number of swap chains we want to present to
+	presentInfo.swapchainCount					= 1;
 	presentInfo.pSwapchains						= &swapchain;
 	presentInfo.pImageIndices					= &m_swapchainIndex;
 	presentInfo.pResults						= &presentResult;
@@ -358,15 +354,6 @@ bool CRasterRender::InitCamera()
 	persIntData.yaw								= 0.0f;									
 	persIntData.pitch							= 0.0f;							
 	RETURN_FALSE_IF_FALSE( m_primaryCamera->Init(&persIntData));
-
-	//COrthoCamera::OrthInitdData orthoInit{};
-	//orthoInit.lookFrom							= nm::float4(0.0f);
-	//orthoInit.lrbt								= nm::float4{ -50.0f, 50.0f, -50.0f, 50.0f };
-	//orthoInit.nearPlane							= 0;
-	//orthoInit.farPlane							= 50;
-	//orthoInit.yaw								= 0.0f;
-	//orthoInit.pitch								= 0.0f;
-	//RETURN_FALSE_IF_FALSE(m_sunLight->Init(orthoInit));
 
 	return true;
 }

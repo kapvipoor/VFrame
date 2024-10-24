@@ -10,10 +10,6 @@
 
 #include <list>
 
-#define MAX_SUPPORTED_MESHES 100
-#define MAX_SUPPORTED_MATERIALS 1000000
-#define MAX_SUPPORTED_TEXTURES 2048
-
 class CCircularList
 {
 public:
@@ -75,19 +71,11 @@ enum BindingDest
 	  bd_Gloabl_Uniform				= 0	, bd_Scene_MeshInfo_Uniform	= 0	, bd_UI_TexArray	= 0 , bd_Debug_Transforms_Uniform = 0
 	, bd_Linear_Sampler				= 1	, bd_CubeMap_Texture		= 1	, bd_UI_max
 	, bd_ObjPicker_Storage			= 2	, bd_Material_Storage		= 2
-	, bd_Depth_Image				= 3	, bd_Scene_Lights			= 3
-	, bd_PosGBuf_Image				= 4	, bd_SceneRead_TexArray		= 4
-	, bd_NormGBuf_Image				= 5 , bd_Scene_max				= 5
-	, bd_AlbedoGBuf_Image			= 6 
-	, bd_SSAO_Image					= 7
-	, bd_SSAOBlur_Image				= 8
-	, bd_SSAOKernel_Storage			= 9
-	, bd_LightDepth_Image			= 10
-	, bd_PrimaryColor_Image			= 11
-	, bd_PrimaryColor_Texture		= 12
-	, bd_DeferredRoughMetal_Image	= 13
-	, bd_PrimaryRead_TexArray		= 14
-	, bd_Primary_max				= 15
+	, bd_SSAOKernel_Storage			= 3 , bd_Scene_Lights			= 3
+	, bd_PrimaryRead_TexArray		= 4 , bd_SceneRead_TexArray		= 4
+	, bd_RTs_StorageImages			= 5 , bd_Scene_max				= 5
+	, bd_RTs_SampledImages			= 6
+	, bd_Primary_max				= 7
 };
 
 struct LoadedUpdateData
@@ -118,8 +106,12 @@ public:
 	// but there can be more than 1 descDataList and descriptor set pairs
 	// provided they are based on the same descriptor set layout and 
 	// created from the same Descriptor pool
-	CDescriptor(bool isBindless = false, uint32_t p_descSetCount = 1);
+	CDescriptor(CVulkanRHI::DescriptorBindFlags isBindless = CVulkanRHI::DescriptorBindFlag::Traditonal, uint32_t p_descSetCount = 1);
 	~CDescriptor() {};
+
+	void BindlessWrite(uint32_t p_swId, uint32_t p_index, const VkDescriptorImageInfo* p_imageInfo, uint32_t p_count = 1, uint32_t p_arrayDestIndex = 0);
+	void BindlessWrite(uint32_t p_swId, uint32_t p_index, const VkDescriptorBufferInfo* p_bufferInfo, uint32_t p_count = 1);
+	void BindlessUpdate(CVulkanRHI* p_rhi, uint32_t p_swId);
 
 	const VkDescriptorSet* GetDescriptorSet(uint32_t p_id = 0) const{ return &m_descList[p_id].descSet; }
 	const VkDescriptorSetLayout GetDescriptorSetLayout(uint32_t p_id = 0) const	{ return m_descList[p_id].descLayout; }
@@ -127,11 +119,11 @@ protected:
 	std::vector<Descriptor>				m_descList;
 	VkDescriptorPool					m_descPool;
 
-	bool CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_varDescCount, uint32_t p_texArrayIndex, uint32_t p_id = 0, std::string p_debugName = "");
+	bool CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_id = 0, std::string p_debugName = "");
 	void DestroyDescriptors(CVulkanRHI* p_rhi);
 	void AddDescriptor(CVulkanRHI::DescriptorData p_dData, uint32_t p_id = 0);
 
-	bool m_isBindless;
+	CVulkanRHI::DescriptorBindFlags m_bindFlags;
 };
 
 class CBuffers
@@ -347,7 +339,6 @@ public:
 private:
 	Guizmo								m_guizmo;
 	bool								m_showImguiDemo;
-	CVulkanRHI::RendererType			m_curRenderType;
 	CCircularList						m_latestFPS;
 	CUIParticipantManager*				m_participantManager;
 	CFixedBuffers::PrimaryUniformData	m_primUniforms;
@@ -572,7 +563,6 @@ public:
 
 	bool Create(CVulkanRHI*, CFixedAssets&, const CLoadableAssets&);
 	void Destroy(CVulkanRHI*);
-
 private:
 	void SetLayoutForDescriptorCreation(CRenderTargets*);
 	void UnSetLayoutForDescriptorCreation(CRenderTargets*);

@@ -38,7 +38,7 @@ float CalculateShadow(in vec4 fragPosViewSpace, bool applyPCF)
     	        for(int dy = -1; dy < 2; dy++)
     	        {
     	            vec2 uv = projCoord.xy + (vec2(dx, dy)/vec2(512, 512));
-    	            float sampledDepth = texture(sampler2D(g_LightDepthImage, g_LinearSampler), uv).r;
+    	            float sampledDepth = texture(sampler2D(g_RT_SampledImages[SAMPLE_DIRECTIONAL_SHADOW_DEPTH], g_LinearSampler), uv).r;
     	            shadowFactor = shadowFactor + ((projCoord.z > sampledDepth) ? g_shadowFactor : 1.0f);
     	        }
     	    }
@@ -47,7 +47,7 @@ float CalculateShadow(in vec4 fragPosViewSpace, bool applyPCF)
     	}
     	else
     	{
-    	    float sampledDepth = texture(sampler2D(g_LightDepthImage, g_LinearSampler), projCoord.xy).r;
+    	    float sampledDepth = texture(sampler2D(g_RT_SampledImages[SAMPLE_DIRECTIONAL_SHADOW_DEPTH], g_LinearSampler), projCoord.xy).r;
     	    return (projCoord.z > sampledDepth) ? g_shadowFactor : 1.0f;
     	}
 	}
@@ -60,13 +60,13 @@ void main()
     ivec2 xy 								= ivec2(gl_GlobalInvocationID.xy);
 
     // these resources are in view space
-	vec4 skyboxColor						= imageLoad(g_PrimaryColor, xy).xyzw;                                              
+	vec4 skyboxColor						= imageLoad(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy).xyzw;                                              
     vec3 camerPosition 						= vec3(0.0f);                                                                       
-	vec4 fragPos                            = imageLoad(g_PositionImage, xy).xyzw;                                              
+	vec4 fragPos                            = imageLoad(g_RT_StorageImages[STORE_POSITION], xy).xyzw;                                              
     vec3 V 									= normalize(camerPosition - fragPos.xyz);                                                                                 
-    vec3 N                                  = imageLoad(g_NormalImage, xy).xyz;                                                         
-    vec3 color                              = imageLoad(g_AlbedoImage, xy).xyz;
-    vec2 roughMetal                         = imageLoad(g_DeferredRoughMetal, xy).xy;
+    vec3 N                                  = imageLoad(g_RT_StorageImages[STORE_NORMAL], xy).xyz;                                                         
+    vec3 color                              = imageLoad(g_RT_StorageImages[STORE_ALBEDO], xy).xyz;
+    vec2 roughMetal                         = imageLoad(g_RT_StorageImages[STORE_DEFERRED_ROUGH_METAL], xy).xy;
     vec3 Lo 								= vec3(0.0);
 
 	// setting the default color to be the skybox if
@@ -132,5 +132,5 @@ void main()
 		finalColor 							    = finalColor / (finalColor + vec4(1.0));
 	}
 
-	imageStore(g_PrimaryColor, xy, finalColor); //vec4(finalColor.xyz, 1.0f));
+	imageStore(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy, finalColor); //vec4(finalColor.xyz, 1.0f));
 }	

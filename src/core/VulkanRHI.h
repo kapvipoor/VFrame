@@ -11,6 +11,14 @@ public:
 		,Deferred
 	};
 
+	enum DescriptorBindFlag
+	{
+			Traditonal		= 0
+		,	Variable_Count	= 1
+		,	Bindless		= 2
+	};
+	typedef int DescriptorBindFlags;
+
 	struct DescriptorData
 	{
 		uint32_t							arrayDestIndex;
@@ -39,7 +47,7 @@ public:
 	void FreeMemoryDestroyBuffer(Buffer&);
 
 	bool CreateDescriptors(const DescDataList& p_descdataList, VkDescriptorPool& p_descPool,VkDescriptorSetLayout* p_descLayout, uint32_t p_layoutCount, VkDescriptorSet* p_desc, void* p_next = VK_NULL_HANDLE, bool p_bindless = false, std::string p_DebugName = "");
-	bool CreateDescriptors(uint32_t p_varDescCount, const DescDataList& p_descDataList, VkDescriptorPool& p_descPool, VkDescriptorSetLayout& p_descSetLayout, VkDescriptorSet& p_descSet, uint32_t p_texArrayIndex, bool p_bindless = false, std::string p_DebugName = "");
+	bool CreateDescriptors(const DescDataList& p_descDataList, VkDescriptorPool& p_descPool, VkDescriptorSetLayout& p_descSetLayout, VkDescriptorSet& p_descSet, DescriptorBindFlags p_bindType = DescriptorBindFlag::Traditonal, std::string p_DebugName = "");
 	void WriteUpdateDescriptors(VkDescriptorSet* p_desc, const DescDataList& p_descDataList);
 
 	RendererType GetRendererType() { return m_rendererType; }

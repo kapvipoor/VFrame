@@ -104,6 +104,7 @@ bool CVulkanRHI::CreateTexture(Buffer& p_staging, Image& p_Image,
 	VkImageCreateInfo p_createInfo, VkCommandBuffer& p_cmdBfr, std::string p_DebugName)
 {
 	p_Image.descInfo.imageLayout					= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // final layout
+	p_Image.usage									= p_createInfo.usage;
 
 	if (!CreateImage(p_createInfo, p_Image.image))
 		return false;
@@ -112,9 +113,9 @@ bool CVulkanRHI::CreateTexture(Buffer& p_staging, Image& p_Image,
 	if (!BindImageMemory(p_Image.image, p_Image.devMem))
 		return false;
 
-	IssueImageLayoutBarrier(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image.layerCount, p_Image.image, p_cmdBfr);
+	IssueImageLayoutBarrier(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image.layerCount, p_Image.image, p_Image.usage, p_cmdBfr);
 	UploadFromHostToDevice(p_staging, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image, p_cmdBfr);
-	IssueImageLayoutBarrier(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image.descInfo.imageLayout, p_Image.layerCount, p_Image.image, p_cmdBfr);
+	IssueImageLayoutBarrier(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image.descInfo.imageLayout, p_Image.layerCount, p_Image.image, p_Image.usage, p_cmdBfr);
 	SetDebugName((uint64_t)p_Image.image, VK_OBJECT_TYPE_IMAGE, (p_DebugName + "_image").c_str());
 
 	if (!CreateImagView(p_createInfo.usage, p_Image.image, p_Image.format, p_Image.viewType, p_Image.descInfo.imageView))
@@ -141,6 +142,7 @@ bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_
 	if (!IsFormatSupported(p_format, feature))
 		return false;
 
+	p_renderTarget.usage							= p_usage;
 	p_renderTarget.format							= p_format;
 	p_renderTarget.descInfo.imageLayout				= p_iniLayout;
 	p_renderTarget.height							= p_height;
@@ -154,7 +156,7 @@ bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_
 	imageCreateInfo.tiling							= VK_IMAGE_TILING_OPTIMAL;
 	imageCreateInfo.mipLevels						= 1;
 	imageCreateInfo.arrayLayers						= 1;
-	imageCreateInfo.initialLayout					= p_renderTarget.descInfo.imageLayout;
+	imageCreateInfo.initialLayout					= VK_IMAGE_LAYOUT_UNDEFINED;
 	imageCreateInfo.usage							= p_usage;
 	imageCreateInfo.sharingMode						= VK_SHARING_MODE_EXCLUSIVE;
 	imageCreateInfo.samples							= VK_SAMPLE_COUNT_1_BIT;
@@ -208,6 +210,10 @@ void CVulkanRHI::WriteUpdateDescriptors(VkDescriptorSet* p_desc, const DescDataL
 			if (desc.type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
 				|| desc.type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
 			{
+				if (desc.bufDesInfo == VK_NULL_HANDLE)
+					continue;
+
+
 				VkWriteDescriptorSet wdSet{};
 				wdSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				wdSet.pNext = nullptr;
@@ -226,6 +232,9 @@ void CVulkanRHI::WriteUpdateDescriptors(VkDescriptorSet* p_desc, const DescDataL
 				|| desc.type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
 				|| desc.type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
 			{
+				if (desc.imgDesinfo == VK_NULL_HANDLE)
+					continue;
+
 				VkWriteDescriptorSet wdSet{};
 				wdSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				wdSet.pNext = nullptr;
@@ -244,17 +253,39 @@ void CVulkanRHI::WriteUpdateDescriptors(VkDescriptorSet* p_desc, const DescDataL
 	vkUpdateDescriptorSets(m_vkDevice, (uint32_t)writeDescList.size(), writeDescList.data(), 0, nullptr);
 }
 
-bool CVulkanRHI::CreateDescriptors(	uint32_t p_varDescCount, const DescDataList& p_descDataList, 
-									VkDescriptorPool& p_descPool, VkDescriptorSetLayout& p_descSetLayout, 
-									VkDescriptorSet& p_descSet, uint32_t p_texArrayIndex, bool p_bindless,
-									std::string p_DebugName)
+bool CVulkanRHI::CreateDescriptors(	const DescDataList& p_descDataList, VkDescriptorPool& p_descPool, 
+									VkDescriptorSetLayout& p_descSetLayout, VkDescriptorSet& p_descSet, 
+									DescriptorBindFlags p_bindFlags, std::string p_DebugName)
 {
 	std::vector<VkDescriptorPoolSize> dPSize;
 	std::vector<VkDescriptorSetLayoutBinding> dsLayoutBinding;
-	for (const auto& desc : p_descDataList)
+	std::vector<VkDescriptorBindingFlags> descBindFlags(p_descDataList.size(), 0);
+	bool hasSpecialDescriptorBindingFlags = false;
+	uint32_t maxDescriptorCount = 0;
+	
+	for (uint32_t i = 0; i < (uint32_t)p_descDataList.size(); i++)
 	{
+		DescriptorData desc = p_descDataList[i];
+
 		dPSize.push_back(VkDescriptorPoolSize{ desc.type, desc.count * FRAME_BUFFER_COUNT });
 		dsLayoutBinding.push_back(VkDescriptorSetLayoutBinding{ (uint32_t)desc.bindingDest, desc.type, desc.count, desc.shaderStage });
+
+		if (p_bindFlags & DescriptorBindFlag::Variable_Count
+			&& desc.count > 1)
+		{
+			hasSpecialDescriptorBindingFlags = true;
+			descBindFlags[i] = VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT;
+
+			maxDescriptorCount = max(maxDescriptorCount, desc.count);
+		}
+
+		if (p_bindFlags & DescriptorBindFlag::Bindless)
+		{
+			hasSpecialDescriptorBindingFlags = true;
+			descBindFlags[i] |= VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
+				VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT |
+				VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
+		}
 	}
 
 	// We are creating a descriptor pool with UPDATE_AFTER_BIND_BIT bit set but that shouldn't stop us
@@ -262,36 +293,24 @@ bool CVulkanRHI::CreateDescriptors(	uint32_t p_varDescCount, const DescDataList&
 	if (!CreateDescriptorPool(dPSize.data(), (uint32_t)dPSize.size(), p_descPool))
 		return false;
 
-	std::vector<VkDescriptorBindingFlags> descBindFlags(p_descDataList.size(), 0);
-	descBindFlags[p_texArrayIndex]				= VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT;
-		
-	if (p_bindless)
-	{
-		for (uint32_t i = 0; i < (uint32_t)p_descDataList.size(); i++)
-		{
-			descBindFlags[i] |= VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
-				VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT;
-		}
-	}
-
 	VkDescriptorSetLayoutBindingFlagsCreateInfoEXT layoutBindFlags{};
 	layoutBindFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
 	layoutBindFlags.bindingCount				= (uint32_t)descBindFlags.size();
 	layoutBindFlags.pBindingFlags				= descBindFlags.data();
 
-	void* layoutFlags = (p_varDescCount == 0) ? nullptr : &layoutBindFlags;
+	void* layoutFlags = (hasSpecialDescriptorBindingFlags) ? &layoutBindFlags : nullptr;
 	if (!CreateDescriptorSetLayout(dsLayoutBinding.data(), (uint32_t)dsLayoutBinding.size(), 
-									p_descSetLayout, layoutFlags, p_bindless))
+									p_descSetLayout, layoutFlags, (p_bindFlags & DescriptorBindFlag::Bindless)))
 		return false;
 
-	uint32_t varDescCount[] = { p_varDescCount };
+	uint32_t varDescCount[] = { maxDescriptorCount };
 	VkDescriptorSetVariableDescriptorCountAllocateInfoEXT varDescCountAllocInfo = {};
 	varDescCountAllocInfo.sType					= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
 	varDescCountAllocInfo.descriptorSetCount	= 1;
 	varDescCountAllocInfo.pDescriptorCounts		= varDescCount;
 
-	void* allocInfo = (p_varDescCount == 0) ? nullptr : &varDescCountAllocInfo;
-	if (!CreateDescriptors(p_descDataList, p_descPool, &p_descSetLayout, 1, &p_descSet, allocInfo, p_bindless, p_DebugName))
+	void* allocInfo = (maxDescriptorCount == 0) ? nullptr : &varDescCountAllocInfo;
+	if (!CreateDescriptors(p_descDataList, p_descPool, &p_descSetLayout, 1, &p_descSet, allocInfo, (p_bindFlags & DescriptorBindFlag::Bindless), p_DebugName))
 			return false;
 	
 	return true;

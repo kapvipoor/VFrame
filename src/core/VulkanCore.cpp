@@ -393,8 +393,10 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	vkGetPhysicalDeviceFeatures(m_vkPhysicalDevice, &supportedFeatures);
 
 	VkPhysicalDeviceFeatures enabledFeatures{};
-	enabledFeatures.geometryShader = true;
-	enabledFeatures.fragmentStoresAndAtomics = true;
+	enabledFeatures.geometryShader										= VK_TRUE;
+	enabledFeatures.fragmentStoresAndAtomics							= VK_TRUE;
+	enabledFeatures.shaderStorageImageReadWithoutFormat					= VK_TRUE;
+	enabledFeatures.shaderStorageImageWriteWithoutFormat				= VK_TRUE;
 
 	if (enabledFeatures.geometryShader != supportedFeatures.geometryShader &&
 		enabledFeatures.fragmentStoresAndAtomics != supportedFeatures.fragmentStoresAndAtomics)
@@ -411,8 +413,10 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	bindlessDescFeatures.descriptorBindingVariableDescriptorCount		= VK_TRUE;
 	bindlessDescFeatures.descriptorBindingPartiallyBound				= VK_TRUE;
 	bindlessDescFeatures.descriptorBindingSampledImageUpdateAfterBind	= VK_TRUE;
+	bindlessDescFeatures.descriptorBindingStorageImageUpdateAfterBind	= VK_TRUE;
 	bindlessDescFeatures.descriptorBindingUniformBufferUpdateAfterBind	= VK_TRUE;
 	bindlessDescFeatures.descriptorBindingStorageBufferUpdateAfterBind  = VK_TRUE;
+	bindlessDescFeatures.descriptorBindingUpdateUnusedWhilePending		= VK_TRUE;
 
 	VkPhysicalDeviceFeatures2 physicalDeviceFeatures2{};
 	physicalDeviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
@@ -1254,55 +1258,89 @@ void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkComm
 	if (p_new == p_image.descInfo.imageLayout)
 		return;
 
-	IssueImageLayoutBarrier(p_image.descInfo.imageLayout, p_new, p_image.layerCount, p_image.image, p_cmdBfr);
+	IssueImageLayoutBarrier(p_image.descInfo.imageLayout, p_new, p_image.layerCount, p_image.image, p_image.usage, p_cmdBfr);
 	p_image.descInfo.imageLayout = p_new;
 }
 
-void CVulkanCore::IssueImageLayoutBarrier(VkImageLayout p_old, VkImageLayout p_new, uint32_t layerCount, VkImage& p_image, VkCommandBuffer p_cmdBfr)
+void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_new, 
+											uint32_t layerCount, VkImage& p_image, VkImageUsageFlags p_usage,
+											VkCommandBuffer p_cmdBfr)
 {
 	VkImageMemoryBarrier imgMemBarrier{};
 	imgMemBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 	// following flags used to transfer one image type to other
 	imgMemBarrier.oldLayout = p_old;
 	imgMemBarrier.newLayout = p_new;
-	// if you wish to transdfer the queue family ownership, use the following flags
+	// if you wish to transfer the queue family ownership, use the following flags
 	imgMemBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;					// for now we dont care
 	imgMemBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;					// for now we dont care
 	// setting affected image and specified part
 	imgMemBarrier.image = p_image;
-	imgMemBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	imgMemBarrier.subresourceRange.baseArrayLayer = 0;
 	imgMemBarrier.subresourceRange.levelCount = 1;
 	imgMemBarrier.subresourceRange.layerCount = layerCount;
 	imgMemBarrier.subresourceRange.baseMipLevel = 0;
-
-	VkPipelineStageFlags src, dst;
-
-	// setting up operations that need to happen before and after the barrier
-	if (p_old == VK_IMAGE_LAYOUT_UNDEFINED && p_new == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+	
+	if (p_usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
 	{
-		imgMemBarrier.srcAccessMask = 0;
-		imgMemBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-		src = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		dst = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		imgMemBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
 	}
-	else if (p_old == VK_IMAGE_LAYOUT_UNDEFINED && 
-		(p_new == VK_IMAGE_LAYOUT_GENERAL || p_new == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL || p_new == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL || p_new == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR))
+	else
 	{
-		imgMemBarrier.srcAccessMask = 0;
-		imgMemBarrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
-
-		src = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		dst = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+		if (p_usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT ||
+			p_usage & VK_IMAGE_USAGE_SAMPLED_BIT)
+		{
+			imgMemBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		}
 	}
-	else if (p_old == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && p_new == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+
+	VkPipelineStageFlags src = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+	VkPipelineStageFlags dst = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	
+	// setting up operations that need to happen before the barrier
+	switch (p_old)
 	{
+	case VK_IMAGE_LAYOUT_UNDEFINED:
+		imgMemBarrier.srcAccessMask = 0;
+		src = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		break;
+
+	case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
 		imgMemBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		imgMemBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
 		src = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		break;
+
+	default:
+		imgMemBarrier.srcAccessMask = 0;
+		src = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		break;
+	}
+
+	// setting up operations that need to happen after the barrier
+	switch (p_new)
+	{
+	case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+		dst = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		imgMemBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		break;
+
+	case VK_IMAGE_LAYOUT_GENERAL:
+	case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+	case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+	case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+		imgMemBarrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+		dst = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+		break;
+
+	case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+		imgMemBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 		dst = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		break;
+
+	default:
+		dst = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+		imgMemBarrier.dstAccessMask = 0;
+		break;
 	}
 
 	vkCmdPipelineBarrier(p_cmdBfr,

@@ -44,7 +44,7 @@ void PickMeshID()
 float CalculateDirectonalShadow(vec4 L, vec3 N, bool applyPCF)
 {
 	vec3 lightPositionNDC 				= L.xyz/L.w;
-	vec2 shadowMapSize 					= textureSize(sampler2D(g_LightDepthImage, g_LinearSampler), 0);
+	vec2 shadowMapSize 					= textureSize(sampler2D(g_RT_SampledImages[SAMPLE_DIRECTIONAL_SHADOW_DEPTH], g_LinearSampler), 0);
 	// NDC ranges between -1 and 1; forcing values bewteen 0 and 1 for shadow map sampling
 	vec2 lightPositionUV 				= lightPositionNDC.xy * 0.5f + 0.5f;
 	if(lightPositionNDC.z > -1.0 && lightPositionNDC.z <= 1.0f)
@@ -59,7 +59,7 @@ float CalculateDirectonalShadow(vec4 L, vec3 N, bool applyPCF)
     	        for(float dy = -1; dy <= 1; ++dy)
     	        {
     	            vec2 uv 			= lightPositionUV.xy + (vec2(dx, dy)/shadowMapSize);
-    	            float sampledDepth 	= texture(sampler2D(g_LightDepthImage, g_LinearSampler), uv).r;			
+    	            float sampledDepth 	= texture(sampler2D(g_RT_SampledImages[SAMPLE_DIRECTIONAL_SHADOW_DEPTH], g_LinearSampler), uv).r;			
     	            shadowFactor 		= shadowFactor + (((lightPositionNDC.z) > sampledDepth) ? 1.0f : 0.0f);
     	        }
     	    }
@@ -67,7 +67,7 @@ float CalculateDirectonalShadow(vec4 L, vec3 N, bool applyPCF)
     	}
     	else
     	{
-    	    float sampledDepth 			= texture(sampler2D(g_LightDepthImage, g_LinearSampler), lightPositionUV.xy).r;
+    	    float sampledDepth 			= texture(sampler2D(g_RT_SampledImages[SAMPLE_DIRECTIONAL_SHADOW_DEPTH], g_LinearSampler), lightPositionUV.xy).r;
     	    return ((lightPositionNDC.z) > sampledDepth) ? 1.0 : 0.0f;
     	}
 	}

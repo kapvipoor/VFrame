@@ -12,8 +12,8 @@ void main()
     ivec2 xy                        = ivec2(gl_GlobalInvocationID.xy);
     vec2 uv                         = XY2UV(xy, g_Info.renderResolution);
 
-    vec3 gFragPos                   = imageLoad(g_PositionImage, xy).xyz;
-    vec3 gNormal                    = imageLoad(g_NormalImage, xy).xyz;
+    vec3 gFragPos                   = imageLoad(g_RT_StorageImages[STORE_POSITION], xy).xyz;
+    vec3 gNormal                    = imageLoad(g_RT_StorageImages[STORE_NORMAL], xy).xyz;
     vec3 randomVec                  = normalize(texture(sampler2D(g_ReadOnlyTexures[TEXTURE_READ_ID_SSAO_NOISE], g_LinearSampler), g_Info.ssaoNoiseScale * uv)).xyz;
 
     vec3 tangent                    = normalize(randomVec - gNormal * dot(randomVec, gNormal));
@@ -31,11 +31,11 @@ void main()
         offset                      = (offset * 0.5) + 0.5;                         //(0,1) range
         offset.xy                   = UV2XY(vec2(offset.x, 1.0f - offset.y), g_Info.renderResolution).xy;
         
-        float gDepth                = imageLoad(g_PositionImage, ivec2(offset.xy)).z;
+        float gDepth                = imageLoad(g_RT_StorageImages[STORE_POSITION], ivec2(offset.xy)).z;
         float rangeCheck            = smoothstep(0.0, 1.0, g_Info.ssaoRadius / abs(gFragPos.z - gDepth));
         occulusion                  = occulusion + (((gDepth >= (ssaoSample.z + g_Info.biasSSAO)) ? 1.0 : 0.0) * rangeCheck);
     }
 
     occulusion                      = 1.0 - (occulusion / g_Info.ssaoKernelSize);
-    imageStore(g_SSAOImage, xy, vec4(occulusion, 0.0, 0.0, 0.0));
+    imageStore(g_RT_StorageImages[STORE_SSAO], xy, vec4(occulusion, 0.0, 0.0, 0.0));
 }

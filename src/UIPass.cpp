@@ -212,6 +212,10 @@ bool CUIPass::Render(RenderData* p_renderData)
 
 	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "UI"));
 
+	// issue a layout barrier on Primary Depth to set as Depth Stencil Target so it can be used in this Fragment Shader
+	//CVulkanRHI::Image primaryDepthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
+	//m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, primaryDepthRT, cmdBfr);
+
 	m_rhi->SetClearColorValue(renderPass, 0, VkClearColorValue{ 0.0f, 0.0f, 0.0f, 1.00f });
 	m_rhi->BeginRenderpass(m_frameBuffer[p_renderData->scIdx], renderPass, cmdBfr);
 
@@ -398,36 +402,39 @@ bool CDebugDrawPass::Render(RenderData* p_renderData)
 	RETURN_FALSE_IF_FALSE(debugRender->PreDrawInstanced(m_rhi, scId, p_renderData->fixedAssets->GetFixedBuffers(), p_renderData->sceneGraph, cmdBfr));
 	
 	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Debug Draw Instanced"));
-	m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
-	
-	m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
-	m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
-	
-	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_DebugDisplay, 1, debugRender->GetDescriptorSet(), 0, nullptr);
-	
-	VkDeviceSize offsets[1] = { 0 };
-	vkCmdBindVertexBuffers(cmdBfr, 0, 1, &debugRender->GetVertexBuffer(0)->descInfo.buffer, offsets);
-	vkCmdBindIndexBuffer(cmdBfr, debugRender->GetIndexBuffer(0)->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
-	
-	// Render bBoxes
 	{
-		CRenderableDebug::DebugDrawDetails drawDetails = debugRender->GetBBoxDrawDetails();
-		vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
-	}	
-	// Render bSpheres
-	{
-		CRenderableDebug::DebugDrawDetails drawDetails = debugRender->GetBSphereDrawDetails();
-		vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
-	}	
-	// Render bFrustums
-	{
-		CRenderableDebug::DebugDrawDetails drawDetails = debugRender->GetBFrustumDrawDetails();
-		vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
+		m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
+		{
+
+			m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
+			m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
+
+			vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
+			vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+			vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_DebugDisplay, 1, debugRender->GetDescriptorSet(), 0, nullptr);
+
+			VkDeviceSize offsets[1] = { 0 };
+			vkCmdBindVertexBuffers(cmdBfr, 0, 1, &debugRender->GetVertexBuffer(0)->descInfo.buffer, offsets);
+			vkCmdBindIndexBuffer(cmdBfr, debugRender->GetIndexBuffer(0)->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+			// Render bBoxes
+			{
+				CRenderableDebug::DebugDrawDetails drawDetails = debugRender->GetBBoxDrawDetails();
+				vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
+			}
+			// Render bSpheres
+			{
+				CRenderableDebug::DebugDrawDetails drawDetails = debugRender->GetBSphereDrawDetails();
+				vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
+			}
+			// Render bFrustums
+			{
+				CRenderableDebug::DebugDrawDetails drawDetails = debugRender->GetBFrustumDrawDetails();
+				vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
+			}
+		}
+		m_rhi->EndRenderPass(cmdBfr);
 	}
-	
-	m_rhi->EndRenderPass(cmdBfr);
 	m_rhi->EndCommandBuffer(cmdBfr);
 	
 	return true;

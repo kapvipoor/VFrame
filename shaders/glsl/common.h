@@ -1,14 +1,13 @@
+#extension GL_EXT_shader_image_load_formatted : require 
+
+#include "../../src/SharedGlobal.h"
+
 #define PI 3.14159265359
 #define TWO_PI 6.28318530718
 #define ONE_OVER_PI (1.0 / PI)
 #define ONE_OVER_2PI (1.0 / TWO_PI)
 
 #define spatialrand vec2
-#define MAX_SUPPORTED_TEXTURES 2048
-
-#define TEXTURE_READ_ID_SSAO_NOISE 0
-#define DEFAULT_TEXTURE_ID 0
-
 
 const float PHI = 1.61803398874989484820459; //Golden Ratio
 
@@ -51,43 +50,35 @@ layout(set = 0, binding = 2) buffer ObjPickerStorage
 	uint id;
 } g_objpickerStorage;
 
-layout(set = 0, binding = 3)			uniform 			texture2D 	g_PriamryDepthImage; 
-layout(set = 0, binding = 4, rgba32f)	uniform readonly	image2D 	g_PositionImage;
-layout(set = 0, binding = 5, rgba32f)	uniform readonly	image2D 	g_NormalImage;
-layout(set = 0, binding = 6, rgba32f)	uniform readonly	image2D 	g_AlbedoImage;
-layout(set = 0, binding = 7, r32f)		uniform 			image2D 	g_SSAOImage;
-layout(set = 0, binding = 8, r32f)		uniform 			image2D 	g_SSAOBlurImage;
-layout(set = 0, binding = 9) 								buffer		SSAOKernel
+layout(set = 0, binding = 3) buffer SSAOKernel
 {
 	vec4 kernel[1];
 } g_SSAOStorage;
 
-layout(set = 0, binding = 10)			uniform				texture2D	g_LightDepthImage; 
-layout(set = 0, binding = 11, rgba32f)	uniform 		 	image2D		g_PrimaryColor;
-layout(set = 0, binding = 12)			uniform 		 	texture2D	g_PrimaryColorTexture;
-layout(set = 0, binding = 13, rg16f)	uniform readonly	image2D		g_DeferredRoughMetal;
-layout(set = 0, binding = 14) 			uniform				texture2D	g_ReadOnlyTexures[];
+layout(set = 0, binding = 4) uniform texture2D g_ReadOnlyTexures[1];
+layout(set = 0, binding = 5) uniform image2D g_RT_StorageImages[STORE_MAX_RENDER_TARGETS];
+layout(set = 0, binding = 6) uniform texture2D g_RT_SampledImages[SAMPLE_MAX_RENDER_TARGETS];
 
 vec4 LoadPrimaryColor(ivec2 xy)
 {
-	return imageLoad(g_PrimaryColor, xy);
+	return imageLoad(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy);
 }
 
 vec4 SamplePrimaryColor(vec2 uv)
 {
-	return texture(sampler2D(g_PrimaryColorTexture, g_LinearSampler), uv);
+	return texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_COLOR], g_LinearSampler), uv);
 }
 
 
 // currently being used by the deferred pipeline
 vec2 GetSceenSapceRoughMetal(ivec2 xy)
 {
-	return imageLoad(g_DeferredRoughMetal, xy).xy;
+	return imageLoad(g_RT_StorageImages[STORE_DEFERRED_ROUGH_METAL], xy).xy;
 }
 
 float GetSSAOBlur(ivec2 xy)
 {
-	return imageLoad(g_SSAOBlurImage, xy).x;
+	return imageLoad(g_RT_StorageImages[STORE_SSAO_BLUR], xy).x;
 }
 
 struct Ray

@@ -18,10 +18,10 @@ void main()
         for(int j = -2; j < 2; j++)
         {
             ivec2 offset        = xy + ivec2(i, j);
-            result              = result + imageLoad(g_SSAOImage, offset).x;
+            result              = result + imageLoad(g_RT_StorageImages[STORE_SSAO], offset).x;
         }
     }
 
     result                      = result / 16.0;
-    imageStore(g_SSAOBlurImage, xy, vec4(result, 0.0, 0.0, 0.0));
+    imageStore(g_RT_StorageImages[STORE_SSAO_BLUR], xy, vec4(result, 0.0, 0.0, 0.0));
 }
