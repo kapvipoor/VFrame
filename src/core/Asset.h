@@ -204,7 +204,11 @@ public:
 		float						pbrAmbientFactor;
 		int							enableSSAO;
 		float						biasSSAO;
-		float						unassigned_1;
+		float						ssrMaxDistance;
+		float						ssrResolution;
+		float						ssrThickness;
+		float						ssrSteps;
+		float						unassigned;
 	};
 
 	CFixedBuffers();
@@ -246,6 +250,7 @@ public:
 		, rt_DirectionalShadowDepth	= 6
 		, rt_PrimaryColor			= 7
 		, rt_DeferredRoughMetal		= 8
+		, rt_SSReflection			= 9
 		, rt_max
 	};
 
