@@ -15,6 +15,10 @@
 * The compute implementation is the most expensive shader in the implementation
 * Fixing the Moire artifacts will reduce some texture fetch stress. Will address performance concerns when the visual quality issues are addressed
 
+## Resources
+* https://lettier.github.io/3d-game-shaders-for-beginners/screen-space-reflection.html
+* https://imanolfotia.com/blog/1
+  
 ## Screenshots
 <img width="1444" alt="SSR_1" src="https://github.com/kapvipoor/VFrame/blob/screen_space_reflections/notes/assets/SSR_1.PNG">
 <img width="1444" alt="SSR_2" src="https://github.com/kapvipoor/VFrame/blob/screen_space_reflections/notes/assets/SSR_2.PNG">
