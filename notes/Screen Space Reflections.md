@@ -16,5 +16,5 @@
 * Fixing the Moire artifacts will reduce some texture fetch stress. Will address performance concerns when the visual quality issues are addressed
 
 ## Screenshots
-<img width="1444" alt="SSR 1" src="https://github.com/kapvipoor/VFrame/blob/screen_space_reflections/notes/assets/SSR_1.PNG">
-<img width="1444" alt="SSR 2" srch="ttps://github.com/kapvipoor/VFrame/blob/screen_space_reflections/notes/assets/SSR_2.PNG">
+<img width="1444" alt="SSR_1" src="https://github.com/kapvipoor/VFrame/blob/screen_space_reflections/notes/assets/SSR_1.PNG">
+<img width="1444" alt="SSR_2" srch="https://github.com/kapvipoor/VFrame/blob/screen_space_reflections/notes/assets/SSR_2.PNG">
