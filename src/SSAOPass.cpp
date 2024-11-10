@@ -38,8 +38,8 @@ bool CSSAOComputePass::Render(RenderData* p_renderData)
 	uint32_t scId											= p_renderData->scIdx;
 	CVulkanRHI::CommandBuffer cmdBfr						= p_renderData->cmdBfr;
 	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
-	uint32_t dispatchDim_x									= m_rhi->GetRenderWidth() / 8;
-	uint32_t dispatchDim_y									= m_rhi->GetRenderHeight() / 8;
+	uint32_t dispatchDim_x									= m_rhi->GetRenderWidth() / THREAD_GROUP_SIZE_X;
+	uint32_t dispatchDim_y									= m_rhi->GetRenderHeight() / THREAD_GROUP_SIZE_Y;
 
 	if (!m_rhi->BeginCommandBuffer(cmdBfr, "Compute SSAO"))
 		return false;
@@ -104,8 +104,8 @@ bool CSSAOBlurPass::Render(RenderData* p_renderData)
 	CVulkanRHI::CommandBuffer cmdBfr						= p_renderData->cmdBfr;
 	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
 
-	uint32_t dispatchDim_x = m_rhi->GetRenderWidth() / 8;
-	uint32_t dispatchDim_y = m_rhi->GetRenderHeight() / 8;
+	uint32_t dispatchDim_x = m_rhi->GetRenderWidth() / THREAD_GROUP_SIZE_X;
+	uint32_t dispatchDim_y = m_rhi->GetRenderHeight() / THREAD_GROUP_SIZE_Y;
 
 	if (!m_rhi->BeginCommandBuffer(cmdBfr, "Compute SSAO Blur"))
 		return false;

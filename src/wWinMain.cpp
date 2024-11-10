@@ -16,7 +16,7 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
     {
     case 1:
         {
-            CRasterRender rasterRender("VFrame Renderer", 1920, 1080, 1);
+            CRasterRender rasterRender("VFrame Renderer", DISPLAY_RESOLUTION_X, DISPLAY_RESOLUTION_Y, 1);
             CWinCore* winCore = &rasterRender;
             
             if (!winCore->initialize())

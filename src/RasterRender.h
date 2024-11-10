@@ -12,6 +12,8 @@
 #include "SSAOPass.h"
 #include "UIPass.h"
 
+#include "SharedGlobal.h"
+
 class CRasterRender : public CWinCore
 {
 public:

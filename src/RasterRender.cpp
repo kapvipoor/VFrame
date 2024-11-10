@@ -15,7 +15,7 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	, m_activeCmdBfrFreeFence(VK_NULL_HANDLE)
 
 {			
-	m_rhi					= new CVulkanRHI(name, screen_width_, screen_height_);
+	m_rhi					= new CVulkanRHI(name, RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
 
 	m_primaryCamera			= new CPerspectiveCamera();
 	//m_sunLight				= new CDirectionaLight("Sunlight", true, nm::float3(0.0f, 1.0f, 0.0f));
@@ -346,7 +346,7 @@ bool CRasterRender::InitCamera()
 	CPerspectiveCamera::PerpspectiveInitdData persIntData{};
 	persIntData.fov								= 45.0f;
 	persIntData.aspect							= (float)CWinCore::s_Window.screenWidth / CWinCore::s_Window.screenHeight;
-	persIntData.lookFrom						= nm::float4(0.0f, 0.0f, 0.0f, 1.0f);
+	persIntData.lookFrom						= nm::float4(0.0f, 0.0f, 4.0f, 1.0f);
 	persIntData.lookAt							= nm::float3{ 0.0f, 0.0f, 0.0f };
 	persIntData.up								= nm::float3{ 0.0f, 1.0f,  0.0f };
 	persIntData.aperture						= 0.1f;							

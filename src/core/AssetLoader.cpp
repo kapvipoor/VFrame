@@ -200,7 +200,7 @@ bool LoadTextures(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, std::string
 		else
 		{
 			unsigned char* test = nullptr;
-			iraw.name = image.name;
+			iraw.name = image.uri;
 			iraw.width = image.width;
 			iraw.height = image.height;
 			iraw.channels = image.component;

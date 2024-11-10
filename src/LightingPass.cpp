@@ -405,8 +405,8 @@ bool CDeferredLightingPass::Render(RenderData* p_renderData)
 	const CPrimaryDescriptors* primaryDesc						= p_renderData->primaryDescriptors;
 	const CScene* scene											= p_renderData->loadedAssets->GetScene();
 
-	uint32_t dispatchDim_x										= m_rhi->GetRenderWidth() / 8;
-	uint32_t dispatchDim_y										= m_rhi->GetRenderHeight() / 8;
+	uint32_t dispatchDim_x										= m_rhi->GetRenderWidth() / THREAD_GROUP_SIZE_X;
+	uint32_t dispatchDim_y										= m_rhi->GetRenderHeight() / THREAD_GROUP_SIZE_Y;
 
 	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Compute Deferred Lighting"));
 	{

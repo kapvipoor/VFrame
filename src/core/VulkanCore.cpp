@@ -342,8 +342,15 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 			return false;
 		}
 
-		// set active physical device
-		m_vkPhysicalDevice = physicalDeviceList[0];
+		for (const auto& physicalDevice : physicalDeviceList)
+		{
+			VkPhysicalDeviceProperties deviceProperties{};
+			vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
+			if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+			{
+				m_vkPhysicalDevice = physicalDevice;
+			}
+		}		
 	}
 
 	// Brute-force setting up device extensions; device creation will fail if extensions are
@@ -397,6 +404,7 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	enabledFeatures.fragmentStoresAndAtomics							= VK_TRUE;
 	enabledFeatures.shaderStorageImageReadWithoutFormat					= VK_TRUE;
 	enabledFeatures.shaderStorageImageWriteWithoutFormat				= VK_TRUE;
+	enabledFeatures.vertexPipelineStoresAndAtomics						= VK_TRUE;
 
 	if (enabledFeatures.geometryShader != supportedFeatures.geometryShader &&
 		enabledFeatures.fragmentStoresAndAtomics != supportedFeatures.fragmentStoresAndAtomics)

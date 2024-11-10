@@ -1,3 +1,13 @@
+#define DISPLAY_RESOLUTION_X					960
+#define DISPLAY_RESOLUTION_Y					540
+
+#define RENDER_RESOLUTION_X						960
+#define RENDER_RESOLUTION_Y						540
+
+#define THREAD_GROUP_SIZE_X						4
+#define THREAD_GROUP_SIZE_Y						4
+#define THREAD_GROUP_SIZE_Z						1
+
 #define FRAME_BUFFER_COUNT                      2
 #define MAX_SUPPORTED_DEBUG_DRAW_ENTITES        256
 #define MAX_SUPPORTED_MESHES                    100

@@ -6,11 +6,11 @@
 
 #include "Common.h"
 
-layout (local_size_x = 8, local_size_y = 8) in;
+layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) in;
 void main()
 {
     ivec2 xy                        = ivec2(gl_GlobalInvocationID.xy);
-    vec2 uv                         = XY2UV(xy, g_Info.renderResolution);
+    vec2 uv                         = XY2UV(xy, vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y));
 
     vec3 gFragPos                   = imageLoad(g_RT_StorageImages[STORE_POSITION], xy).xyz;
     vec3 gNormal                    = imageLoad(g_RT_StorageImages[STORE_NORMAL], xy).xyz;
@@ -29,7 +29,7 @@ void main()
         vec4 offset                 = g_Info.camProj * vec4(ssaoSample, 1.0);       // view space to clip-space
         offset.xyz                  = offset.xyz/offset.w;                          //ndc (-1, 1)
         offset                      = (offset * 0.5) + 0.5;                         //(0,1) range
-        offset.xy                   = UV2XY(vec2(offset.x, 1.0f - offset.y), g_Info.renderResolution).xy;
+        offset.xy                   = UV2XY(vec2(offset.x, 1.0f - offset.y), vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y)).xy;
         
         float gDepth                = imageLoad(g_RT_StorageImages[STORE_POSITION], ivec2(offset.xy)).z;
         float rangeCheck            = smoothstep(0.0, 1.0, g_Info.ssaoRadius / abs(gFragPos.z - gDepth));

@@ -433,7 +433,7 @@ void CRenderableUI::Show(CVulkanRHI* p_rhi)
 				refresh_time += 1.0f / 60.0f;
 			}
 			char overlay[32];
-			sprintf(overlay, "avg %f", m_latestFPS.Average());
+			sprintf_s(overlay, "avg %f", m_latestFPS.Average());
 			ImGui::PlotLines("cpu (ms)", data.data(), (int)data.size(), values_offset, overlay, 0.0f, 32.0f, ImVec2(0, 60.0f));
 		}
 	}
@@ -1023,12 +1023,12 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 	// Load sky box cube map
 	{
 		std::filesystem::path cubemap_path[6]{
-			g_AssetPath / "skybox/Daylight_Box_Pieces/f.png"
-		,	g_AssetPath / "skybox/Daylight_Box_Pieces//b.png"
-		,	g_AssetPath / "skybox/Daylight_Box_Pieces/t.png"
-		,	g_AssetPath / "skybox/Daylight_Box_Pieces/bt.png"
-		,	g_AssetPath / "skybox/Daylight_Box_Pieces/l.png"
-		,	g_AssetPath / "skybox/Daylight_Box_Pieces/r.png"
+			g_DefaultPath / "skybox_textures/f.png"
+		,	g_DefaultPath / "skybox_textures//b.png"
+		,	g_DefaultPath / "skybox_textures/t.png"
+		,	g_DefaultPath / "skybox_textures/bt.png"
+		,	g_DefaultPath / "skybox_textures/l.png"
+		,	g_DefaultPath / "skybox_textures/r.png"
 		};
 
 		std::vector<ImageRaw> cubemap_raw;
@@ -1051,7 +1051,7 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 		loadData.flipUV					= false;
 		loadData.loadMeshOnly			= true;
 
-		RETURN_FALSE_IF_FALSE(LoadObj((g_AssetPath / "skybox/skybox.obj").string().c_str(), sceneraw, loadData));
+		RETURN_FALSE_IF_FALSE(LoadObj((g_DefaultPath / "cube.obj").string().c_str(), sceneraw, loadData));
 
 		MeshRaw meshraw					= sceneraw.meshList[0];
 		CRenderableMesh* mesh			= new CRenderableMesh("Skybox", MeshType::mt_Skybox, nm::Transform());
@@ -1070,11 +1070,13 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");						//2
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
 	//defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
-	defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");											//4													//5
+	//defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Models/2.0/Sponza/glTF/Sponza.gltf");
+	//defaultScenePaths.push_back(g_AssetPath/"glTF-Sample-Models/2.0/Suzanne/glTF/Suzanne.gltf");											//4													//5
+	defaultScenePaths.push_back(g_AssetPath/"glTF-Sample-Models/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf");
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");				//6
 	//m_scenePaths.push_back("D:/Projects/MyPersonalProjects/assets/cube/cube.obj");																			//7
 	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/icosphere.gltf");																			//8
-	//m_scenePaths.push_back(g_AssetPath/"dragon/dragon.obj");																		//9
+	//m_scenePaths.push_back(g_AssetPath/"dragon/dragon.obj");															f			//9
 	//m_scenePaths.push_back(g_AssetPath/"stanford_dragon_pbr/scene.gltf");															//10
 	//m_scenePaths.push_back(g_AssetPath/"mitsuba/mitsuba.obj");																	//11
 	//m_scenePaths.push_back(g_AssetPath/"wall_and_floor/wall_and_floor.gltf");														//12
@@ -1839,7 +1841,7 @@ CFixedBuffers::CFixedBuffers()
 	m_primaryUniformData.ssaoRadius				= 0.5f;
 	m_primaryUniformData.enableShadowPCF		= 0;
 	//m_primaryUniformData.sunIntensity			= 20.0f;
-	m_primaryUniformData.pbrAmbientFactor		= 0.1f;
+	m_primaryUniformData.pbrAmbientFactor		= 0.5f;
 	m_primaryUniformData.enableSSAO				= 1;
 	m_primaryUniformData.biasSSAO				= 0.015f;
 	m_primaryUniformData.unassigned_1			= 0.0f;
