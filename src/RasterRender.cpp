@@ -2,7 +2,6 @@
 
 #include "core/RandGen.h"
 #include "RasterRender.h"
-#include "external/imgui/imgui.h"
 #include <assert.h>
 
 //float g_sunDistanceFromOrigin = 50.0f;
@@ -13,6 +12,7 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	, m_pickObject(false)
 	, m_activeAcquireSemaphore(VK_NULL_HANDLE)
 	, m_activeCmdBfrFreeFence(VK_NULL_HANDLE)
+	, m_frameCount(0)
 
 {			
 	m_rhi					= new CVulkanRHI(name, RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
@@ -37,6 +37,7 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_debugDrawPass			= new CDebugDrawPass(m_rhi);
 	m_toneMapPass			= new CToneMapPass(m_rhi);
 	m_uiPass				= new CUIPass(m_rhi);
+	m_taa					= new CTAA();
 
 	m_cmdBufferNames[0][cb_ShadowMap]			= "ShadowMap_0";
 	m_cmdBufferNames[0][cb_SSAO]				= "SSAO_0";
@@ -71,6 +72,7 @@ CRasterRender::~CRasterRender()
 
 	delete m_sceneGraph;
 
+	delete m_taa;
 	delete m_uiPass;
 	delete m_toneMapPass;
 	delete m_debugDrawPass;
@@ -177,7 +179,7 @@ bool CRasterRender::on_update(float delta)
 	UpdateCamera(camUpdateData);
 
 	// if left mouse is clicked; prepare and pick object for this frame
-	m_pickObject = false;  m_keys[LEFT_MOUSE_BUTTON].down;
+	m_pickObject = false; //m_keys[LEFT_MOUSE_BUTTON].down;
 
 	int mousepos_x = 0, mousepos_y = 0;
 	GetCurrentMousePosition(mousepos_x, mousepos_y);
@@ -304,6 +306,7 @@ void CRasterRender::on_present()
 	}
 
 	m_rhi->WaitToFinish(queue);
+	++m_frameCount;
 }
 
 VkSemaphore CRasterRender::GetAvailableAcquireSemaphore(VkSemaphore p_in)
@@ -498,7 +501,7 @@ bool CRasterRender::CreatePasses()
 
 void CRasterRender::UpdateCamera(CCamera::UpdateData& p_updateData)
 {
-	p_updateData.moveCamera						= m_keys[MIDDLE_MOUSE_BUTTON].down;
+	p_updateData.moveCamera							= m_keys[MIDDLE_MOUSE_BUTTON].down;
 	p_updateData.mouseDelta[0]						= mouse_delta[0];
 	p_updateData.mouseDelta[1]						= mouse_delta[1];
 	p_updateData.A									= m_keys[(int)char('A')].down;
@@ -508,6 +511,7 @@ void CRasterRender::UpdateCamera(CCamera::UpdateData& p_updateData)
 	p_updateData.Q									= m_keys[(int)char('Q')].down;
 	p_updateData.E									= m_keys[(int)char('E')].down;
 	p_updateData.Shft								= (m_keys[160].down || m_keys[16].down);
+	p_updateData.jitter								= m_taa->GetJitterHelper()->ComputeJitter(m_frameCount);
 	m_primaryCamera->Update(p_updateData);
 
 	UpdateSceneGraphDependencies(p_updateData.timeDelta);

@@ -11,6 +11,7 @@
 #include "LightingPass.h"
 #include "SSAOPass.h"
 #include "UIPass.h"
+#include "PostProcessingPasses.h"
 
 #include "SharedGlobal.h"
 
@@ -50,6 +51,7 @@ private:
 	};
 
 	uint32_t							m_swapchainIndex;
+	uint64_t							m_frameCount;
 
 	VkSemaphore							m_activeAcquireSemaphore;
 	VkSemaphore							m_vkswapchainAcquireSemaphore[FRAME_BUFFER_COUNT];
@@ -87,6 +89,7 @@ private:
 	CDebugDrawPass*						m_debugDrawPass;
 	CToneMapPass*						m_toneMapPass;
 	CUIPass*							m_uiPass;
+	CTAA*								m_taa;
 	
 	VkSemaphore GetAvailableAcquireSemaphore(VkSemaphore p_in);
 	VkFence WaitForFinishIfNecessary(VkFence p_in);

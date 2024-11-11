@@ -1,5 +1,6 @@
 #include "Camera.h"
 #include "AssetLoader.h"
+#include "../SharedGlobal.h"
 
 CCamera::CCamera(/*std::string p_name*/)
 //    : CEntity(p_name)
@@ -86,7 +87,7 @@ void CPerspectiveCamera::Move(nm::float3 p_lookFrom)
 {
     m_lookFrom = nm::float4(p_lookFrom, 0.0);
     m_view = m_view * nm::translation(p_lookFrom);
-    m_viewProj = m_projection * m_view;
+    m_viewProj = m_jitteredProjection * m_view;
 }
 
 bool CPerspectiveCamera::Init(InitData* p_initData)
@@ -127,6 +128,7 @@ bool CPerspectiveCamera::Init(InitData* p_initData)
         m_horizontal = 2.0f * m_halfWidth * persInitData->focusDistance * m_camX;
 
         m_projection = nm::perspective(vFovRad, persInitData->aspect, m_zNear, m_zFar);
+        //m_projection = nm::perspective_new((float)DISPLAY_RESOLUTION_X, (float)DISPLAY_RESOLUTION_Y, m_zNear, m_zFar);
     }
 
     CCamera::Init(p_initData);
@@ -146,9 +148,10 @@ void CPerspectiveCamera::Update(UpdateData p_data)
     nm::float4 dir = PolarToVector(m_yaw, m_pitch) * m_dist;
     LookAt(m_lookFrom, m_lookFrom - dir);
 
-    m_viewProj = m_projection * m_view;
+    m_jitteredProjection = m_projection;
+    m_jitteredView = m_view * p_data.jitter;
+    m_viewProj = m_jitteredProjection * m_jitteredView;
 
-    //std::cout << "Printing View: " << m_view.column[3][0] << ", " << m_view.column[3][1] << ", " << m_view.column[3][2] << std::endl;
 
     // TODO
     //CCamera::Update(p_data);
