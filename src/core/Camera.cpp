@@ -35,20 +35,21 @@ void CCamera::Update(UpdateData data)
     //}
 }
 
-nm::float4 CCamera::PolarToVector(float yaw, float pitch)
+glm::vec4 CCamera::PolarToVector(float yaw, float pitch)
 {
-    return  nm::float4(sinf(yaw) * cosf(pitch), sinf(pitch), cosf(yaw) * cosf(pitch), 0);
+    return  glm::vec4(sinf(yaw) * cosf(pitch), sinf(pitch), cosf(yaw) * cosf(pitch), 0);
 }
 
-nm::float4x4 CCamera::LookAtRH(nm::float4 eyePos, nm::float4 lookAt)
+glm::mat4x4 CCamera::LookAtRH(glm::vec4 eyePos, glm::vec4 lookAt)
 {
-    nm::float3 eyepos_{ eyePos.x(), eyePos.y(), eyePos.z() };
-    nm::float3 lookat_{ lookAt.x(), lookAt.y(), lookAt.z() };
+    glm::vec3 eyepos_{ eyePos.x, eyePos.y, eyePos.z };
+    glm::vec3 lookat_{ lookAt.x, lookAt.y, lookAt.z };
 
-    return nm::lookAtRH(eyepos_, lookat_, m_up); // up should be nm::float3(0, 1, 0)
+
+    return glm::lookAtRH(eyepos_, lookat_, m_up); // up should be nm::float3(0, 1, 0)
 }
 
-nm::float4 CCamera::MoveWASD(UpdateData pdata)
+glm::vec4 CCamera::MoveWASD(UpdateData pdata)
 {
     float move = 10.0f;
     float x = 0, y = 0, z = 0;
@@ -80,13 +81,13 @@ nm::float4 CCamera::MoveWASD(UpdateData pdata)
 
     pdata.Shft ? (m_moveScale *= 1.01f) : (m_moveScale = 0.25f);
 
-    return nm::float4(x, y, z, 0.0f) * m_moveScale;
+    return glm::vec4(x, y, z, 0.0f) * m_moveScale;
 }
 
-void CPerspectiveCamera::Move(nm::float3 p_lookFrom)
+void CPerspectiveCamera::Move(glm::vec3 p_lookFrom)
 {
-    m_lookFrom = nm::float4(p_lookFrom, 0.0);
-    m_view = m_view * nm::translation(p_lookFrom);
+    m_lookFrom = glm::vec4(p_lookFrom, 0.0);
+    m_view =  glm::translate(m_view, p_lookFrom);
     m_viewProj = m_jitteredProjection * m_view;
 }
 
@@ -100,7 +101,7 @@ bool CPerspectiveCamera::Init(InitData* p_initData)
         m_vFov = persInitData->fov;
         m_aspect = persInitData->aspect;
         m_up = persInitData->up;
-        m_lookFrom = nm::float4{ persInitData->lookFrom.xyz(), 1.0f };
+        m_lookFrom = persInitData->lookFrom;
         m_lookAt = persInitData->lookAt;
 
         m_zNear = 0.1f;
@@ -115,11 +116,11 @@ bool CPerspectiveCamera::Init(InitData* p_initData)
         m_halfHeight = tan(vFovRad / 2.0f);
         m_halfWidth = m_aspect * m_halfHeight;
 
-        m_camZ = nm::normalize(persInitData->lookFrom.xyz() - persInitData->lookAt);       //w
-        m_camX = nm::normalize(nm::cross(persInitData->up, m_camZ));                       //u
-        m_camY = nm::normalize(nm::cross(m_camZ, m_camX));                                 //v
+        m_camZ = glm::normalize(glm::vec3(persInitData->lookFrom) - persInitData->lookAt);       //w
+        m_camX = glm::normalize(glm::cross(persInitData->up, m_camZ));                       //u
+        m_camY = glm::normalize(glm::cross(m_camZ, m_camX));                                 //v
 
-        m_lowerLeft = nm::float3(m_lookFrom.x(), m_lookFrom.y(), m_lookFrom.z())
+        m_lowerLeft = glm::vec3(m_lookFrom)
             - (m_halfWidth * persInitData->focusDistance * m_camX)
             - (m_halfHeight * persInitData->focusDistance * m_camY)
             - (persInitData->focusDistance * m_camZ);
@@ -127,8 +128,7 @@ bool CPerspectiveCamera::Init(InitData* p_initData)
         m_vertical = 2.0f * m_halfHeight * persInitData->focusDistance * m_camY;
         m_horizontal = 2.0f * m_halfWidth * persInitData->focusDistance * m_camX;
 
-        m_projection = nm::perspective(vFovRad, persInitData->aspect, m_zNear, m_zFar);
-        //m_projection = nm::perspective_new((float)DISPLAY_RESOLUTION_X, (float)DISPLAY_RESOLUTION_Y, m_zNear, m_zFar);
+        m_projection = glm::perspective(vFovRad, persInitData->aspect, m_zNear, m_zFar);
     }
 
     CCamera::Init(p_initData);
@@ -144,8 +144,8 @@ void CPerspectiveCamera::Update(UpdateData p_data)
         m_pitch += p_data.mouseDelta[1] / 654.f;
     }
 
-    m_lookFrom = m_lookFrom + nm::transpose(m_view) * nm::float4(MoveWASD(p_data) * m_speed * (float)p_data.timeDelta);
-    nm::float4 dir = PolarToVector(m_yaw, m_pitch) * m_dist;
+    m_lookFrom = m_lookFrom + glm::transpose(m_view) * glm::vec4(MoveWASD(p_data) * m_speed * (float)p_data.timeDelta);
+    glm::vec4 dir = PolarToVector(m_yaw, m_pitch) * m_dist;
     LookAt(m_lookFrom, m_lookFrom - dir);
 
     m_jitteredProjection = m_projection;
@@ -157,20 +157,20 @@ void CPerspectiveCamera::Update(UpdateData p_data)
     //CCamera::Update(p_data);
 }
 
-void CPerspectiveCamera::LookAt(nm::float4 eyePos, nm::float4 lookAt)
+void CPerspectiveCamera::LookAt(glm::vec4 eyePos, glm::vec4 lookAt)
 {
     // this is unnessary
-    m_lookAt                    = nm::float3(lookAt.x(), lookAt.y(), lookAt.z());
+    m_lookAt                    = glm::vec3(lookAt);
 
     m_lookFrom                  = eyePos;
     m_view                      = LookAtRH(eyePos, lookAt);
-    m_dist                      = nm::length(lookAt - eyePos);
+    m_dist                      = glm::length(lookAt - eyePos);
 
-    nm::float4x4 inView         = nm::inverse(m_view);
-    nm::float4 zBasis           = inView.column[2];
-    m_yaw                       = atan2f(zBasis.x(), zBasis.z());
-    float fLen                  = sqrtf(zBasis.z() * zBasis.z() + zBasis.x() * zBasis.x());
-    m_pitch                     = atan2f(zBasis.y(), fLen);
+    glm::mat4x4 inView         = glm::inverse(m_view);
+    glm::vec4 zBasis           = inView[2];
+    m_yaw                       = atan2f(zBasis.x, zBasis.z);
+    float fLen                  = sqrtf(zBasis.z * zBasis.z + zBasis.x * zBasis.x);
+    m_pitch                     = atan2f(zBasis.y, fLen);
 }
 
 COrthoCamera::COrthoCamera(/*std::string p_entityName*/)
@@ -189,15 +189,15 @@ bool COrthoCamera::Init(InitData* p_initData)
 
     m_lrbt                      = orthoInitData->lrbt;
     m_up                        = c_up;
-    m_lookFrom                  = nm::float4{ orthoInitData->lookFrom.xyz(), 1.0f };
+    m_lookFrom                  = glm::vec4( glm::vec3(orthoInitData->lookFrom), 1.0f );
     m_zNear                     = orthoInitData->nearPlane;
     m_zFar                      = orthoInitData->farPlane;
     m_dist                      = 1;
     m_yaw                       = orthoInitData->yaw;
     m_pitch                     = orthoInitData->pitch;
-    m_projection                = nm::orthoRH_01(m_lrbt.x(), m_lrbt.y(), m_lrbt.z(), m_lrbt.w(), m_zNear, m_zFar); // TODO: there is a problem here with projection generation and some issue with ZNear and ZFar
-    nm::float4 dir              = PolarToVector(m_yaw, m_pitch) * m_dist;
-    m_lookAt                    = dir.xyz(); // (m_lookFrom - dir).xyz();
+    m_projection                = glm::ortho(m_lrbt.x, m_lrbt.y, m_lrbt.z, m_lrbt.w, m_zNear, m_zFar); // TODO: there is a problem here with projection generation and some issue with ZNear and ZFar
+    glm::vec4 dir               = PolarToVector(m_yaw, m_pitch) * m_dist;
+    m_lookAt                    = glm::vec3(dir); // (m_lookFrom - dir).xyz();
     m_view                      = LookAtRH(m_lookFrom, m_lookFrom - dir);
     m_viewProj                  = m_projection * m_view;
 
@@ -218,15 +218,15 @@ void COrthoCamera::Update(UpdateData p_data)
         //m_yaw = atan2f(rotationMat.column[2][0], rotationMat.column[2][1]);
         //m_pitch = acos(rotationMat.column[2][2]);
 
-        m_lookFrom = nm::float4(p_data.transform.GetTranslateVector(), 1.0f);
+        ////m_lookFrom = glm::vec4(p_data.transform.GetTranslateVector(), 1.0f);
         //m_pitch = -p_data.pitch;            //transform.GetRotateVector().x();
         //m_yaw = p_data.yaw;                 // transform.GetRotateVector().y();
 
         // recalculating view and viewproj
-        nm::float4 dir          = PolarToVector(m_yaw, m_pitch) * m_dist;
-        m_lookAt                = dir.xyz(); // (m_lookFrom - dir).xyz();
-        m_view                  = LookAtRH(m_lookFrom, m_lookFrom - dir);
-        m_viewProj              = m_projection * m_view;
-        m_up                    = (p_data.transform.GetRotate() * nm::float4(c_up, 1.0f)).xyz();
+        ////nm::float4 dir          = PolarToVector(m_yaw, m_pitch) * m_dist;
+        ////m_lookAt                = dir.xyz(); // (m_lookFrom - dir).xyz();
+        ////m_view                  = LookAtRH(m_lookFrom, m_lookFrom - dir);
+        ////m_viewProj              = m_projection * m_view;
+        ////m_up                    = (p_data.transform.GetRotate() * nm::float4(c_up, 1.0f)).xyz();
     }
 }

@@ -5,9 +5,9 @@
 #include <cmath>
 #include <map>
 
-#include "external/NiceMath.h"
-
 #include "Global.h"
+
+#include "external/NiceMath.h"
 
 struct ImageRaw
 {
