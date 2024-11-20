@@ -40,7 +40,11 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 	float 	pbrAmbientFactor;
 	float 	enabelSSAO;
 	float 	biasSSAO;
-	float 	unassigned_1;
+	float 	ssrMaxDistance;
+	float 	ssrResolution;
+	float 	ssrThickness;
+	float 	ssrSteps;
+	float 	unassigned;
 } g_Info;
 
 layout(set = 0, binding = 1) uniform sampler g_LinearSampler;

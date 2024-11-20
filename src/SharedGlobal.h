@@ -26,7 +26,8 @@
 #define SAMPLE_DIRECTIONAL_SHADOW_DEPTH	        6
 #define SAMPLE_PRIMARY_COLOR				    7
 #define SAMPLE_DEFERRED_ROUGH_METAL		        8
-#define SAMPLE_MAX_RENDER_TARGETS			    9
+#define SAMPLE_SS_REFLECTION    		        9
+#define SAMPLE_MAX_RENDER_TARGETS			    10
 
 #define STORE_POSITION					        0
 #define STORE_NORMAL						    1
@@ -35,7 +36,8 @@
 #define STORE_SSAO_BLUR					        4
 #define STORE_PRIMARY_COLOR				        5
 #define STORE_DEFERRED_ROUGH_METAL		        6
-#define STORE_MAX_RENDER_TARGETS			    7
+#define STORE_SS_REFLECTION     		        7
+#define STORE_MAX_RENDER_TARGETS			    8
 
 #define SHADOW_BIAS                             0.005
 

@@ -1067,14 +1067,14 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	std::vector<std::filesystem::path>		defaultScenePaths;
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels / 2.0 / DragonAttenuation / glTF / DragonAttenuation.gltf");				//0
 	//m_scenePaths.push_back(g_AssetPath/"shadow_test_3.gltf");																		//1
-	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");						//2
+	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");						//2
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
 	//defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
 	//defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Models/2.0/Sponza/glTF/Sponza.gltf");
 	//defaultScenePaths.push_back(g_AssetPath/"glTF-Sample-Models/2.0/Suzanne/glTF/Suzanne.gltf");											//4													//5
 	defaultScenePaths.push_back(g_AssetPath/"glTF-Sample-Models/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf");
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");				//6
-	//m_scenePaths.push_back("D:/Projects/MyPersonalProjects/assets/cube/cube.obj");																			//7
+	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/cube/cube.obj");																			//7
 	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/icosphere.gltf");																			//8
 	//m_scenePaths.push_back(g_AssetPath/"dragon/dragon.obj");															f			//9
 	//m_scenePaths.push_back(g_AssetPath/"stanford_dragon_pbr/scene.gltf");															//10
@@ -1083,6 +1083,7 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	//m_scenePaths.push_back(g_AssetPath / "main_sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");								//13
 	//m_scenePaths.push_back(g_AssetPath/"main_sponza/PKG_A_Curtains/NewSponza_Curtains_glTF.gltf");								//14
 	//m_scenePaths.push_back(g_AssetPath/"an_afternoon_in_a_persian_garden/scene.obj");												//15
+	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/glTFSampleModels/2.0/SpecGlossVsMetalRough/glTF/SpecGlossVsMetalRough.gltf");
 
 	std::vector<bool> flipYList{ false, false, false };
 
@@ -1765,6 +1766,7 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,	VK_FORMAT_D32_SFLOAT_S8_UINT,	4096, 4096,					 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	"directional_shadow",	sample_depth));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"primary_color",		sample_storage_color));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DeferredRoughMetal,		VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"deferred_RM",			sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"ss_reflection",		sample_storage_color));
 
 	return true;
 }
@@ -1829,6 +1831,8 @@ std::string CRenderTargets::GetRenderTargetIDinString(RenderTargetId p_id)
 		return "PrimaryColor";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_DeferredRoughMetal)
 		return "DeferredRoughMetal";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_SSReflection)
+		return "Screen Space Reflection (UVs)";
 	else
 		return "Error Render Target";
 }
@@ -1844,7 +1848,10 @@ CFixedBuffers::CFixedBuffers()
 	m_primaryUniformData.pbrAmbientFactor		= 0.5f;
 	m_primaryUniformData.enableSSAO				= 1;
 	m_primaryUniformData.biasSSAO				= 0.015f;
-	m_primaryUniformData.unassigned_1			= 0.0f;
+	m_primaryUniformData.ssrMaxDistance			= 5.0f;
+	m_primaryUniformData.ssrResolution			= 1.0f;
+	m_primaryUniformData.ssrThickness			= 0.11;
+	m_primaryUniformData.ssrSteps				= 2;
 }
 
 CFixedBuffers::~CFixedBuffers()
@@ -1873,8 +1880,12 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(float) * 1)				// sun intensity
 		+ (sizeof(float) * 1)				// PBR ambient Factor
 		+ (sizeof(int) * 1)					// enable SSAO
-		+ (sizeof(float) * 1)				// unassigned_0
-		+ (sizeof(float) * 1);				// unassigned_1
+		+ (sizeof(float) * 1)				// biasSSAO
+		+ (sizeof(float) * 1)				// SSR Max Distance
+		+ (sizeof(float) * 1)				// SSR Resolution
+		+ (sizeof(float) * 1)				// SSR Thickness
+		+ (sizeof(float) * 1)					// SSR Steps
+		+ (sizeof(float) * 1);				// unassigned
 
 	size_t objPickerBufferSize = sizeof(uint32_t) * 1; // selected mesh ID
 	size_t debugDrawUniformSize = MAX_SUPPORTED_DEBUG_DRAW_ENTITES * ((sizeof(float) * 16)); // storing transforms
@@ -1942,6 +1953,14 @@ void CFixedBuffers::Show(CVulkanRHI* p_rhi)
 			ImGui::SliderFloat("Ambient Factor", &m_primaryUniformData.pbrAmbientFactor, 0.00f, 1.0f);
 			ImGui::TreePop();
 		}
+		if (ImGui::TreeNode("SSR"))
+		{
+			ImGui::SliderFloat("Max Distance", &m_primaryUniformData.ssrMaxDistance, 0.0f, 50.0f);
+			ImGui::SliderFloat("Resolution", &m_primaryUniformData.ssrResolution, 0.0f, 1.0f);
+			ImGui::SliderFloat("Steps", &m_primaryUniformData.ssrSteps, 1, 50);
+			ImGui::SliderFloat("Thickness", &m_primaryUniformData.ssrThickness, 0.0f, 4.0f);
+			ImGui::TreePop();
+		}
 		ImGui::Unindent();
 	}
 }
@@ -1982,7 +2001,12 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	uniformValues.push_back(m_primaryUniformData.pbrAmbientFactor);																						// PBR Ambient Factor
 	uniformValues.push_back((float)m_primaryUniformData.enableSSAO);																					// enable SSAO
 	uniformValues.push_back(m_primaryUniformData.biasSSAO);																								// SSAO Bias
-	uniformValues.push_back(m_primaryUniformData.unassigned_1);																							// unassigned_1
+	uniformValues.push_back(m_primaryUniformData.ssrMaxDistance);																						// SSR Max Distance
+	uniformValues.push_back(m_primaryUniformData.ssrResolution);																						// SSR Resolution
+	uniformValues.push_back(m_primaryUniformData.ssrThickness);																							// SSR Thickness
+	uniformValues.push_back((float)m_primaryUniformData.ssrSteps);																								// SSR Steps
+	uniformValues.push_back(m_primaryUniformData.unassigned);																							// unassigned
+	
 
 	uint8_t* data							= (uint8_t*)(uniformValues.data());
 	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, m_buffers[p_scId], false));
@@ -2071,19 +2095,6 @@ CPrimaryDescriptors::~CPrimaryDescriptors()
 {
 }
 
-void CPrimaryDescriptors::SetLayoutForDescriptorCreation(CRenderTargets* p_renderTargets)
-{
-	p_renderTargets->SetLayout(CRenderTargets::rt_DeferredRoughMetal,		VK_IMAGE_LAYOUT_GENERAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_PrimaryColor,				VK_IMAGE_LAYOUT_GENERAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_DirectionalShadowDepth,	VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_SSAOBlur,					VK_IMAGE_LAYOUT_GENERAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_SSAO,						VK_IMAGE_LAYOUT_GENERAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_Position,					VK_IMAGE_LAYOUT_GENERAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_Albedo,					VK_IMAGE_LAYOUT_GENERAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_Normal,					VK_IMAGE_LAYOUT_GENERAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_PrimaryDepth,				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-}
-
 bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets, const CLoadableAssets& p_loadableAssets)
 {
 	const CReadOnlyTextures* readonlyTex				= p_loadableAssets.GetReadonlyTextures();
@@ -2092,8 +2103,6 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 	CRenderTargets* rendTargets							= p_fixedAssets.GetRenderTargets();
 	const CVulkanRHI::SamplerList* samplers				= p_fixedAssets.GetSamplers();
 	
-	//SetLayoutForDescriptorCreation(rendTargets);
-
 	// Sampling Render Targets Descriptor Info
 	std::vector<VkDescriptorImageInfo> sampleRenderTargetsDesInfoList;
 	for(int i = 0; i < CRenderTargets::RenderTargetId::rt_max; i++)
@@ -2111,6 +2120,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 		storeRenderTargetsDesInfoList[STORE_SSAO_BLUR]				= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSAOBlur).descInfo;
 		storeRenderTargetsDesInfoList[STORE_PRIMARY_COLOR]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_PrimaryColor).descInfo;
 		storeRenderTargetsDesInfoList[STORE_DEFERRED_ROUGH_METAL]	= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_DeferredRoughMetal).descInfo;
+		storeRenderTargetsDesInfoList[STORE_SS_REFLECTION]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSReflection).descInfo;
 	}
 
 	// read only texture desc info
@@ -2165,22 +2175,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 		BindlessUpdate(p_rhi, i);
 	}
 
-	//UnSetLayoutForDescriptorCreation(rendTargets);
-
 	return true;
-}
-
-void CPrimaryDescriptors::UnSetLayoutForDescriptorCreation(CRenderTargets* p_renderTargets)
-{
-	p_renderTargets->SetLayout(CRenderTargets::rt_DeferredRoughMetal	, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_PrimaryColor			, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_DirectionalShadowDepth, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_SSAOBlur				, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_SSAO					, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_Position				, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_Albedo				, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_Normal				, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	p_renderTargets->SetLayout(CRenderTargets::rt_PrimaryDepth			, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 }
 
 void CPrimaryDescriptors::Destroy(CVulkanRHI* p_rhi)

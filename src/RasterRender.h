@@ -9,7 +9,7 @@
 
 #include "ShadowPass.h"
 #include "LightingPass.h"
-#include "SSAOPass.h"
+#include "ScreenSpacePass.h"
 #include "UIPass.h"
 #include "PostProcessingPasses.h"
 
@@ -40,6 +40,7 @@ private:
 		, cb_PickerCopy2CPU			= 8
 		, cb_ToneMapping			= 9
 		, cb_Skybox					= 10
+		, cb_SSR					= 11
 		, cb_max
 	};
 
@@ -85,6 +86,7 @@ private:
 	CDeferredPass*						m_deferredPass;
 	CSSAOComputePass*					m_ssaoComputePass;
 	CSSAOBlurPass*						m_ssaoBlurPass;
+	CSSRComputePass*					m_ssrComputePass;
 	CDeferredLightingPass*				m_deferredLightPass;
 	CDebugDrawPass*						m_debugDrawPass;
 	CToneMapPass*						m_toneMapPass;

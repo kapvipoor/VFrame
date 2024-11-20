@@ -34,6 +34,7 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_deferredLightPass		= new CDeferredLightingPass(m_rhi);
 	m_ssaoComputePass		= new CSSAOComputePass(m_rhi);
 	m_ssaoBlurPass			= new CSSAOBlurPass(m_rhi);
+	m_ssrComputePass		= new CSSRComputePass(m_rhi);
 	m_debugDrawPass			= new CDebugDrawPass(m_rhi);
 	m_toneMapPass			= new CToneMapPass(m_rhi);
 	m_uiPass				= new CUIPass(m_rhi);
@@ -76,6 +77,7 @@ CRasterRender::~CRasterRender()
 	delete m_uiPass;
 	delete m_toneMapPass;
 	delete m_debugDrawPass;
+	delete m_ssrComputePass;
 	delete m_ssaoBlurPass;
 	delete m_ssaoComputePass;
 	delete m_deferredLightPass;
@@ -97,6 +99,7 @@ void CRasterRender::on_destroy()
 	m_uiPass->Destroy();
 	m_toneMapPass->Destroy();
 	m_debugDrawPass->Destroy();
+	m_ssrComputePass->Destroy();
 	m_ssaoBlurPass->Destroy();
 	m_ssaoComputePass->Destroy();
 	m_deferredLightPass->Destroy();
@@ -227,6 +230,7 @@ bool CRasterRender::on_update(float delta)
 		m_skyboxDeferredPass->Update(&updateData);
 		m_ssaoComputePass->Update(&updateData);
 		m_ssaoBlurPass->Update(&updateData);
+		m_ssrComputePass->Update(&updateData);
 		m_forwardPass->Update(&updateData);
 		m_deferredPass->Update(&updateData);
 		m_deferredLightPass->Update(&updateData);
@@ -477,6 +481,7 @@ bool CRasterRender::CreatePasses()
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= primaryAndSceneLayout;
 	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Initalize(nullptr, pipeline));
+	RETURN_FALSE_IF_FALSE(m_ssrComputePass->Initalize(&renderData, pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= debugLayout;
@@ -606,6 +611,10 @@ bool CRasterRender::RenderDeferred()
 
 	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Deferred_Lighting];
 	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Render(&renderData));
+	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+
+	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSR];
+	RETURN_FALSE_IF_FALSE(m_ssrComputePass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
 	// placing debug draw here because I do not want the depth buffer to go through another layout barrier

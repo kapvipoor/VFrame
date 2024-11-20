@@ -19,7 +19,11 @@ void main()
 		ssaoFactor                      = GetSSAOBlur(ivec2(gl_FragCoord.xy));
 	}
 
+    vec4 reflectedUV = imageLoad(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_FragCoord.xy));
+    vec3 reflectedColor = SamplePrimaryColor(reflectedUV.xy).xyz;
+
     vec3 color                          = (SamplePrimaryColor(inUV).xyz) * ssaoFactor; 
+    color += mix(vec3(0.0), reflectedColor, reflectedUV.a);
 
     // Reinhard Operator for Tonemapping (moving from HDR to LDR)
 	//color 							    = color / (color + vec3(1.0));
