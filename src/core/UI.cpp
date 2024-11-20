@@ -134,7 +134,7 @@ void CUIParticipantManager::BeginPanel(std::string p_panelName)
 {
 	ImGui::SetNextWindowBgAlpha(0.25f); // Transparent background
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-	ImGui::Begin(p_panelName.c_str(), nullptr, ImGuiWindowFlags_NoMove);
+	ImGui::Begin(p_panelName.c_str(), nullptr);// , ImGuiWindowFlags_NoMove);
 }
 
 void CUIParticipantManager::EndPanel()
