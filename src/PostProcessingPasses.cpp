@@ -72,10 +72,8 @@ nm::float4x4 CTAA::CJitterHelper::ComputeJitter(const uint64_t p_frameCount)
     // TAA is applied post upscaling. Hence we are sampling/jittering over display resolution
     // and not render resolution
     const float offsetX = jitter.x()* (1.0f / (float)DISPLAY_RESOLUTION_X);
-    const float offsetY = 0.0; // jitter.y()* (1.0f / DISPLAY_RESOLUTION_Y);
+    const float offsetY = jitter.y()* (1.0f / (float)DISPLAY_RESOLUTION_Y);
     
-    std::cout << "offsetX " << offsetX << ", offsetY " << offsetY << std::endl;
-
     nm::Transform jitterOffset;
     jitterOffset.SetTranslate(nm::float4(offsetX, -offsetY, 0.0f, 1.0f));
     return jitterOffset.GetTransform();

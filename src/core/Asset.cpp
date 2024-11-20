@@ -1070,9 +1070,9 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");						//2
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
 	//defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
-	//defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Models/2.0/Sponza/glTF/Sponza.gltf");
+	defaultScenePaths.push_back(g_AssetPath / "glTFSampleModels/2.0/Sponza/glTF/Sponza.gltf");
 	//defaultScenePaths.push_back(g_AssetPath/"glTF-Sample-Models/2.0/Suzanne/glTF/Suzanne.gltf");											//4													//5
-	defaultScenePaths.push_back(g_AssetPath/"glTF-Sample-Models/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf");
+	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf");
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");				//6
 	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/cube/cube.obj");																			//7
 	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/icosphere.gltf");																			//8
