@@ -38,8 +38,12 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_debugDrawPass			= new CDebugDrawPass(m_rhi);
 	m_toneMapPass			= new CToneMapPass(m_rhi);
 	m_uiPass				= new CUIPass(m_rhi);
-	m_taa					= new CTAA();
+	m_taaComputePass		= new CTAAComputePass(m_rhi);
+	m_copyComputePass		= new CCopyComputePass(m_rhi);
 
+	m_cmdBufferNames[0][cb_CopyCompute]			= "CopyCompute_0";
+	m_cmdBufferNames[0][cb_TAA]					= "TAA_0";
+	m_cmdBufferNames[0][cb_SSR]					= "SSR_0";
 	m_cmdBufferNames[0][cb_ShadowMap]			= "ShadowMap_0";
 	m_cmdBufferNames[0][cb_SSAO]				= "SSAO_0";
 	m_cmdBufferNames[0][cb_SSAO_Blur]			= "SSAOBlur_0";
@@ -52,6 +56,9 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_cmdBufferNames[0][cb_ToneMapping]			= "ToneMapping_0";
 	m_cmdBufferNames[0][cb_Skybox]				= "Skybox_0";
 
+	m_cmdBufferNames[1][cb_CopyCompute]			= "CopyCompute_1";
+	m_cmdBufferNames[1][cb_TAA]					= "TAA_1";
+	m_cmdBufferNames[1][cb_SSR]					= "SSR_1";
 	m_cmdBufferNames[1][cb_ShadowMap]			= "ShadowMap_1";
 	m_cmdBufferNames[1][cb_SSAO]				= "SSAO_1";
 	m_cmdBufferNames[1][cb_SSAO_Blur]			= "SSAOBlur_1";
@@ -73,7 +80,8 @@ CRasterRender::~CRasterRender()
 
 	delete m_sceneGraph;
 
-	delete m_taa;
+	delete m_copyComputePass;
+	delete m_taaComputePass;
 	delete m_uiPass;
 	delete m_toneMapPass;
 	delete m_debugDrawPass;
@@ -97,6 +105,8 @@ CRasterRender::~CRasterRender()
 void CRasterRender::on_destroy()
 {
 	m_uiPass->Destroy();
+	m_copyComputePass->Destroy();
+	m_taaComputePass->Destroy();
 	m_toneMapPass->Destroy();
 	m_debugDrawPass->Destroy();
 	m_ssrComputePass->Destroy();
@@ -149,13 +159,20 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 	RETURN_FALSE_IF_FALSE(CreatePasses());
 
 	{
-		RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(m_vkCmdBfr[0][0], "Initialize Barriers"));
+		RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(m_vkCmdBfr[0][0], "Preparing Render Targets"));
 
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PrimaryDepth);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Position);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Normal);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Albedo);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSAO);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSAOBlur);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_vkCmdBfr[0][0], CRenderTargets::rt_DirectionalShadowDepth);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PrimaryColor);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_DeferredRoughMetal);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSReflection);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Prev_PrimaryColor);
 		
-		//m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, m_vkCmdBfr[0][0], CRenderTargets::rt_DeferredLighting);
-
 		RETURN_FALSE_IF_FALSE(m_rhi->EndCommandBuffer(m_vkCmdBfr[0][0]));
 
 		CVulkanRHI::CommandBufferList cbrList{ m_vkCmdBfr[0][0] };
@@ -239,27 +256,7 @@ bool CRasterRender::on_update(float delta)
 		m_uiPass->Update(&updateData);
 	}
 	
-	// This code path does not work ATM because we are presenting outdated
-	// descriptors hence all meshed in the scene look to be updating on delayed
-	// descriptors when the camera moves
-	m_activeCmdBfrFreeFence = WaitForFinishIfNecessary(m_activeCmdBfrFreeFence);
-
-	// We are forcing a CPU-GPU sync here for now. Without this sync we 
-	// are rendering with outdated descriptor data.
-	//if (!m_rhi->WaitFence(m_vkFenceCmdBfrFree[m_swapchainIndex]))
-	//	return false;
-	//
-	//if (!m_rhi->ResetFence(m_vkFenceCmdBfrFree[m_swapchainIndex]))
-	//	return false;
-
-	if (m_rhi->GetRendererType() == CVulkanRHI::RendererType::Forward)
-	{
-		RenderForward();
-	}
-	else
-	{
-		RenderDeferred();
-	}
+	RenderFrame(m_rhi->GetRendererType());
 
 	if (m_pickObject)
 	{
@@ -274,7 +271,8 @@ bool CRasterRender::on_update(float delta)
 	CVulkanRHI::SemaphoreList signalList{ m_vksubmitCompleteSemaphore };
 	CVulkanRHI::SemaphoreList waitList{ m_activeAcquireSemaphore };
 	RETURN_FALSE_IF_FALSE(m_rhi->SubmitCommandBuffers(
-		&m_cmdBfrsInUse, &psfList, waitForFinish, &m_vkFenceCmdBfrFree[m_swapchainIndex], waitForFence, &signalList, &waitList));
+		&m_cmdBfrsInUse, &psfList, waitForFinish, VK_NULL_HANDLE/*&m_vkFenceCmdBfrFree[m_swapchainIndex]*/, 
+		waitForFence, &signalList, &waitList));
 
 	m_cmdBfrsInUse.clear();
 
@@ -497,8 +495,6 @@ bool CRasterRender::CreatePasses()
 	pipeline.enableBlending					= true;
 	pipeline.enableDepthTest				= false;
 	pipeline.enableDepthWrite				= false;
-	//RETURN_FALSE_IF_FALSE(m_uiForwardPass->Initalize(&renderData, pipeline));
-	//RETURN_FALSE_IF_FALSE(m_uiDeferredPass->Initalize(&renderData, pipeline));
 	RETURN_FALSE_IF_FALSE(m_uiPass->Initalize(&renderData, pipeline));
 
 	return true;
@@ -516,7 +512,7 @@ void CRasterRender::UpdateCamera(CCamera::UpdateData& p_updateData)
 	p_updateData.Q									= m_keys[(int)char('Q')].down;
 	p_updateData.E									= m_keys[(int)char('E')].down;
 	p_updateData.Shft								= (m_keys[160].down || m_keys[16].down);
-	p_updateData.jitter								= m_taa->GetJitterHelper()->ComputeJitter(m_frameCount);
+	p_updateData.jitter								= m_taaComputePass->GetJitterHelper()->ComputeJitter(m_frameCount);
 	m_primaryCamera->Update(p_updateData);
 
 	UpdateSceneGraphDependencies(p_updateData.timeDelta);
@@ -576,115 +572,90 @@ bool CRasterRender::DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkan
 	return true;
 }
 
-bool CRasterRender::RenderDeferred()
+bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 {
 	CPass::RenderData renderData{};
-	renderData.fixedAssets					= m_fixedAssets;
-	renderData.loadedAssets					= m_loadableAssets;
-	renderData.primaryDescriptors			= m_primaryDescriptors;
-	renderData.scIdx						= m_swapchainIndex;
-	renderData.sceneGraph					= m_sceneGraph;
-	renderData.rendererType					= m_rhi->GetRendererType();
+	renderData.fixedAssets = m_fixedAssets;
+	renderData.loadedAssets = m_loadableAssets;
+	renderData.primaryDescriptors = m_primaryDescriptors;
+	renderData.scIdx = m_swapchainIndex;
+	renderData.sceneGraph = m_sceneGraph;
 
 	//if (!m_staticShadowPass->ReuseShadowMap())
 	{
-		renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ShadowMap];
+		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ShadowMap];
 		RETURN_FALSE_IF_FALSE(m_staticShadowPass->Render(&renderData));
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 	}
 
-	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Skybox];
-	RETURN_FALSE_IF_FALSE(m_skyboxDeferredPass->Render(&renderData));
-	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-
-	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Deferred_GBuf];
-	RETURN_FALSE_IF_FALSE(m_deferredPass->Render(&renderData));
-	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-
-	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO];
-	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Render(&renderData));
-	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-
-	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO_Blur];
-	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Render(&renderData));
-	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-
-	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Deferred_Lighting];
-	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Render(&renderData));
-	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSR];
-	RETURN_FALSE_IF_FALSE(m_ssrComputePass->Render(&renderData));
-	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-
-	// placing debug draw here because I do not want the depth buffer to go through another layout barrier
-	// from depth stencil attachment to shader read used in ssao pass
-	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_DebugDraw];
-	if (m_debugDrawPass->Render(&renderData))
+	if (p_renderType == CVulkanRHI::RendererType::Forward)
 	{
+		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Skybox];
+		RETURN_FALSE_IF_FALSE(m_skyboxForwardPass->Render(&renderData));
+		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+
+		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Forward];
+		RETURN_FALSE_IF_FALSE(m_forwardPass->Render(&renderData));
+		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+	}
+	else
+	{
+		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Skybox];
+		RETURN_FALSE_IF_FALSE(m_skyboxDeferredPass->Render(&renderData));
+		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+
+		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Deferred_GBuf];
+		RETURN_FALSE_IF_FALSE(m_deferredPass->Render(&renderData));
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 	}
 
-	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ToneMapping];
-	RETURN_FALSE_IF_FALSE(m_toneMapPass->Render(&renderData));
-	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-
-	renderData.cmdBfr						= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_UI];
-	RETURN_FALSE_IF_FALSE(m_uiPass->Render(&renderData));
-	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-
-	return true;
-}
-
-bool CRasterRender::RenderForward()
-{
-	CPass::RenderData renderData{};
-	renderData.fixedAssets				= m_fixedAssets;
-	renderData.loadedAssets				= m_loadableAssets;
-	renderData.primaryDescriptors		= m_primaryDescriptors;
-	renderData.scIdx					= m_swapchainIndex;
-	renderData.sceneGraph				= m_sceneGraph;
-
-	//if (!m_staticShadowPass->ReuseShadowMap())
-	{
-		renderData.cmdBfr				= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ShadowMap];
-		RETURN_FALSE_IF_FALSE(m_staticShadowPass->Render(&renderData));
-		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-	}
-
-	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Skybox];
-	RETURN_FALSE_IF_FALSE(m_skyboxForwardPass->Render(&renderData));
-	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-
-	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Forward];
-	RETURN_FALSE_IF_FALSE(m_forwardPass->Render(&renderData));
-	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-
-	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO];
+	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO];
 	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO_Blur];
+	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO_Blur];
 	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+
+	if (p_renderType == CVulkanRHI::RendererType::Deferred)
+	{
+		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Deferred_Lighting];
+		RETURN_FALSE_IF_FALSE(m_deferredLightPass->Render(&renderData));
+		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+
+		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSR];
+		RETURN_FALSE_IF_FALSE(m_ssrComputePass->Render(&renderData));
+		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+	}
+
+	if (m_taaComputePass->IsEnabled())
+	{
+		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_TAA];
+		RETURN_FALSE_IF_FALSE(m_taaComputePass->Render(&renderData));
+		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+	}
 
 	// placing debug draw here because I do not want the depth buffer to go through another layout barrier
 	// from depth stencil attachment to shader read used in SSAO pass
-	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_DebugDraw];
+	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_DebugDraw];
 	if (m_debugDrawPass->Render(&renderData))
 	{
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 	}
 
-	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ToneMapping];
+	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ToneMapping];
 	RETURN_FALSE_IF_FALSE(m_toneMapPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+	
+	//renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_CopyCompute];
+	//RETURN_FALSE_IF_FALSE(m_copyComputePass->Render(&renderData));
+	//m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-	renderData.cmdBfr					= m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_UI];
+	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_UI];
 	RETURN_FALSE_IF_FALSE(m_uiPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-	return true;
+	return false;
 }
 
 // Placing the notes here until I can find the best way to place them in my read me

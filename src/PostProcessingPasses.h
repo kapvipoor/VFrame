@@ -3,24 +3,21 @@
 #include "Pass.h"
 #include "core/UI.h"
 
-class CTAA : public CUIParticipant
+class CTAAComputePass : public CPass, CUIParticipant
 {
 public:
-	CTAA();
-	~CTAA();
-
 	class CJitterHelper
 	{
-		friend CTAA;
+		friend CTAAComputePass;
 	public:
 		enum JitterMode
 		{
-			 None			= 0
-			,Uniform2x		= 1
-			,Hammersley4x	= 2
-			,Hammersley8x	= 3
-			,Hammersley16x	= 4
-			,jm_max
+			None = 0
+			, Uniform2x = 1
+			, Hammersley4x = 2
+			, Hammersley8x = 3
+			, Hammersley16x = 4
+			, jm_max
 		};
 
 		CJitterHelper();
@@ -40,6 +37,18 @@ public:
 		// Refer - https://graphics.stanford.edu/~seander/bithacks.html
 		inline float RadicalInverseBase2(uint32_t p_bits);
 	};
+
+	CTAAComputePass(CVulkanRHI* p_rhi);
+	~CTAAComputePass();
+
+	virtual bool CreateRenderpass(RenderData*) override;
+	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
+
+	virtual bool Update(UpdateData*) override;
+	virtual bool Render(RenderData*) override;
+	virtual void Destroy() override;
+
+	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 
 	virtual void Show(CVulkanRHI* p_rhi) override;
 

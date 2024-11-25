@@ -41,6 +41,8 @@ private:
 		, cb_ToneMapping			= 9
 		, cb_Skybox					= 10
 		, cb_SSR					= 11
+		, cb_TAA					= 12
+		, cb_CopyCompute			= 13
 		, cb_max
 	};
 
@@ -87,11 +89,12 @@ private:
 	CSSAOComputePass*					m_ssaoComputePass;
 	CSSAOBlurPass*						m_ssaoBlurPass;
 	CSSRComputePass*					m_ssrComputePass;
+	CTAAComputePass*					m_taaComputePass;
 	CDeferredLightingPass*				m_deferredLightPass;
 	CDebugDrawPass*						m_debugDrawPass;
 	CToneMapPass*						m_toneMapPass;
+	CCopyComputePass*					m_copyComputePass;
 	CUIPass*							m_uiPass;
-	CTAA*								m_taa;
 	
 	VkSemaphore GetAvailableAcquireSemaphore(VkSemaphore p_in);
 	VkFence WaitForFinishIfNecessary(VkFence p_in);
@@ -105,6 +108,6 @@ private:
 	void UpdateSceneGraphDependencies(float p_delta);
 
 	bool DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkanRHI::CommandBuffer& p_cmdBfr);
-	bool RenderForward();
-	bool RenderDeferred();
+
+	bool RenderFrame(CVulkanRHI::RendererType p_renderType);
 };

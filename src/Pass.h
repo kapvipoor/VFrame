@@ -31,6 +31,7 @@ public:
 
 	CPass(CVulkanRHI* p_core)
 		: m_rhi(p_core)
+		, m_isEnabled(true)
 	{}
 	~CPass() {}
 
@@ -56,7 +57,11 @@ public:
 
 	void SetFrameBuffer(CVulkanRHI::FrameBuffer& p_fb) { m_frameBuffer = p_fb; }
 
+	void Enable(bool p_enable) { m_isEnabled = p_enable; }
+	bool IsEnabled() { return m_isEnabled; }
+
 protected:
+	bool							m_isEnabled;
 	CVulkanRHI*						m_rhi;
 	CVulkanRHI::FrameBuffer			m_frameBuffer;
 	CVulkanRHI::Pipeline			m_pipeline;

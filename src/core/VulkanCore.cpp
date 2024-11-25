@@ -1269,11 +1269,12 @@ bool CVulkanCore::WaitToFinish(VkQueue p_queue)
 
 void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr)
 {
-	if (p_new == p_image.descInfo.imageLayout)
+	p_image.descInfo.imageLayout = p_new;
+	if (p_new == p_image.curLayout)
 		return;
 
-	IssueImageLayoutBarrier(p_image.descInfo.imageLayout, p_new, p_image.layerCount, p_image.image, p_image.usage, p_cmdBfr);
-	p_image.descInfo.imageLayout = p_new;
+	IssueImageLayoutBarrier(p_image.curLayout, p_new, p_image.layerCount, p_image.image, p_image.usage, p_cmdBfr);
+	p_image.curLayout = p_new;
 }
 
 void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_new, 
@@ -1508,6 +1509,22 @@ void CVulkanCore::DestroyImageView(VkImageView p_imageView)
 void CVulkanCore::DestroyImage(VkImage p_image)
 {
 	vkDestroyImage(m_vkDevice, p_image, nullptr);
+}
+
+void CVulkanCore::CopyImage(VkCommandBuffer p_cmdBfr, VkImage p_src, VkImageLayout p_srclayout, 
+	VkImage p_dest, VkImageLayout p_destLayout, uint32_t p_width, uint32_t p_height)
+{
+	uint32_t regionCount = 1;
+	// Assuming few things here. Will keep improving this based on need
+	VkImageCopy imageCopyRegion{};
+	imageCopyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	imageCopyRegion.srcSubresource.layerCount = 1;
+	imageCopyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	imageCopyRegion.dstSubresource.layerCount = 1;
+	imageCopyRegion.extent.width = p_width;
+	imageCopyRegion.extent.height = p_height;
+	imageCopyRegion.extent.depth = 1;
+	vkCmdCopyImage(p_cmdBfr, p_src, p_srclayout, p_dest, p_destLayout, 1, &imageCopyRegion);
 }
 
 bool CVulkanCore::CreateSampler(Sampler& p_sampler)

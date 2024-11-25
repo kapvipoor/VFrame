@@ -6,7 +6,7 @@
 
 #include "Common.h"
 
-layout (local_size_x = 8, local_size_y = 8) in;
+layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) in;
 void main()
 {
     // This is the maximum distance we wish the reflected ray to be
@@ -26,7 +26,7 @@ void main()
     // between samples if too thin.
     float thickness = g_Info.ssrThickness;
 
-    vec2 texSize = g_Info.renderResolution;
+    vec2 texSize = vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
     vec2 texCoord = vec2(gl_GlobalInvocationID.xy)/texSize;
 
     vec4 uv = vec4(0.0);

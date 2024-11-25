@@ -127,7 +127,7 @@ bool CVulkanRHI::CreateTexture(Buffer& p_staging, Image& p_Image,
 }
 
 bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_t p_height, 
-	VkImageLayout p_iniLayout, VkImageUsageFlags p_usage, Image& p_renderTarget, std::string p_DebugName)
+	VkImageLayout p_layout, VkImageUsageFlags p_usage, Image& p_renderTarget, std::string p_DebugName)
 {
 	VkFormatFeatureFlags feature;
 	if (p_usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
@@ -144,9 +144,10 @@ bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_
 
 	p_renderTarget.usage							= p_usage;
 	p_renderTarget.format							= p_format;
-	p_renderTarget.descInfo.imageLayout				= p_iniLayout;
+	p_renderTarget.descInfo.imageLayout				= p_layout;
 	p_renderTarget.height							= p_height;
 	p_renderTarget.width							= p_width;
+	p_renderTarget.curLayout						= VK_IMAGE_LAYOUT_UNDEFINED;
 
 	VkImageCreateInfo imageCreateInfo{};
 	imageCreateInfo.sType							= VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -173,6 +174,11 @@ bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_
 	SetDebugName((uint64_t)p_renderTarget.image, VK_OBJECT_TYPE_IMAGE, (p_DebugName + "_rt").c_str());
 
 	return true;
+}
+
+void CVulkanRHI::CopyImage(CommandBuffer p_cmdBfr, CVulkanRHI::Image p_src, CVulkanRHI::Image p_dest)
+{
+	CVulkanCore::CopyImage(p_cmdBfr, p_src.image, p_src.descInfo.imageLayout, p_dest.image, p_dest.descInfo.imageLayout, p_src.width, p_src.height);
 }
 
 void CVulkanRHI::FreeMemoryDestroyBuffer(Buffer& p_buffer)

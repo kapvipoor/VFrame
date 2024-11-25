@@ -251,6 +251,7 @@ public:
 		, rt_PrimaryColor			= 7
 		, rt_DeferredRoughMetal		= 8
 		, rt_SSReflection			= 9
+		, rt_Prev_PrimaryColor		= 10
 		, rt_max
 	};
 

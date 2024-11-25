@@ -4,8 +4,8 @@
 #define RENDER_RESOLUTION_X						1920
 #define RENDER_RESOLUTION_Y						1080
 
-#define THREAD_GROUP_SIZE_X						4
-#define THREAD_GROUP_SIZE_Y						4
+#define THREAD_GROUP_SIZE_X						8
+#define THREAD_GROUP_SIZE_Y						8
 #define THREAD_GROUP_SIZE_Z						1
 
 #define FRAME_BUFFER_COUNT                      2
@@ -27,7 +27,8 @@
 #define SAMPLE_PRIMARY_COLOR				    7
 #define SAMPLE_DEFERRED_ROUGH_METAL		        8
 #define SAMPLE_SS_REFLECTION    		        9
-#define SAMPLE_MAX_RENDER_TARGETS			    10
+#define SAMPLE_PREV_PRIMARY_COLOR    		    10
+#define SAMPLE_MAX_RENDER_TARGETS			    11
 
 #define STORE_POSITION					        0
 #define STORE_NORMAL						    1
@@ -37,7 +38,8 @@
 #define STORE_PRIMARY_COLOR				        5
 #define STORE_DEFERRED_ROUGH_METAL		        6
 #define STORE_SS_REFLECTION     		        7
-#define STORE_MAX_RENDER_TARGETS			    8
+#define STORE_PREV_PRIMARY_COLOR   		        8
+#define STORE_MAX_RENDER_TARGETS			    9
 
 #define SHADOW_BIAS                             0.005
 

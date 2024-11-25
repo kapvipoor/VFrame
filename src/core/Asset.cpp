@@ -1069,7 +1069,7 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	//m_scenePaths.push_back(g_AssetPath/"shadow_test_3.gltf");																		//1
 	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");						//2
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
-	//defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
+	defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
 	//defaultScenePaths.push_back(g_AssetPath / "glTFSampleModels/2.0/Sponza/glTF/Sponza.gltf");
 	//defaultScenePaths.push_back(g_AssetPath/"glTF-Sample-Models/2.0/Suzanne/glTF/Suzanne.gltf");											//4													//5
 	defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf");
@@ -1755,7 +1755,8 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	VkImageUsageFlags sample_depth = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 	VkImageUsageFlags sample_storage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 	VkImageUsageFlags sample_storage_color = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
+	VkImageUsageFlags sample_storage_color_src = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	VkImageUsageFlags sample_storage_color_dest = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryDepth,			VK_FORMAT_D32_SFLOAT_S8_UINT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	"primary_depth",		sample_depth));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Position,				VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"position",				sample_storage_color));
@@ -1764,9 +1765,10 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAO,					VK_FORMAT_R32_SFLOAT,			fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"ssao",					sample_storage));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAOBlur,				VK_FORMAT_R32_SFLOAT,			fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"ssao_blur",			sample_storage));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,	VK_FORMAT_D32_SFLOAT_S8_UINT,	4096, 4096,					 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	"directional_shadow",	sample_depth));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"primary_color",		sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"primary_color",		sample_storage_color_src));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DeferredRoughMetal,		VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"deferred_RM",			sample_storage_color));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"ss_reflection",		sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Prev_PrimaryColor,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"prev_primary_color",	sample_storage_color_dest));
 
 	return true;
 }
@@ -1833,6 +1835,8 @@ std::string CRenderTargets::GetRenderTargetIDinString(RenderTargetId p_id)
 		return "DeferredRoughMetal";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_SSReflection)
 		return "Screen Space Reflection (UVs)";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_Prev_PrimaryColor)
+		return "Previous Color (Temporal)";
 	else
 		return "Error Render Target";
 }
@@ -2121,6 +2125,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 		storeRenderTargetsDesInfoList[STORE_PRIMARY_COLOR]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_PrimaryColor).descInfo;
 		storeRenderTargetsDesInfoList[STORE_DEFERRED_ROUGH_METAL]	= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_DeferredRoughMetal).descInfo;
 		storeRenderTargetsDesInfoList[STORE_SS_REFLECTION]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSReflection).descInfo;
+		storeRenderTargetsDesInfoList[STORE_PREV_PRIMARY_COLOR]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Prev_PrimaryColor).descInfo;
 	}
 
 	// read only texture desc info
@@ -2165,7 +2170,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 
 	for (uint32_t i = 0; i < FRAME_BUFFER_COUNT; i++)
 	{
-		BindlessWrite(i, BindingDest::bd_Gloabl_Uniform, &fixedBuf->GetBuffer(i).descInfo);
+		BindlessWrite(i, BindingDest::bd_Gloabl_Uniform, &fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_0 + i).descInfo);
 		BindlessWrite(i, BindingDest::bd_Linear_Sampler, &(*samplers)[s_Linear].descInfo);
 		BindlessWrite(i, BindingDest::bd_ObjPicker_Storage, &fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo);
 		BindlessWrite(i, BindingDest::bd_SSAOKernel_Storage, &readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo);
