@@ -62,7 +62,9 @@ public:
     virtual void Update(UpdateData data);
 
     const nm::float4x4 GetViewProj() const { return m_viewProj; }
-    const nm::float4x4 GetView() const { return m_jitteredView; }
+    const nm::float4x4 GetPreViewProj() const { return m_preViewProj; }
+    const nm::float4x4 GetInvViewProj() const { return m_invViewProj; }
+    const nm::float4x4 GetView() const { return m_view; }
     const nm::float4x4 GetProjection() const { return m_jitteredProjection; }
     nm::float3 GetLookFrom() const { return m_lookFrom.xyz(); }
     const nm::float3 GetLookAt() const { return m_lookAt; }
@@ -86,10 +88,11 @@ protected:
     nm::float3                      m_lookAt;
 
     nm::float4x4                    m_view;
-    nm::float4x4                    m_jitteredView;
     nm::float4x4                    m_projection;
     nm::float4x4                    m_jitteredProjection;
     nm::float4x4                    m_viewProj;
+    nm::float4x4                    m_invViewProj;
+    nm::float4x4                    m_preViewProj;
 
     nm::float4 PolarToVector(float yaw, float pitch);
     nm::float4x4 LookAtRH(nm::float4 eyePos, nm::float4 lookAt);

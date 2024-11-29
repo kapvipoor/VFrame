@@ -14,11 +14,13 @@ layout (location = 1) in vec2 inUV;
 layout (location = 2) in vec3 inNormal;
 layout (location = 3) in vec3 inTangent;
 layout (location = 4) in vec3 inBiTangent;
+layout (location = 5) in vec4 inPosinClipSpace;
+layout (location = 6) in vec4 inPrevPosinClipSpace;
 
 layout (location = 0) out vec4 outPosition;
 layout (location = 1) out vec4 outNormal;
 layout (location = 2) out vec4 outAlbedo;
-layout (location = 3) out vec2 outRoughMetal;
+layout (location = 3) out vec4 outRoughMetalMotion;
 
 #define DISPLAY_MOUSE_POINTER
 
@@ -42,13 +44,29 @@ void PickMeshID()
 void main()
 {
 	Material mat 							= g_materials.data[g_pushConstant.material_id];
-	// if roughness is 0, NDF is 0 and so is the entire cook-torrence factor withotu specular or diffuse
-	outRoughMetal							= vec2(mat.roughness, mat.metallic);//vec2(max(mat.roughness, 0.1), mat.metallic);	
-	outRoughMetal							= GetRoughMetalPBR(mat.roughMetal_id, inUV, outRoughMetal);
+	// if roughness is 0, NDF is 0 and so is the entire cook-Torrence factor without specular or diffuse
+	outRoughMetalMotion.xy					= vec2(mat.roughness, mat.metallic);//vec2(max(mat.roughness, 0.1), mat.metallic);	
+	outRoughMetalMotion.xy					= GetRoughMetalPBR(mat.roughMetal_id, inUV, outRoughMetalMotion.xy).xy;
 
 	outPosition 							= inPosition;
 	outAlbedo 								= GetColor(mat.color_id, inUV); // vec4(roughMetal.x, roughMetal.y, 1.0, 1.0); //
 	mat3 TBN 								= mat3(inTangent, inBiTangent, inNormal);	
 	outNormal 								= vec4(GetNormal(TBN, mat.normal_id, inUV, inNormal), 1.0);
+
+	// Calculate motion vectors
+	{
+		// Perspective divide both positions
+		vec2 posinClipSpace 					= inPosinClipSpace.xy/inPosinClipSpace.w;
+		vec2 prevPosinClipSpace 				= inPrevPosinClipSpace.xy/inPrevPosinClipSpace.w;
+
+		// Compute difference and convert to UVs
+		vec2 velocity							= (prevPosinClipSpace - posinClipSpace);
+		velocity								= (velocity * vec2(0.5, -0.5)) + 0.5;
+
+		// now correct the motion vectors with the jitter that has been applied to
+		// the current view-projection matrix only - g_Info.camViewProj
+		velocity								-= g_Info.taaJitterOffset;
+		outRoughMetalMotion.zw					= velocity;
+	}
 	//PickMeshID();
 }

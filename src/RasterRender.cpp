@@ -165,11 +165,10 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Position);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Normal);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Albedo);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSAO);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSAOBlur);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSAO_Blur);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_vkCmdBfr[0][0], CRenderTargets::rt_DirectionalShadowDepth);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PrimaryColor);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_DeferredRoughMetal);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_RoughMetal_Motion);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSReflection);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Prev_PrimaryColor);
 		
@@ -206,15 +205,17 @@ bool CRasterRender::on_update(float delta)
 	
 	{
 		CFixedBuffers::PrimaryUniformData uniformData = m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
-		uniformData.elapsedTime						= delta;
 		uniformData.cameraInvView					= nm::inverse(m_primaryCamera->GetView());
 		uniformData.cameraLookFrom					= m_primaryCamera->GetLookFrom();
 		uniformData.cameraProj						= m_primaryCamera->GetProjection();
 		uniformData.cameraView						= m_primaryCamera->GetView();
 		uniformData.cameraViewProj					= m_primaryCamera->GetViewProj();
+		uniformData.cameraInvViewProj				= m_primaryCamera->GetInvViewProj();
+		uniformData.cameraPreViewProj				= m_primaryCamera->GetPreViewProj();
 		uniformData.mousePos						= nm::float2((float)mousepos_x, (float)mousepos_y);
-		uniformData.renderRes						= nm::float2((float)m_rhi->GetRenderWidth(), (float)m_rhi->GetRenderHeight());
 		uniformData.skyboxModelView					= m_primaryCamera->GetView();
+		uniformData.taaResolveWeight				= m_taaComputePass->GetResolveWeight();
+		uniformData.taaJitterOffset					= m_taaComputePass->GetJitterHelper()->GetJitterOffset();
 
 		FixedUpdateData fixedUpdate{};
 		fixedUpdate.primaryUniData					= &uniformData;
@@ -253,6 +254,7 @@ bool CRasterRender::on_update(float delta)
 		m_deferredLightPass->Update(&updateData);
 		m_debugDrawPass->Update(&updateData);
 		m_toneMapPass->Update(&updateData);
+		m_taaComputePass->Update(&updateData);
 		m_uiPass->Update(&updateData);
 	}
 	
@@ -489,6 +491,10 @@ bool CRasterRender::CreatePasses()
 	pipeline.pipeLayout						= primaryLayout;
 	RETURN_FALSE_IF_FALSE(m_toneMapPass->Initalize(&renderData, pipeline));
 
+	pipeline = CVulkanRHI::Pipeline{};
+	pipeline.pipeLayout = primaryLayout;
+	RETURN_FALSE_IF_FALSE(m_taaComputePass->Initalize(&renderData, pipeline));
+
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= uiLayout;
 	pipeline.cullMode						= VK_CULL_MODE_NONE;
@@ -646,10 +652,6 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ToneMapping];
 	RETURN_FALSE_IF_FALSE(m_toneMapPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-	
-	//renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_CopyCompute];
-	//RETURN_FALSE_IF_FALSE(m_copyComputePass->Render(&renderData));
-	//m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
 	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_UI];
 	RETURN_FALSE_IF_FALSE(m_uiPass->Render(&renderData));

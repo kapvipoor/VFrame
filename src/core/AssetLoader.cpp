@@ -1,5 +1,6 @@
 #include "AssetLoader.h"
 #include "Global.h"
+#include "../SharedGlobal.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "external/tiny_obj_loader.h"
@@ -55,13 +56,13 @@ void GenerateSphere(int p_stackCount, int p_sectorCount, RawSphere& p_sphere, fl
 
 	float x, y, z, xy;									// vertex position
 	
-	float sectorStep = 2 * nm::PI / p_sectorCount;
-	float stackStep = nm::PI / p_stackCount;
+	float sectorStep = 2 * (float)PI / p_sectorCount;
+	float stackStep = (float)PI / p_stackCount;
 	float sectorAngle, stackAngle;
 
 	for (int i = 0; i <= p_stackCount; ++i)
 	{
-		stackAngle = nm::PI / 2 - i * stackStep;        // starting from pi/2 to -pi/2
+		stackAngle = (float)PI / 2 - i * stackStep;        // starting from pi/2 to -pi/2
 		xy = p_radius * cosf(stackAngle);             // r * cos(u)
 		z = p_radius * sinf(stackAngle);              // r * sin(u)
 

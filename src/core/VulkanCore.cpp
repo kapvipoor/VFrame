@@ -1545,7 +1545,7 @@ bool CVulkanCore::CreateSampler(Sampler& p_sampler)
 		samplerInfo.maxAnisotropy = p_sampler.maxAnisotropy;
 	}
 
-	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+	samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
 	samplerInfo.unnormalizedCoordinates = VK_FALSE;
 
 	samplerInfo.compareEnable = VK_FALSE;
@@ -1554,8 +1554,8 @@ bool CVulkanCore::CreateSampler(Sampler& p_sampler)
 	// mip mapping
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	samplerInfo.mipLodBias = 0.0f;
-	samplerInfo.minLod = -1000.0f;
-	samplerInfo.maxLod = 1000.0f;
+	samplerInfo.minLod = 0.0f;
+	samplerInfo.maxLod = 1.0f;
 
 	VkResult res = vkCreateSampler(m_vkDevice, &samplerInfo, nullptr, &p_sampler.descInfo.sampler);
 	if (res != VK_SUCCESS)

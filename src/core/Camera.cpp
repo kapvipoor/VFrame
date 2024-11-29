@@ -138,6 +138,8 @@ bool CPerspectiveCamera::Init(InitData* p_initData)
 
 void CPerspectiveCamera::Update(UpdateData p_data)
 {
+    m_preViewProj = m_projection * m_view;
+
     if (p_data.moveCamera == true)
     {
         m_yaw -= p_data.mouseDelta[0] / 654.f;
@@ -148,10 +150,11 @@ void CPerspectiveCamera::Update(UpdateData p_data)
     nm::float4 dir = PolarToVector(m_yaw, m_pitch) * m_dist;
     LookAt(m_lookFrom, m_lookFrom - dir);
 
-    m_jitteredProjection = m_projection;
-    m_jitteredView = m_view * p_data.jitter;
-    m_viewProj = m_jitteredProjection * m_jitteredView;
+    m_jitteredProjection = m_projection * p_data.jitter;
+    
+    m_viewProj = m_jitteredProjection * m_view;
 
+    m_invViewProj = nm::inverse(m_projection * m_view);
 
     // TODO
     //CCamera::Update(p_data);

@@ -17,10 +17,13 @@ layout (location = 2) in vec3 inTangentinViewSpace;
 layout (location = 3) in vec3 inBiTangentinViewSpace;
 layout (location = 4) in vec4 inPosinLightSpace;
 layout (location = 5) in vec4 inPosinViewSpace;
+layout (location = 6) in vec4 inPosinClipSpace;
+layout (location = 7) in vec4 inPrevPosinClipSpace;
 
 layout (location = 0) out vec4 outPosition;
 layout (location = 1) out vec4 outNormal;
 layout (location = 2) out vec4 outFragColor;
+layout (location = 3) out vec4 outRoughMetalMotion;
 
 void PickMeshID()
 {
@@ -168,8 +171,24 @@ void main()
 	vec3 ambient 							= vec3(g_Info.pbrAmbientFactor) * color.xyz * ssaoFactor;
 	vec3 finalColor							= ambient + Lo;
 
-	// Reinhard Operator for Tonemapping (moving from HDR to LDR)
+	// Reinhard Operator for Tone-mapping (moving from HDR to LDR)
 	finalColor 							    = finalColor / (finalColor + vec3(1.0));
+
+	// Calculate motion vectors
+	{
+		// Perspective divide both positions
+		vec2 posinClipSpace 					= inPosinClipSpace.xy/inPosinClipSpace.w;
+		vec2 prevPosinClipSpace 				= inPrevPosinClipSpace.xy/inPrevPosinClipSpace.w;
+
+		// Compute difference and convert to UVs
+		vec2 velocity							= (prevPosinClipSpace - posinClipSpace);
+		velocity								= (velocity * vec2(0.5, -0.5)) + 0.5;
+
+		// now correct the motion vectors with the jitter that has been passed to
+		// the current view-projection matrix only - g_Info.camViewProj
+		velocity								-= g_Info.taaJitterOffset;
+		outRoughMetalMotion.zw					= velocity;
+	}
 
 	outPosition								= inPosinViewSpace;				// for ssao
 	outNormal								= vec4(N, 0.0f);				// for ssao

@@ -1,4 +1,7 @@
 #include "WinCore.h"
+#include "../../external/imgui/backends/imgui_impl_win32.h"
+// Needs to be declared outside of the cauldron namespace or it won't resolve properly
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 CWinCore::WindowData CWinCore::s_Window = CWinCore::WindowData{};
 
@@ -59,6 +62,10 @@ bool CWinCore::initialize()
         m_keystate[i] = new short[256];
         memset(m_keystate[i], 0, sizeof(short) * 256);
     }
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui_ImplWin32_Init(CWinCore::s_Window.handle);
 
     return true;
 }
@@ -184,6 +191,8 @@ bool CWinCore::run(HINSTANCE p_instance)
 
         m_current_keystate ^= 1;
 
+        ImGui_ImplWin32_NewFrame();
+
         // User update
         if (!on_update(delta))
         {
@@ -217,6 +226,8 @@ void CWinCore::GetCurrentMousePosition(int& x, int& y)
 
 void CWinCore::shutdown()
 {
+    ImGui_ImplWin32_Shutdown();
+
     for (int i = 0; i < 2; ++i)
     {
         delete[] m_keystate[i];
@@ -245,6 +256,8 @@ LRESULT CWinCore::window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         //}
     default:;
     }
+    
+    ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam);
 
     return DefWindowProc(hwnd, msg, wparam, lparam);
 }

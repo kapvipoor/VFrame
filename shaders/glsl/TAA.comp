@@ -6,30 +6,74 @@
 
 #include "Common.h"
 
-vec3 Resolve(ivec2 xy)
+// Fixes ghosting when the camera is translation-al static but is rotating around.
+// We do this by checking for the current pixel in the history buffer and if found,
+// we blend it with the current pixel
+vec2 ComputeReprojectedUV(ivec2 in_xy)
 {
+    float z = imageLoad(g_RT_StorageImages[STORE_PRIMARY_DEPTH], in_xy).x;
+
+    vec2 uv = vec2(float(in_xy.x)/DISPLAY_RESOLUTION_X, float(in_xy.y)/DISPLAY_RESOLUTION_Y);
+    float x = (uv.x * 2.0) - 1.0;
+    float y = ((1.0 - uv.y) * 2.0) - 1.0;
+    vec4 projPos = vec4(x,y,z,1.0);
+    vec4 worldPos = g_Info.camInvViewProj * projPos;
+    
+    vec4 prePos = g_Info.camPreViewProj * worldPos;
+    prePos.xyz /= prePos.w;
+    vec2 reprojUV = (prePos.xy * vec2(0.5, -0.5)) + 0.5;
+
+    return reprojUV;
+}
+
+// However, when the camera moves, surfaces that were previously occluded start showing up. 
+// Since they do not exist in the history buffer, blending against them makes no sense. Hence
+// the artifacts now show up as steaks. This is solved by color clamping. We do this by sampling
+// 3x3 neighbors in the current frame and clamping the history value to these limits. But ideally
+// we need to reject those values instead of clamping them. But clamping nonetheless gets the job done.
+vec3 ColorClampPrevious(vec2 in_uv, vec3 preColor)
+{
+    vec3 minColor = vec3(9999.0);
+    vec3 maxColor = vec3(-9999.0);
+    for(int i = -1; i < 1; i++)
+    {
+        for(int j = -1; j < 1; j++)
+        {
+            vec2 uv = in_uv + vec2(float(i)/DISPLAY_RESOLUTION_X, float(j)/DISPLAY_RESOLUTION_Y);
+            vec3 curColor = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_COLOR], g_LinearSampler), uv).xyz;
+            minColor = min(minColor, curColor);
+            maxColor = max(maxColor, curColor);
+        }
+    }
+    return clamp(preColor, minColor, maxColor);
+}
+
+// Resolve is lerp blend between the current color buffer with the previous color 
+// buffer. This could help resolving some aliasing and the jittering process,
+// but only work as long as the camera has not moved. However Ghosting occurs.
+vec3 Resolve(vec2 uv, vec2 reprojUV)
+{   
     // sample pixel color from current color buffer
-    vec3 curColor = imageLoad(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy).xyz;
-
+    vec3 curColor = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_COLOR], g_LinearSampler), uv).xyz;
+    
     // sample pixel color from previous color buffer
-
+    vec3 prevColor = texture(sampler2D(g_RT_SampledImages[SAMPLE_PREV_PRIMARY_COLOR], g_LinearSampler), reprojUV).xyz;
+    prevColor = ColorClampPrevious(uv, prevColor);
+    
     // linear interpolate between current and previous colors based on a weight
     // tutorial hard-codes this to 0.1, but I ll pass this as TAA_Resolve_Weight
-    return curColor;
+    return mix(curColor, prevColor, g_Info.taaResolveWeight);
 }
 
 layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) in;
 void main()
 {
-    // calculating the UV for this thread
-    // might not be needed for now
-    //vec2 uv = vec2(gl_GlobalInvocationID.x/DISPLAY_RESOLUTION_X, gl_GlobalInvocationID.y/DISPLAY_RESOLUTION_Y);
+    vec2 uv = vec2(float(gl_GlobalInvocationID.x)/DISPLAY_RESOLUTION_X, float(gl_GlobalInvocationID.y)/DISPLAY_RESOLUTION_Y);
 
-    vec3 finalColor = Resolve(ivec2(gl_GlobalInvocationID.xy));
+    vec2 reprojectedUV = ComputeReprojectedUV(ivec2(gl_GlobalInvocationID.xy));
 
-    // for now, we ll write back the color to the current color buffer we are sampling from
-    // chances are we might want to write to other buffer incase we are performing
-    // any neighbor sampling. 
+    vec3 finalColor = Resolve(uv, reprojectedUV);
+ 
     imageStore(g_RT_StorageImages[STORE_PRIMARY_COLOR], ivec2(gl_GlobalInvocationID.xy), vec4(finalColor, 1.0));
 }
 

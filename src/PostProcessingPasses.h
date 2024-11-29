@@ -3,6 +3,22 @@
 #include "Pass.h"
 #include "core/UI.h"
 
+class CToneMapPass : public CPass
+{
+public:
+	CToneMapPass(CVulkanRHI*);
+	~CToneMapPass();
+
+	virtual bool CreateRenderpass(RenderData*) override;
+	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
+
+	virtual bool Update(UpdateData*) override;
+	virtual bool Render(RenderData*) override;
+	virtual void Destroy() override;
+
+	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+};
+
 class CTAAComputePass : public CPass, CUIParticipant
 {
 public:
@@ -24,10 +40,12 @@ public:
 		~CJitterHelper() {}
 
 		nm::float4x4 ComputeJitter(const uint64_t p_frameCount);
+		nm::float2 GetJitterOffset() { return m_jitterOffset; }
 
 	private:
 		JitterMode m_jitterMode;
 		float m_jitterScale;
+		nm::float2 m_jitterOffset;
 
 		// Returns a single 2D point in a Hammersley sequence of length "numSamples", using base 1 and base 2
 		// Refer - https://mathworld.wolfram.com/HammersleyPointSet.html
@@ -53,7 +71,11 @@ public:
 	virtual void Show(CVulkanRHI* p_rhi) override;
 
 	CJitterHelper* GetJitterHelper() { return m_jitterHelper; }
+	float GetResolveWeight() { return m_resolveWeight; }
 
 private:
 	CJitterHelper* m_jitterHelper;
+
+	float m_resolveWeight;
+
 };

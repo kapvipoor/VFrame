@@ -37,5 +37,5 @@ void main()
     }
 
     occulusion                      = 1.0 - (occulusion / g_Info.ssaoKernelSize);
-    imageStore(g_RT_StorageImages[STORE_SSAO], xy, vec4(occulusion, 0.0, 0.0, 0.0));
+    imageStore(g_RT_StorageImages[STORE_SSAO_AND_BLUR], xy, vec4(occulusion, 0.0, 0.0, 0.0));
 }

@@ -188,14 +188,15 @@ public:
 
 	struct PrimaryUniformData
 	{
-		float						elapsedTime;
+		float						UNASSIGINED_float;
 		nm::float3					cameraLookFrom;
 		nm::float4x4				cameraViewProj;
+		nm::float4x4				cameraInvViewProj;
+		nm::float4x4				cameraPreViewProj;
 		nm::float4x4				cameraProj;
 		nm::float4x4				cameraView;
 		nm::float4x4				cameraInvView;
 		nm::float4x4				skyboxModelView;
-		nm::float2					renderRes;
 		nm::float2					mousePos;
 		nm::float2					ssaoNoiseScale;
 		float						ssaoKernelSize;
@@ -208,7 +209,8 @@ public:
 		float						ssrResolution;
 		float						ssrThickness;
 		float						ssrSteps;
-		float						unassigned;
+		float						taaResolveWeight;
+		nm::float2					taaJitterOffset;
 	};
 
 	CFixedBuffers();
@@ -245,13 +247,12 @@ public:
 		, rt_Position				= 1
 		, rt_Normal					= 2
 		, rt_Albedo					= 3
-		, rt_SSAO					= 4
-		, rt_SSAOBlur				= 5
-		, rt_DirectionalShadowDepth	= 6
-		, rt_PrimaryColor			= 7
-		, rt_DeferredRoughMetal		= 8
-		, rt_SSReflection			= 9
-		, rt_Prev_PrimaryColor		= 10
+		, rt_SSAO_Blur				= 4
+		, rt_DirectionalShadowDepth	= 5
+		, rt_PrimaryColor			= 6
+		, rt_RoughMetal_Motion		= 7
+		, rt_SSReflection			= 8
+		, rt_Prev_PrimaryColor		= 9
 		, rt_max
 	};
 

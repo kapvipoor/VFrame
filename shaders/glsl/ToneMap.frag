@@ -13,16 +13,16 @@ layout (location = 0) out vec4 outFragColor;
 
 void main()
 {
-    float ssaoFactor                    = 1.0f;
+    float ssaoFactor = 1.0f;
     if(g_Info.enabelSSAO == 1)
 	{
-		ssaoFactor                      = GetSSAOBlur(ivec2(gl_FragCoord.xy));
+		ssaoFactor = imageLoad(g_RT_StorageImages[STORE_SSAO_AND_BLUR], ivec2(gl_FragCoord.xy)).y;
 	}
 
     vec4 reflectedUV = imageLoad(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_FragCoord.xy));
-    vec3 reflectedColor = SamplePrimaryColor(reflectedUV.xy).xyz;
-
-    vec3 color                          = (SamplePrimaryColor(inUV).xyz) * ssaoFactor; 
+    vec3 reflectedColor = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_COLOR], g_LinearSampler), reflectedUV.xy).xyz;
+    vec3 color = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_COLOR], g_LinearSampler), inUV).xyz;
+    color *=  ssaoFactor;
     color += mix(vec3(0.0), reflectedColor, reflectedUV.a);
 
     // Reinhard Operator for Tonemapping (moving from HDR to LDR)

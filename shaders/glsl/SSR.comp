@@ -36,7 +36,7 @@ void main()
     vec4 positionFrom = texture(sampler2D(g_RT_SampledImages[SAMPLE_POSITION], g_LinearSampler), texCoord);
     
     // We are sampling the roughness map to not run SSR for pixels with max roughness values
-    float roughness = imageLoad(g_RT_StorageImages[STORE_DEFERRED_ROUGH_METAL], ivec2(gl_GlobalInvocationID.xy)).x;
+    float roughness = imageLoad(g_RT_StorageImages[STORE_ROUGH_METAL_MOTION], ivec2(gl_GlobalInvocationID.xy)).x;
     if ( positionFrom.w <= 0.0 || roughness == 1.0) 
     { 
          imageStore(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_GlobalInvocationID.xy), uv);

@@ -17,10 +17,12 @@ bool CForwardPass::CreateRenderpass(RenderData* p_renderData)
 	CVulkanRHI::Image normalRT								= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Normal);
 	CVulkanRHI::Image primaryColorRT						= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
 	CVulkanRHI::Image primaryDepthRT						= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
+	CVulkanRHI::Image rMMMotion								= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_RoughMetal_Motion);
 
 	renderPass->AttachColor(positionRT.format,			VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	renderPass->AttachColor(normalRT.format,			VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	renderPass->AttachColor(primaryColorRT.format,		VK_ATTACHMENT_LOAD_OP_LOAD,		VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	renderPass->AttachColor(rMMMotion.format,			VK_ATTACHMENT_LOAD_OP_LOAD,		VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	renderPass->AttachDepth(primaryDepthRT.format,		VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,	VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
 	if (!m_rhi->CreateRenderpass(*renderPass))
@@ -29,11 +31,12 @@ bool CForwardPass::CreateRenderpass(RenderData* p_renderData)
 	renderPass->framebufferWidth							= primaryDepthRT.width;
 	renderPass->framebufferHeight							= primaryDepthRT.height;
 
-	std::vector<VkImageView> attachments(4, VkImageView{});
+	std::vector<VkImageView> attachments(5, VkImageView{});
 	attachments[0]											= positionRT.descInfo.imageView;
 	attachments[1]											= normalRT.descInfo.imageView;
 	attachments[2]											= primaryColorRT.descInfo.imageView;
-	attachments[3]											= primaryDepthRT.descInfo.imageView;
+	attachments[3]											= rMMMotion.descInfo.imageView;
+	attachments[4]											= primaryDepthRT.descInfo.imageView;
 	RETURN_FALSE_IF_FALSE(m_rhi->CreateFramebuffer(renderPass->renderpass, m_frameBuffer[0], attachments.data(), (uint32_t)attachments.size(), renderPass->framebufferWidth, renderPass->framebufferHeight));
 
 	return true;
@@ -243,19 +246,17 @@ CDeferredPass::~CDeferredPass()
 
 bool CDeferredPass::CreateRenderpass(RenderData* p_renderData)
 {
-	CVulkanRHI::Renderpass* renderPass						= &m_pipeline.renderpassData;
-	CVulkanRHI::Image positionRT							= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Position);
-	CVulkanRHI::Image normalRT								= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Normal);
-	CVulkanRHI::Image albedoRT								= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Albedo);
-	CVulkanRHI::Image metalRoughRT							= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_DeferredRoughMetal);
-	CVulkanRHI::Image primaryDepthRT						= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
-	//CVulkanRHI::Image primaryColorRT						= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
+	CVulkanRHI::Renderpass* renderPass	= &m_pipeline.renderpassData;
+	CVulkanRHI::Image positionRT		= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Position);
+	CVulkanRHI::Image normalRT			= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Normal);
+	CVulkanRHI::Image albedoRT			= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Albedo);
+	CVulkanRHI::Image rmMotionRT		= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_RoughMetal_Motion);
+	CVulkanRHI::Image primaryDepthRT	= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
 
 	renderPass->AttachColor(positionRT.format,		VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED,		VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);																				 
 	renderPass->AttachColor(normalRT.format,		VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED,		VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);																				 
 	renderPass->AttachColor(albedoRT.format,		VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED,		VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachColor(metalRoughRT.format,	VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED,		VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	//renderPass->AttachColor(primaryColorRT.format,  VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED,		VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	renderPass->AttachColor(rmMotionRT.format,		VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED,		VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	renderPass->AttachDepth(primaryDepthRT.format,  VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED,		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
 	if (!m_rhi->CreateRenderpass(*renderPass))
@@ -265,12 +266,11 @@ bool CDeferredPass::CreateRenderpass(RenderData* p_renderData)
 	attachments.push_back(positionRT.descInfo.imageView);
 	attachments.push_back(normalRT.descInfo.imageView);
 	attachments.push_back(albedoRT.descInfo.imageView);
-	attachments.push_back(metalRoughRT.descInfo.imageView);
-	//attachments.push_back(primaryColorRT.descInfo.imageView);
+	attachments.push_back(rmMotionRT.descInfo.imageView);
 	attachments.push_back(primaryDepthRT.descInfo.imageView);
 
-	renderPass->framebufferWidth							= positionRT.width;
-	renderPass->framebufferHeight							= positionRT.height;
+	renderPass->framebufferWidth	= positionRT.width;
+	renderPass->framebufferHeight	= positionRT.height;
 	if (!m_rhi->CreateFramebuffer(renderPass->renderpass, m_frameBuffer[0], attachments.data(), (uint32_t)attachments.size(), positionRT.width, positionRT.height))
 		return false;
 
