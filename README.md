@@ -1,6 +1,6 @@
 <img width="1437" alt="DemoReel_03232024" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/demoreel.PNG">
 
-<img width="1444" alt="FixedShadowSceneFitting_2" src="https://user-images.githubusercontent.com/7133245/201559782-e4a9f4fd-1cc3-4093-8c4c-896b1de31adb.PNG">
+<img width="1444" alt="FixedShadowSceneFitting_2" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/demoreel_2.PNG">
 
 # VFrame
  A compilation of few rasterization techniques using Vulkan API and C++
