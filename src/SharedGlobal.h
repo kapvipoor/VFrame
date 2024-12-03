@@ -1,11 +1,13 @@
-#define DISPLAY_RESOLUTION_X					960
-#define DISPLAY_RESOLUTION_Y					540
+#define PI                                      3.14159265359
 
-#define RENDER_RESOLUTION_X						960
-#define RENDER_RESOLUTION_Y						540
+#define DISPLAY_RESOLUTION_X					1920
+#define DISPLAY_RESOLUTION_Y					1080
 
-#define THREAD_GROUP_SIZE_X						4
-#define THREAD_GROUP_SIZE_Y						4
+#define RENDER_RESOLUTION_X						1920
+#define RENDER_RESOLUTION_Y						1080
+
+#define THREAD_GROUP_SIZE_X						8
+#define THREAD_GROUP_SIZE_Y						8
 #define THREAD_GROUP_SIZE_Z						1
 
 #define FRAME_BUFFER_COUNT                      2
@@ -21,21 +23,23 @@
 #define SAMPLE_POSITION					        1
 #define SAMPLE_NORMAL						    2
 #define SAMPLE_ALBEDO						    3
-#define SAMPLE_SSAO						        4
-#define SAMPLE_SSAO_BLUR					    5
-#define SAMPLE_DIRECTIONAL_SHADOW_DEPTH	        6
-#define SAMPLE_PRIMARY_COLOR				    7
-#define SAMPLE_DEFERRED_ROUGH_METAL		        8
-#define SAMPLE_MAX_RENDER_TARGETS			    9
+#define SAMPLE_SSAO_AND_BLUR			        4
+#define SAMPLE_DIRECTIONAL_SHADOW_DEPTH	        5
+#define SAMPLE_PRIMARY_COLOR				    6
+#define SAMPLE_ROUGH_METAL_MOTION		        7
+#define SAMPLE_SS_REFLECTION    		        8
+#define SAMPLE_PREV_PRIMARY_COLOR    		    9
+#define SAMPLE_MAX_RENDER_TARGETS			    10
 
 #define STORE_POSITION					        0
 #define STORE_NORMAL						    1
 #define STORE_ALBEDO						    2
-#define STORE_SSAO						        3
-#define STORE_SSAO_BLUR					        4
-#define STORE_PRIMARY_COLOR				        5
-#define STORE_DEFERRED_ROUGH_METAL		        6
-#define STORE_MAX_RENDER_TARGETS			    7
+#define STORE_SSAO_AND_BLUR				        3
+#define STORE_PRIMARY_COLOR				        4
+#define STORE_ROUGH_METAL_MOTION		        5
+#define STORE_SS_REFLECTION     		        6
+#define STORE_PREV_PRIMARY_COLOR   		        7
+#define STORE_MAX_RENDER_TARGETS			    8
 
 #define SHADOW_BIAS                             0.005
 

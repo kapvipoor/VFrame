@@ -2,36 +2,20 @@
 
 #include "../../src/SharedGlobal.h"
 
-#define PI 3.14159265359
-#define TWO_PI 6.28318530718
-#define ONE_OVER_PI (1.0 / PI)
-#define ONE_OVER_2PI (1.0 / TWO_PI)
-
-#define spatialrand vec2
-
-const float PHI = 1.61803398874989484820459; //Golden Ratio
-
-// certain constants that will be moved out from the shader
-// and passed as unfiorms/push constants
-const float g_RenderDim_x = 2400;
-const float g_RenderDim_y = 1200;
-
-const float g_ambientCoeff = 0.25;
-const float g_diffuseCoeff = 0.75;
-const float g_shadowFactor = 0.2;
-
 layout(set = 0, binding = 0) uniform GlobalBuffer
 {
-	float	elapsedTime;
+	float	UNASSIGINED_float;
 	float	cameraLookFromX;
 	float	cameraLookFromY;
 	float	cameraLookFromZ;
-	mat4	camViewProj;
+	mat4	camViewProj;				// without jitter
+	mat4	camJitteredViewProj;		// with jitter
+	mat4	camInvViewProj;				// without jitter
+	mat4	camPreViewProj;				// without jitter
 	mat4	camProj;
 	mat4	camView;
 	mat4	invCamView;
 	mat4	skyboxView;
-	vec2	renderResolution;
 	vec2	mousePosition;
 	vec2	ssaoNoiseScale;
 	float	ssaoKernelSize;
@@ -40,7 +24,15 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 	float 	pbrAmbientFactor;
 	float 	enabelSSAO;
 	float 	biasSSAO;
-	float 	unassigned_1;
+	float	ssrEnabled;
+	float 	ssrMaxDistance;
+	float 	ssrResolution;
+	float 	ssrThickness;
+	float 	ssrSteps;
+	float 	taaResolveWeight;
+	float	taaUseMotionVectors;
+	float	taaFlickerCorrectionMode;
+	float	taaReprojectionFilter;
 } g_Info;
 
 layout(set = 0, binding = 1) uniform sampler g_LinearSampler;
@@ -59,72 +51,6 @@ layout(set = 0, binding = 4) uniform texture2D g_ReadOnlyTexures[1];
 layout(set = 0, binding = 5) uniform image2D g_RT_StorageImages[STORE_MAX_RENDER_TARGETS];
 layout(set = 0, binding = 6) uniform texture2D g_RT_SampledImages[SAMPLE_MAX_RENDER_TARGETS];
 
-vec4 LoadPrimaryColor(ivec2 xy)
-{
-	return imageLoad(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy);
-}
-
-vec4 SamplePrimaryColor(vec2 uv)
-{
-	return texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_COLOR], g_LinearSampler), uv);
-}
-
-
-// currently being used by the deferred pipeline
-vec2 GetSceenSapceRoughMetal(ivec2 xy)
-{
-	return imageLoad(g_RT_StorageImages[STORE_DEFERRED_ROUGH_METAL], xy).xy;
-}
-
-float GetSSAOBlur(ivec2 xy)
-{
-	return imageLoad(g_RT_StorageImages[STORE_SSAO_BLUR], xy).x;
-}
-
-struct Ray
-{
-	vec3 origin;
-	vec3 direction;
-};
-
-struct Lambertian
-{
-	vec3 albedo;
-};
-
-struct Metal
-{
-	float roughness;
-	vec3 albedo;
-};
-
-struct Dielectric
-{
-	float refractiveIndex;
-};
-
-struct Sphere
-{
-	float radius;
-	vec3 center;
-	int	mat_type;
-	int mat_index;
-};
-
-struct HitRecord
-{
-	float rayLength;
-	vec3 hitPoint;
-	vec3 normal;
-	int	mat_type;
-	int mat_index;
-};
-
-float gold_noise(in vec2 xy, in float seed)
-{
-	return fract(tan(distance(xy * PHI, xy) * seed) * xy.x);
-}
-
 vec2 XY2UV(in vec2 xy, in vec2 resolution)
 {
 	return vec2(xy.x / resolution.x, xy.y / resolution.y);
@@ -135,48 +61,58 @@ vec2 UV2XY(in vec2 uv, in vec2 resolution)
 	return vec2(uv.x * resolution.x, uv.y * resolution.y);
 }
 
-vec2 XYtoUV(in vec2 xy)
+// Trowbridge-Reitz GGX normal distribution function
+float DistrubutionGGX(vec3 N, vec3 H, float Roughness)
 {
-	return vec2(xy.x / g_RenderDim_x, xy.y / g_RenderDim_y);
+	float roughnessSq	= Roughness * Roughness;
+	float a2			= roughnessSq * roughnessSq;
+	float NdotH			= max(dot(N, H), 0.0);
+	float NdotHSq		= NdotH * NdotH;
+	float denom			= (NdotHSq * (a2 - 1.0) + 1.0);
+	denom				= PI * denom * denom;
+	return a2 / denom;
 }
 
-uvec3 pcg3d(uvec3 v) {
-	v = v * 1664525u + 1013904223u;
-	v.x += v.y * v.z;
-	v.y += v.z * v.x;
-	v.z += v.x * v.y;
-	v ^= v >> 16u;
-	v.x += v.y * v.z;
-	v.y += v.z * v.x;
-	v.z += v.x * v.y;
-	return v;
+// Schlick GGX to statistically estiamte light ray occlusion
+float GeometrySchlickGGX(float NdotV, float K)
+{
+	float denom = (NdotV * (1.0 - K) + K);
+	return NdotV / denom;
 }
 
-vec3 random3(vec3 f) 
+// Applying Schlick GGX on Light vector to compute for geometry shadowing
+// Applying SchlickGGX on View vector to compute for geometry occlusion
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float Roughness)
 {
-	return uintBitsToFloat((pcg3d(floatBitsToUint(f)) & 0x007FFFFFu) | 0x3F800000u) - 1.0;
+	float k = (Roughness + 1.0);
+	k = k * k;
+	k = k / 8.0;
+	float NdotV = max(dot(N, V), 0.0);
+	float NdotL = max(dot(N, L), 0.0);
+	return GeometrySchlickGGX(NdotL, k) * GeometrySchlickGGX(NdotV, k);
 }
 
-vec3 random_in_unit_sphere(uvec2 xy, float seed)
+// Fresnel Schlick Approximation for Fresnel Effect
+vec3 FresnelSchlick(float cosThetha, vec3 F0)
 {
-	float n1 = 1.0;
-	float n2 = 2.0;
-	float n3 = 3.0;
+	return F0 + (1.0 - F0) * pow(clamp(1.0 - cosThetha, 0.0, 1.0), 5.0);
+}
 
-	vec3 result = vec3(1.0, 2.0, 3.0);
-	float lengthSq = 1.0;
-	while (lengthSq >= 1.0)
+float ComputeLuminance(vec3 color)
+{
+	return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
+vec3 log2_safe(vec3 inVal)
+{
+	//return log2(x + 1.0);
+	//return (x > vec3(0.0)) ? log2(x) : -10.0;
+	if(all(greaterThan(inVal, vec3(0.0))))
 	{
-		vec3 rand = random3(vec3(xy + ivec2(seed), g_Info.elapsedTime));
-		// Randf generates floating point values betweem 0 and 1.0f. So converting them between -1.0f and 1.0f
-		result = (2.0 * rand) - vec3(1.0f, 1.0f, 1.0f);
-		lengthSq = length(result);
-		lengthSq *= lengthSq;
+		return vec3(log2(inVal.x), log2(inVal.y), log2(inVal.z));
 	}
-	return result;
-}
-
-vec3 NDCtoView(in vec3 value)
-{
-	return (value + 1.0) / 2.0;
+	else
+	{
+		return vec3(-10.0);
+	}
 }

@@ -12,16 +12,25 @@ void main()
     ivec2 xy                    = ivec2(gl_GlobalInvocationID.xy);
     float result                = 0.0;
 
-    // get 2 by 2 neighbours and average
-    for(int i = -2; i < 2; i++)
+    float ssaoRead = 0.0;
+    // get 3 by 3 neighbors and average
+    for(int i = -1; i <= 1; i++)
     {
-        for(int j = -2; j < 2; j++)
+        for(int j = -1; j <= 1; j++)
         {
             ivec2 offset        = xy + ivec2(i, j);
-            result              = result + imageLoad(g_RT_StorageImages[STORE_SSAO], offset).x;
+            float sampleRead    = imageLoad(g_RT_StorageImages[STORE_SSAO_AND_BLUR], offset).x;
+            if(i == 0)
+            {
+                if(j == 0)
+                {
+                    ssaoRead = sampleRead;
+                }
+            }
+            result              = result + sampleRead;
         }
     }
 
-    result                      = result / 16.0;
-    imageStore(g_RT_StorageImages[STORE_SSAO_BLUR], xy, vec4(result, 0.0, 0.0, 0.0));
+    result                      = result / 9.0;
+    imageStore(g_RT_StorageImages[STORE_SSAO_AND_BLUR], xy, vec4(ssaoRead, result, 0.0, 0.0));
 }

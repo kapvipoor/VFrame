@@ -19,6 +19,8 @@ layout (location = 2) out vec3 outTangentinVieSpace;
 layout (location = 3) out vec3 outBiTangentinViewSpace;
 layout (location = 4) out vec4 outPosinLightSpace;
 layout (location = 5) out vec4 outPosinViewSpace;
+layout (location = 6) out vec4 outPosinClipSpace;
+layout (location = 7) out vec4 outPrevPosinClipSpace;
 
 // Using Gram-Schmidth process to orthogonalize Tanget w.r.t Normal
 vec3 MakeTangentOrthogonal(in vec3 N, in vec3 T)
@@ -35,8 +37,12 @@ void main()
 	outBiTangentinViewSpace 			= cross(outNormalinViewSpace, outTangentinVieSpace) * inTangent.w;
 	vec4 PosinWorldSpace 				= (meshData.modelMatrix * vec4(inPos, 1.0));
 	outPosinViewSpace 					= g_Info.camView * PosinWorldSpace;
-	gl_Position 						= g_Info.camViewProj * PosinWorldSpace;
+	gl_Position 						= g_Info.camJitteredViewProj * PosinWorldSpace;
 
+	// Used to calculate the motion vectors
+	outPosinClipSpace					= g_Info.camViewProj * PosinWorldSpace;
+	outPrevPosinClipSpace				= PosinWorldSpace;
+	outPrevPosinClipSpace				= g_Info.camPreViewProj * PosinWorldSpace;
 
 	for(int i = 0; i < g_lights.count; i++)
 	{

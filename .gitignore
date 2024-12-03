@@ -1,4 +1,1 @@
-
-shaders/spirv/Copy.comp.spv
-shaders/spirv/SSR.comp.spv
-shaders/spirv/TAA.comp.spv
+shaders/spirv/*

@@ -9,8 +9,9 @@
 
 #include "ShadowPass.h"
 #include "LightingPass.h"
-#include "SSAOPass.h"
+#include "ScreenSpacePass.h"
 #include "UIPass.h"
+#include "PostProcessingPasses.h"
 
 #include "SharedGlobal.h"
 
@@ -39,6 +40,9 @@ private:
 		, cb_PickerCopy2CPU			= 8
 		, cb_ToneMapping			= 9
 		, cb_Skybox					= 10
+		, cb_SSR					= 11
+		, cb_TAA					= 12
+		, cb_CopyCompute			= 13
 		, cb_max
 	};
 
@@ -50,6 +54,7 @@ private:
 	};
 
 	uint32_t							m_swapchainIndex;
+	uint64_t							m_frameCount;
 
 	VkSemaphore							m_activeAcquireSemaphore;
 	VkSemaphore							m_vkswapchainAcquireSemaphore[FRAME_BUFFER_COUNT];
@@ -83,9 +88,12 @@ private:
 	CDeferredPass*						m_deferredPass;
 	CSSAOComputePass*					m_ssaoComputePass;
 	CSSAOBlurPass*						m_ssaoBlurPass;
+	CSSRComputePass*					m_ssrComputePass;
+	CTAAComputePass*					m_taaComputePass;
 	CDeferredLightingPass*				m_deferredLightPass;
 	CDebugDrawPass*						m_debugDrawPass;
 	CToneMapPass*						m_toneMapPass;
+	CCopyComputePass*					m_copyComputePass;
 	CUIPass*							m_uiPass;
 	
 	VkSemaphore GetAvailableAcquireSemaphore(VkSemaphore p_in);
@@ -100,6 +108,6 @@ private:
 	void UpdateSceneGraphDependencies(float p_delta);
 
 	bool DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkanRHI::CommandBuffer& p_cmdBfr);
-	bool RenderForward();
-	bool RenderDeferred();
+
+	bool RenderFrame(CVulkanRHI::RendererType p_renderType);
 };

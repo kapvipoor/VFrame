@@ -116,6 +116,10 @@ void CVulkanCore::BeginDebugMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg
 	VkDebugUtilsLabelEXT debugLabel{};
 	debugLabel.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
 	debugLabel.pLabelName = pMsg;
+	debugLabel.color[0] = 1.0f;
+	debugLabel.color[1] = 0.14f;
+	debugLabel.color[2] = 0.14f;
+	debugLabel.color[3] = 1.0f;
 	m_fpvkCmdBeginDebugUtilsLabel(p_vkCmdBuff, &debugLabel);
 #endif
 }
@@ -139,6 +143,10 @@ void CVulkanCore::InsertMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg)
 	VkDebugUtilsLabelEXT debugLabel{};
 	debugLabel.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
 	debugLabel.pLabelName = pMsg;
+	debugLabel.color[0] = 1.0f;
+	debugLabel.color[1] = 0.14f;
+	debugLabel.color[2] = 0.14f;
+	debugLabel.color[3] = 1.0f;
 	m_fpvkCmdInsertDebugUtilsLabelEXT(p_vkCmdBuff, &debugLabel);
 #endif
 }
@@ -1269,11 +1277,12 @@ bool CVulkanCore::WaitToFinish(VkQueue p_queue)
 
 void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr)
 {
-	if (p_new == p_image.descInfo.imageLayout)
+	p_image.descInfo.imageLayout = p_new;
+	if (p_new == p_image.curLayout)
 		return;
 
-	IssueImageLayoutBarrier(p_image.descInfo.imageLayout, p_new, p_image.layerCount, p_image.image, p_image.usage, p_cmdBfr);
-	p_image.descInfo.imageLayout = p_new;
+	IssueImageLayoutBarrier(p_image.curLayout, p_new, p_image.layerCount, p_image.image, p_image.usage, p_cmdBfr);
+	p_image.curLayout = p_new;
 }
 
 void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_new, 
@@ -1510,6 +1519,34 @@ void CVulkanCore::DestroyImage(VkImage p_image)
 	vkDestroyImage(m_vkDevice, p_image, nullptr);
 }
 
+void CVulkanCore::ClearImage(VkCommandBuffer p_cmdBfr, VkImage p_src, VkImageLayout p_srclayout, VkClearValue p_clearValue)
+{
+	VkImageSubresourceRange range{};
+	range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	range.baseMipLevel = 0;
+	range.baseArrayLayer = 0;
+	range.layerCount = 1;
+	range.levelCount = 1;
+
+	vkCmdClearColorImage(p_cmdBfr, p_src, p_srclayout, &p_clearValue.color, 1, &range);
+}
+
+void CVulkanCore::CopyImage(VkCommandBuffer p_cmdBfr, VkImage p_src, VkImageLayout p_srclayout, 
+	VkImage p_dest, VkImageLayout p_destLayout, uint32_t p_width, uint32_t p_height)
+{
+	uint32_t regionCount = 1;
+	// Assuming few things here. Will keep improving this based on need
+	VkImageCopy imageCopyRegion{};
+	imageCopyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	imageCopyRegion.srcSubresource.layerCount = 1;
+	imageCopyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	imageCopyRegion.dstSubresource.layerCount = 1;
+	imageCopyRegion.extent.width = p_width;
+	imageCopyRegion.extent.height = p_height;
+	imageCopyRegion.extent.depth = 1;
+	vkCmdCopyImage(p_cmdBfr, p_src, p_srclayout, p_dest, p_destLayout, 1, &imageCopyRegion);
+}
+
 bool CVulkanCore::CreateSampler(Sampler& p_sampler)
 {
 	VkSamplerCreateInfo samplerInfo{};
@@ -1528,7 +1565,7 @@ bool CVulkanCore::CreateSampler(Sampler& p_sampler)
 		samplerInfo.maxAnisotropy = p_sampler.maxAnisotropy;
 	}
 
-	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+	samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
 	samplerInfo.unnormalizedCoordinates = VK_FALSE;
 
 	samplerInfo.compareEnable = VK_FALSE;
@@ -1537,8 +1574,8 @@ bool CVulkanCore::CreateSampler(Sampler& p_sampler)
 	// mip mapping
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	samplerInfo.mipLodBias = 0.0f;
-	samplerInfo.minLod = -1000.0f;
-	samplerInfo.maxLod = 1000.0f;
+	samplerInfo.minLod = 0.0f;
+	samplerInfo.maxLod = 1.0f;
 
 	VkResult res = vkCreateSampler(m_vkDevice, &samplerInfo, nullptr, &p_sampler.descInfo.sampler);
 	if (res != VK_SUCCESS)

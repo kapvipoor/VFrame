@@ -16,7 +16,7 @@ bool CStaticShadowPrepass::CreateRenderpass(RenderData* p_renderData)
 	CVulkanRHI::Image renderTarget			= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_DirectionalShadowDepth);
 	CVulkanRHI::Renderpass* renderpass		= &m_pipeline.renderpassData; 
 
-	renderpass->AttachDepth(renderTarget.format, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE,	VK_IMAGE_LAYOUT_UNDEFINED,	VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+	renderpass->AttachDepth(renderTarget.format, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 		
 	renderpass->framebufferWidth							= renderTarget.width;
 	renderpass->framebufferHeight							= renderTarget.height;

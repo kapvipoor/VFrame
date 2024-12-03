@@ -104,7 +104,7 @@
    */
 namespace nm {
 
-    constexpr float PI = 3.1415926f;
+    constexpr float nm_PI = 3.1415926f;
 
     /**
      * Generic N-dimensional vector. Do not use this class directly.
@@ -1547,10 +1547,10 @@ namespace nm {
      * @return angle in radians.
      */
     template <class S>
-    inline constexpr S deg2rad(const S deg) { return deg * ((S)PI / (S)180.0); }
+    inline constexpr S deg2rad(const S deg) { return deg * ((S)nm_PI / (S)180.0); }
     
     template <class S>
-    inline constexpr S rad2deg(const S rad) { return rad * ((S)180.0 / (S)PI); }
+    inline constexpr S rad2deg(const S rad) { return rad * ((S)180.0 / (S)nm_PI); }
 
 
 

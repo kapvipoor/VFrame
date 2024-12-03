@@ -7,7 +7,6 @@
 
 #include "Common.h"
 #include "MeshCommon.h"
-#include "PBRHelper.h"
 
 #define DISPLAY_MOUSE_POINTER
 
@@ -54,9 +53,9 @@ void main()
     vec3 camerPosition = vec3(0.0f);                                                                       
 	vec4 fragPos = imageLoad(g_RT_StorageImages[STORE_POSITION], xy).xyzw;                                              
     vec3 V = normalize(camerPosition - fragPos.xyz);                                                                                 
-    vec3 N = imageLoad(g_RT_StorageImages[STORE_NORMAL], xy).xyz;                                                         
+    vec3 N = normalize(imageLoad(g_RT_StorageImages[STORE_NORMAL], xy).xyz);                                                         
     vec3 color = imageLoad(g_RT_StorageImages[STORE_ALBEDO], xy).xyz;
-    vec2 roughMetal = imageLoad(g_RT_StorageImages[STORE_DEFERRED_ROUGH_METAL], xy).xy;
+    vec2 roughMetal = imageLoad(g_RT_StorageImages[STORE_ROUGH_METAL_MOTION], xy).xy;
     vec3 Lo = vec3(0.0);
 
 	// setting the default color to be the skybox if

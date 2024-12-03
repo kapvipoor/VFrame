@@ -161,6 +161,7 @@ public:
 	struct Image
 	{
 		VkImageUsageFlags									usage;
+		VkImageLayout										curLayout;
 
 		VkDescriptorImageInfo								descInfo;
 		VkImage												image;
@@ -345,6 +346,8 @@ public:
 	bool CreateImagView(VkImageUsageFlags p_usage, VkImage p_image, VkFormat p_format, VkImageViewType p_viewType, VkImageView& p_imgView);
 	void DestroyImageView(VkImageView p_imageView);
 	void DestroyImage(VkImage p_image);
+	void ClearImage(VkCommandBuffer p_cmdBfr, VkImage p_src, VkImageLayout p_srclayout, VkClearValue p_clearValue);
+	void CopyImage(VkCommandBuffer p_cmdBfr, VkImage p_src, VkImageLayout p_srclayout, VkImage p_dest, VkImageLayout p_destLayout, uint32_t p_width, uint32_t p_height);
 
 	bool CreateSampler(Sampler& p_sampler);
 	void DestroySampler(VkSampler p_sampler);

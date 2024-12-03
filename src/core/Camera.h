@@ -35,6 +35,24 @@ public:
         float                       yaw;
         float                       pitch;
         float                       roll;
+        nm::float4x4                jitter;
+        UpdateData()
+            : timeDelta(0.0f)
+            , mouseDelta{-1, -1}
+            , moveCamera(false)
+            , A(false)
+            , W(false)
+            , D(false)
+            , S(false)
+            , Q(false)
+            , E(false)
+            , Shft(false)
+            , transform()
+            , yaw(0.0f)
+            , pitch(0.0f)
+            , roll(0.0f)
+            , jitter(nm::float4x4::identity()) {
+        }
     };
 
     CCamera(/*std::string p_name*/);
@@ -44,6 +62,9 @@ public:
     virtual void Update(UpdateData data);
 
     const nm::float4x4 GetViewProj() const { return m_viewProj; }
+    const nm::float4x4 GetJitteredViewProj() const { return m_jitteredViewProj; }
+    const nm::float4x4 GetPreViewProj() const { return m_preViewProj; }
+    const nm::float4x4 GetInvViewProj() const { return m_invViewProj; }
     const nm::float4x4 GetView() const { return m_view; }
     const nm::float4x4 GetProjection() const { return m_projection; }
     nm::float3 GetLookFrom() const { return m_lookFrom.xyz(); }
@@ -70,6 +91,9 @@ protected:
     nm::float4x4                    m_view;
     nm::float4x4                    m_projection;
     nm::float4x4                    m_viewProj;
+    nm::float4x4                    m_jitteredViewProj;
+    nm::float4x4                    m_invViewProj;
+    nm::float4x4                    m_preViewProj;
 
     nm::float4 PolarToVector(float yaw, float pitch);
     nm::float4x4 LookAtRH(nm::float4 eyePos, nm::float4 lookAt);

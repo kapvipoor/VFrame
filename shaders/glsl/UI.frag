@@ -39,5 +39,5 @@ void main()
 {
     uint binding_id = g_pushConstant.binding_textureId >> 16;
     uint texture_id = g_pushConstant.binding_textureId - (binding_id << 16);
-    outFragColor = inColor *  SampleUITexture(binding_id, texture_id, inUV); // SamplePrimaryColor(inUV) *
+    outFragColor = inColor *  SampleUITexture(binding_id, texture_id, inUV);
 }
