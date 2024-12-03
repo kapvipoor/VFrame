@@ -62,10 +62,11 @@ public:
     virtual void Update(UpdateData data);
 
     const nm::float4x4 GetViewProj() const { return m_viewProj; }
+    const nm::float4x4 GetJitteredViewProj() const { return m_jitteredViewProj; }
     const nm::float4x4 GetPreViewProj() const { return m_preViewProj; }
     const nm::float4x4 GetInvViewProj() const { return m_invViewProj; }
     const nm::float4x4 GetView() const { return m_view; }
-    const nm::float4x4 GetProjection() const { return m_jitteredProjection; }
+    const nm::float4x4 GetProjection() const { return m_projection; }
     nm::float3 GetLookFrom() const { return m_lookFrom.xyz(); }
     const nm::float3 GetLookAt() const { return m_lookAt; }
     const float GetPitch() const { return m_pitch; }
@@ -89,8 +90,8 @@ protected:
 
     nm::float4x4                    m_view;
     nm::float4x4                    m_projection;
-    nm::float4x4                    m_jitteredProjection;
     nm::float4x4                    m_viewProj;
+    nm::float4x4                    m_jitteredViewProj;
     nm::float4x4                    m_invViewProj;
     nm::float4x4                    m_preViewProj;
 

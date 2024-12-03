@@ -36,7 +36,7 @@ public:
 			, jm_max
 		};
 
-		CJitterHelper();
+		CJitterHelper(JitterMode);
 		~CJitterHelper() {}
 
 		nm::float4x4 ComputeJitter(const uint64_t p_frameCount);
@@ -56,6 +56,19 @@ public:
 		inline float RadicalInverseBase2(uint32_t p_bits);
 	};
 
+	enum FlickerCorrection
+	{
+		  None = 0
+		, LogWeighing
+		, LuminanceWeighing
+	};
+
+	enum ReprojectionFilter
+	{
+		  Standard = 0
+		, CatmullRom
+	};
+
 	CTAAComputePass(CVulkanRHI* p_rhi);
 	~CTAAComputePass();
 
@@ -72,10 +85,17 @@ public:
 
 	CJitterHelper* GetJitterHelper() { return m_jitterHelper; }
 	float GetResolveWeight() { return m_resolveWeight; }
+	bool UseMotionVectors() { return m_useMotionVectors; }
+	FlickerCorrection GetFlickerCorrectionMode() { return m_flickerCorrectionMode; }
+	ReprojectionFilter GetReprojectionFilter() { return m_reprojectionFilter; }
 
 private:
 	CJitterHelper* m_jitterHelper;
+	CJitterHelper::JitterMode m_activeJitterMode;
 
 	float m_resolveWeight;
+	bool m_useMotionVectors;
+	FlickerCorrection m_flickerCorrectionMode;
+	ReprojectionFilter m_reprojectionFilter;
 
 };

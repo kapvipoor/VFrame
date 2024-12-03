@@ -191,6 +191,7 @@ public:
 		float						UNASSIGINED_float;
 		nm::float3					cameraLookFrom;
 		nm::float4x4				cameraViewProj;
+		nm::float4x4				cameraJitteredViewProj;
 		nm::float4x4				cameraInvViewProj;
 		nm::float4x4				cameraPreViewProj;
 		nm::float4x4				cameraProj;
@@ -205,12 +206,15 @@ public:
 		float						pbrAmbientFactor;
 		int							enableSSAO;
 		float						biasSSAO;
+		float						ssrEnable;
 		float						ssrMaxDistance;
 		float						ssrResolution;
 		float						ssrThickness;
 		float						ssrSteps;
 		float						taaResolveWeight;
-		nm::float2					taaJitterOffset;
+		float						taaUseMotionVectors;
+		float						taaFlickerCorectionMode;
+		float						taaReprojectionFilter;
 	};
 
 	CFixedBuffers();

@@ -32,12 +32,12 @@ void main()
 	outBiTangent 			= cross(outNormal, outTangent) * inTangent.w;
 
 	vec4 PosinWorldSpace 	= (meshData.modelMatrix * vec4(inPos, 1.0));
-	gl_Position 			= g_Info.camViewProj * PosinWorldSpace;
+	gl_Position 			= g_Info.camJitteredViewProj * PosinWorldSpace;
 
 	outPosition 			= g_Info.camView * PosinWorldSpace;
 
 	// Used to calculate the motion vectors
-	outPosinClipSpace		= gl_Position;
+	outPosinClipSpace		= g_Info.camViewProj * PosinWorldSpace;
 	outPrevPosinClipSpace	= PosinWorldSpace;
 	outPrevPosinClipSpace	= g_Info.camPreViewProj * PosinWorldSpace;
 }

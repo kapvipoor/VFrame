@@ -210,12 +210,20 @@ bool CRasterRender::on_update(float delta)
 		uniformData.cameraProj						= m_primaryCamera->GetProjection();
 		uniformData.cameraView						= m_primaryCamera->GetView();
 		uniformData.cameraViewProj					= m_primaryCamera->GetViewProj();
+		uniformData.cameraJitteredViewProj			= m_primaryCamera->GetJitteredViewProj();
 		uniformData.cameraInvViewProj				= m_primaryCamera->GetInvViewProj();
 		uniformData.cameraPreViewProj				= m_primaryCamera->GetPreViewProj();
 		uniformData.mousePos						= nm::float2((float)mousepos_x, (float)mousepos_y);
 		uniformData.skyboxModelView					= m_primaryCamera->GetView();
+		uniformData.ssrEnable						= m_ssrComputePass->IsEnabled();
+		uniformData.ssrMaxDistance					= m_ssrComputePass->GetMaxDistance();
+		uniformData.ssrResolution					= m_ssrComputePass->GetResolution();
+		uniformData.ssrThickness					= m_ssrComputePass->GetThickness();
+		uniformData.ssrSteps						= m_ssrComputePass->GetSteps();
 		uniformData.taaResolveWeight				= m_taaComputePass->GetResolveWeight();
-		uniformData.taaJitterOffset					= m_taaComputePass->GetJitterHelper()->GetJitterOffset();
+		uniformData.taaUseMotionVectors				= m_taaComputePass->UseMotionVectors();
+		uniformData.taaFlickerCorectionMode			= (float)m_taaComputePass->GetFlickerCorrectionMode();
+		uniformData.taaReprojectionFilter			= (float)m_taaComputePass->GetReprojectionFilter();
 
 		FixedUpdateData fixedUpdate{};
 		fixedUpdate.primaryUniData					= &uniformData;
@@ -629,16 +637,12 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 		RETURN_FALSE_IF_FALSE(m_deferredLightPass->Render(&renderData));
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSR];
-		RETURN_FALSE_IF_FALSE(m_ssrComputePass->Render(&renderData));
-		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-	}
-
-	if (m_taaComputePass->IsEnabled())
-	{
-		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_TAA];
-		RETURN_FALSE_IF_FALSE(m_taaComputePass->Render(&renderData));
-		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+		if (m_ssrComputePass->IsEnabled())
+		{
+			renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSR];
+			RETURN_FALSE_IF_FALSE(m_ssrComputePass->Render(&renderData));
+			m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+		}
 	}
 
 	// placing debug draw here because I do not want the depth buffer to go through another layout barrier
@@ -646,6 +650,13 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_DebugDraw];
 	if (m_debugDrawPass->Render(&renderData))
 	{
+		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+	}
+
+	if (m_taaComputePass->IsEnabled())
+	{
+		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_TAA];
+		RETURN_FALSE_IF_FALSE(m_taaComputePass->Render(&renderData));
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 	}
 

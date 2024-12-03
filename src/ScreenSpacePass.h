@@ -36,7 +36,7 @@ public:
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 };
 
-class CSSRComputePass : public CPass
+class CSSRComputePass : public CPass, CUIParticipant
 {
 public:
 	CSSRComputePass(CVulkanRHI*);
@@ -51,7 +51,18 @@ public:
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 
+	virtual void Show(CVulkanRHI* p_rhi) override;
+
+	float GetMaxDistance() { return m_maxDistance; }
+	float GetResolution() { return m_resolution; }
+	float GetThickness() { return m_thickness; }
+	float GetSteps() { return m_steps; }
+
 private:
+	float	m_maxDistance;	// Maximum Ray Distance
+	float	m_resolution;	// Sampling resolution for the color buffer
+	float	m_thickness;	// Ray thickness
+	float	m_steps;		// Number of steps for hit point refinement in step 2 (binary search iterations)
 };
 
 class CCopyComputePass : public CPass

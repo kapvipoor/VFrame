@@ -176,6 +176,11 @@ bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_
 	return true;
 }
 
+void CVulkanRHI::ClearImage(CommandBuffer p_cmdBfr, CVulkanRHI::Image p_src, VkClearValue p_clearValue)
+{
+	CVulkanCore::ClearImage(p_cmdBfr, p_src.image, p_src.descInfo.imageLayout, p_clearValue);
+}
+
 void CVulkanRHI::CopyImage(CommandBuffer p_cmdBfr, CVulkanRHI::Image p_src, CVulkanRHI::Image p_dest)
 {
 	CVulkanCore::CopyImage(p_cmdBfr, p_src.image, p_src.descInfo.imageLayout, p_dest.image, p_dest.descInfo.imageLayout, p_src.width, p_src.height);

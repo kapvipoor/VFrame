@@ -116,6 +116,10 @@ void CVulkanCore::BeginDebugMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg
 	VkDebugUtilsLabelEXT debugLabel{};
 	debugLabel.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
 	debugLabel.pLabelName = pMsg;
+	debugLabel.color[0] = 1.0f;
+	debugLabel.color[1] = 0.14f;
+	debugLabel.color[2] = 0.14f;
+	debugLabel.color[3] = 1.0f;
 	m_fpvkCmdBeginDebugUtilsLabel(p_vkCmdBuff, &debugLabel);
 #endif
 }
@@ -139,6 +143,10 @@ void CVulkanCore::InsertMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg)
 	VkDebugUtilsLabelEXT debugLabel{};
 	debugLabel.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
 	debugLabel.pLabelName = pMsg;
+	debugLabel.color[0] = 1.0f;
+	debugLabel.color[1] = 0.14f;
+	debugLabel.color[2] = 0.14f;
+	debugLabel.color[3] = 1.0f;
 	m_fpvkCmdInsertDebugUtilsLabelEXT(p_vkCmdBuff, &debugLabel);
 #endif
 }
@@ -1509,6 +1517,18 @@ void CVulkanCore::DestroyImageView(VkImageView p_imageView)
 void CVulkanCore::DestroyImage(VkImage p_image)
 {
 	vkDestroyImage(m_vkDevice, p_image, nullptr);
+}
+
+void CVulkanCore::ClearImage(VkCommandBuffer p_cmdBfr, VkImage p_src, VkImageLayout p_srclayout, VkClearValue p_clearValue)
+{
+	VkImageSubresourceRange range{};
+	range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	range.baseMipLevel = 0;
+	range.baseArrayLayer = 0;
+	range.layerCount = 1;
+	range.levelCount = 1;
+
+	vkCmdClearColorImage(p_cmdBfr, p_src, p_srclayout, &p_clearValue.color, 1, &range);
 }
 
 void CVulkanCore::CopyImage(VkCommandBuffer p_cmdBfr, VkImage p_src, VkImageLayout p_srclayout, 

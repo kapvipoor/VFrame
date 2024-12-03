@@ -22,7 +22,7 @@ bool CForwardPass::CreateRenderpass(RenderData* p_renderData)
 	renderPass->AttachColor(positionRT.format,			VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	renderPass->AttachColor(normalRT.format,			VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	renderPass->AttachColor(primaryColorRT.format,		VK_ATTACHMENT_LOAD_OP_LOAD,		VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachColor(rMMMotion.format,			VK_ATTACHMENT_LOAD_OP_LOAD,		VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	renderPass->AttachColor(rMMMotion.format,			VK_ATTACHMENT_LOAD_OP_CLEAR,		VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	renderPass->AttachDepth(primaryDepthRT.format,		VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,	VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
 	if (!m_rhi->CreateRenderpass(*renderPass))
@@ -77,6 +77,8 @@ bool CForwardPass::Render(RenderData* p_renderData)
 
 	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Forward"));
 	{
+		// x,y  holds roughness and metal and z,w holds velocity x,y
+		m_rhi->SetClearColorValue(renderPass, 3, VkClearColorValue{ 0.0f, 0.0f, 0.0f, 0.0f });
 		m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
 		{
 

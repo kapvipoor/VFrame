@@ -1763,7 +1763,7 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,	VK_FORMAT_D32_SFLOAT_S8_UINT,	4096, 4096,					 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	"directional_shadow",	sample_depth));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"primary_color",		sample_storage_color_src));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RoughMetal_Motion,		VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"Rough_Metal_Motion",	sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"ss_reflection",		sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"ss_reflection",		sample_storage_color_dest));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Prev_PrimaryColor,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"prev_primary_color",	sample_storage_color_dest));
 
 	return true;
@@ -1843,15 +1843,18 @@ CFixedBuffers::CFixedBuffers()
 	m_primaryUniformData.ssaoKernelSize			= 64.0f;
 	m_primaryUniformData.ssaoRadius				= 0.5f;
 	m_primaryUniformData.enableShadowPCF		= 0;
-	m_primaryUniformData.pbrAmbientFactor		= 0.5f;
+	m_primaryUniformData.pbrAmbientFactor		= 0.1f;
 	m_primaryUniformData.enableSSAO				= 1;
 	m_primaryUniformData.biasSSAO				= 0.015f;
+	m_primaryUniformData.ssrEnable				= false;
 	m_primaryUniformData.ssrMaxDistance			= 5.0f;
 	m_primaryUniformData.ssrResolution			= 1.0f;
 	m_primaryUniformData.ssrThickness			= 0.11f;
 	m_primaryUniformData.ssrSteps				= 2;
 	m_primaryUniformData.taaResolveWeight		= 0.9f;
-	m_primaryUniformData.taaJitterOffset		= nm::float2(0.0f);
+	m_primaryUniformData.taaUseMotionVectors	= false;
+	m_primaryUniformData.taaFlickerCorectionMode = 0;	// None
+	m_primaryUniformData.taaReprojectionFilter	= 0;	// Standard
 }
 
 CFixedBuffers::~CFixedBuffers()
@@ -1864,6 +1867,7 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		(sizeof(float) * 1)					// UNASSIGINED float
 		+ (sizeof(float) * 3)				// camera look-from
 		+ (sizeof(float) * 16)				// camera view projection
+		+ (sizeof(float) * 16)				// camera view projection with Jitter
 		+ (sizeof(float) * 16)				// pre camera view projection
 		+ (sizeof(float) * 16)				// camera projection
 		+ (sizeof(float) * 16)				// camera view
@@ -1881,12 +1885,16 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(float) * 1)				// PBR ambient Factor
 		+ (sizeof(int) * 1)					// enable SSAO
 		+ (sizeof(float) * 1)				// biasSSAO
+		+ (sizeof(float) * 1);				// SSR Enable
 		+ (sizeof(float) * 1)				// SSR Max Distance
 		+ (sizeof(float) * 1)				// SSR Resolution
 		+ (sizeof(float) * 1)				// SSR Thickness
 		+ (sizeof(float) * 1)				// SSR Steps
 		+ (sizeof(float) * 1)				// TAA Resolve Weight
-		+ (sizeof(float) * 2);				// TAA Jitter Offset
+		+ (sizeof(float) * 1)				// TAA Use Motion Vectors
+		+ (sizeof(float) * 1)				// TAA Flicker Correction Mode
+		+ (sizeof(float) * 1);				// TAA Reprojection Filter
+		
 
 	size_t objPickerBufferSize = sizeof(uint32_t) * 1; // selected mesh ID
 	size_t debugDrawUniformSize = MAX_SUPPORTED_DEBUG_DRAW_ENTITES * ((sizeof(float) * 16)); // storing transforms
@@ -1954,14 +1962,14 @@ void CFixedBuffers::Show(CVulkanRHI* p_rhi)
 			ImGui::SliderFloat("Ambient Factor", &m_primaryUniformData.pbrAmbientFactor, 0.00f, 1.0f);
 			ImGui::TreePop();
 		}
-		if (ImGui::TreeNode("SSR"))
-		{
-			ImGui::SliderFloat("Max Distance", &m_primaryUniformData.ssrMaxDistance, 0.0f, 50.0f);
-			ImGui::SliderFloat("Resolution", &m_primaryUniformData.ssrResolution, 0.0f, 1.0f);
-			ImGui::SliderFloat("Steps", &m_primaryUniformData.ssrSteps, 1, 50);
-			ImGui::SliderFloat("Thickness", &m_primaryUniformData.ssrThickness, 0.0f, 4.0f);
-			ImGui::TreePop();
-		}
+		//if (ImGui::TreeNode("SSR"))
+		//{
+		//	ImGui::SliderFloat("Max Distance", &m_primaryUniformData.ssrMaxDistance, 0.0f, 50.0f);
+		//	ImGui::SliderFloat("Resolution", &m_primaryUniformData.ssrResolution, 0.0f, 1.0f);
+		//	ImGui::SliderFloat("Steps", &m_primaryUniformData.ssrSteps, 1, 50);
+		//	ImGui::SliderFloat("Thickness", &m_primaryUniformData.ssrThickness, 0.0f, 4.0f);
+		//	ImGui::TreePop();
+		//}
 		ImGui::Unindent();
 	}
 }
@@ -1974,6 +1982,7 @@ void CFixedBuffers::Destroy(CVulkanRHI* p_rhi)
 bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 {
 	float* cameraViewProj					= const_cast<float*>(&m_primaryUniformData.cameraViewProj.column[0][0]);
+	float* cameraJitteredViewProj			= const_cast<float*>(&m_primaryUniformData.cameraJitteredViewProj.column[0][0]);
 	float* cameraInvViewProj				= const_cast<float*>(&m_primaryUniformData.cameraInvViewProj.column[0][0]);
 	float* cameraPreViewProj				= const_cast<float*>(&m_primaryUniformData.cameraPreViewProj.column[0][0]);
 	float* cameraProj						= const_cast<float*>(&m_primaryUniformData.cameraProj.column[0][0]);
@@ -1991,6 +2000,7 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	uniformValues.push_back(m_primaryUniformData.UNASSIGINED_float);																						// UNASSIGINED
 	std::copy(&m_primaryUniformData.cameraLookFrom[0], &m_primaryUniformData.cameraLookFrom[3], std::back_inserter(uniformValues));							// camera look from x, y, z
 	std::copy(&cameraViewProj[0], &cameraViewProj[16], std::back_inserter(uniformValues));																	// camera view projection matrix
+	std::copy(&cameraJitteredViewProj[0], &cameraJitteredViewProj[16], std::back_inserter(uniformValues));													// camera jittered view projection matrix
 	std::copy(&cameraInvViewProj[0], &cameraInvViewProj[16], std::back_inserter(uniformValues));															// camera inv view projection matrix
 	std::copy(&cameraPreViewProj[0], &cameraPreViewProj[16], std::back_inserter(uniformValues));															// camera pre view projection matrix
 	std::copy(&cameraProj[0], &cameraProj[16], std::back_inserter(uniformValues));																			// camera projection matrix
@@ -2005,12 +2015,15 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	uniformValues.push_back(m_primaryUniformData.pbrAmbientFactor);																							// PBR Ambient Factor
 	uniformValues.push_back((float)m_primaryUniformData.enableSSAO);																						// enable SSAO
 	uniformValues.push_back(m_primaryUniformData.biasSSAO);																									// SSAO Bias
+	uniformValues.push_back((float)m_primaryUniformData.ssrEnable);																							// SSR Enable
 	uniformValues.push_back(m_primaryUniformData.ssrMaxDistance);																							// SSR Max Distance
 	uniformValues.push_back(m_primaryUniformData.ssrResolution);																							// SSR Resolution
 	uniformValues.push_back(m_primaryUniformData.ssrThickness);																								// SSR Thickness
 	uniformValues.push_back((float)m_primaryUniformData.ssrSteps);																							// SSR Steps
 	uniformValues.push_back(m_primaryUniformData.taaResolveWeight);																							// TAA Resolve Weight
-	uniformValues.push_back((float)m_primaryUniformData.taaJitterOffset[0]); uniformValues.push_back((float)m_primaryUniformData.taaJitterOffset[1]);		// TAA Jitter Offset
+	uniformValues.push_back((float)m_primaryUniformData.taaUseMotionVectors);																				// TAA Use Motion Vector
+	uniformValues.push_back((float)m_primaryUniformData.taaFlickerCorectionMode);																			// TAA Flicker Correction Mode
+	uniformValues.push_back((float)m_primaryUniformData.taaReprojectionFilter);																				// TAA Reprojection Filter
 	
 	uint8_t* data							= (uint8_t*)(uniformValues.data());
 	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, m_buffers[p_scId], false));

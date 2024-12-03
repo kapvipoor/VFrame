@@ -80,11 +80,16 @@ bool CToneMapPass::Render(RenderData* p_renderData)
     vkCmdDraw(cmdBfr, 3, 1, 0, 0);
     m_rhi->EndRenderPass(cmdBfr);
 
-    m_rhi->InsertMarker(cmdBfr, "Temporal Color Copy");
+    m_rhi->InsertMarker(cmdBfr, "Resources Copy/Clear");
 
     CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
     CVulkanRHI::Image prevColorlRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Prev_PrimaryColor);
     m_rhi->CopyImage(cmdBfr, colorRT, prevColorlRT);
+
+    VkClearValue clear{};
+    clear.color = { 0.0, 0.0, 0.0, 1.0 };
+    CVulkanRHI::Image ssrRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_SSReflection);
+    m_rhi->ClearImage(cmdBfr, ssrRT, clear);
 
     m_rhi->EndCommandBuffer(cmdBfr);
 
@@ -108,11 +113,15 @@ void CToneMapPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBin
 CTAAComputePass::CTAAComputePass(CVulkanRHI* p_rhi)
     : CPass(p_rhi)
     , CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
+    , m_activeJitterMode(CJitterHelper::JitterMode::Hammersley16x)
     , m_resolveWeight(0.93f)
+    , m_useMotionVectors(false)
+    , m_flickerCorrectionMode(FlickerCorrection::None)
+    , m_reprojectionFilter(ReprojectionFilter::Standard)
 {
     m_frameBuffer.resize(1);
     //m_isEnabled = false; // for now disabling it by default
-	m_jitterHelper = new CJitterHelper();
+	m_jitterHelper = new CJitterHelper(m_activeJitterMode);
 }
 
 CTAAComputePass::~CTAAComputePass()
@@ -175,28 +184,47 @@ void CTAAComputePass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertex
 
 void CTAAComputePass::Show(CVulkanRHI* p_rhi)
 {
-    bool isEnabled = IsEnabled();
-    ImGui::Checkbox(" ", &isEnabled);
-    Enable(isEnabled);
+    bool taaNode = ImGui::TreeNode("TAA");
+    ImGui::SameLine(75);
+    bool isTAAEnabled = IsEnabled();
+    ImGui::Checkbox(" ", &isTAAEnabled);
+    Enable(isTAAEnabled);
 
     if (m_isEnabled == false)
     {
         m_jitterHelper->m_jitterMode = CJitterHelper::JitterMode::None;
     }
-
-    ImGui::SameLine(25);
-
-    if (ImGui::TreeNode("TAA"))
+    else
+    {
+        m_jitterHelper->m_jitterMode = m_activeJitterMode;
+    }
+    if (taaNode)
     {
         ImGui::Indent();
         if (ImGui::TreeNode("Jitter"))
         {
+            ImGui::InputFloat2("Jitter Offset", &m_jitterHelper->m_jitterOffset[0]);
+
             ImGui::SliderFloat("Jitter Scale", &m_jitterHelper->m_jitterScale, 0.00f, 50.0f);
 
             const char* items[] = { "None", "Uniform2x", "Hammersley4x", "Hammersley8x", "Hammersley16x" };
             int jitMod = (int)m_jitterHelper->m_jitterMode;
-            ImGui::ListBox("Jitter Mode", &jitMod, items, IM_ARRAYSIZE(items), 4);
+            ImGui::ListBox("Jitter Mode", &jitMod, items, IM_ARRAYSIZE(items), 3);
             m_jitterHelper->m_jitterMode = (CJitterHelper::JitterMode)jitMod;
+            
+            if(m_isEnabled)
+                m_activeJitterMode = m_jitterHelper->m_jitterMode;
+
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Reproject"))
+        {
+            ImGui::Checkbox("Use Motion Vectors ", &m_useMotionVectors);
+
+            const char* items[] = { "Standard", "CatmullRom"};
+            int reprojFilter = (int)m_reprojectionFilter;
+            ImGui::ListBox("Reprojection Filter", &reprojFilter, items, IM_ARRAYSIZE(items), 2);
+            m_reprojectionFilter = (ReprojectionFilter)reprojFilter;
 
             ImGui::TreePop();
         }
@@ -206,14 +234,24 @@ void CTAAComputePass::Show(CVulkanRHI* p_rhi)
 
             ImGui::TreePop();
         }
+        if (ImGui::TreeNode("Flicker Correction"))
+        {
+            const char* items[] = { "None", "Log Weighing", "Luminance Weighing"};
+            int filckerCorrectionMode = (int)m_flickerCorrectionMode;
+            ImGui::ListBox("Correction Algorithm", &filckerCorrectionMode, items, IM_ARRAYSIZE(items), 3);
+            m_flickerCorrectionMode = (FlickerCorrection)filckerCorrectionMode;
 
+            ImGui::TreePop();
+        }
+
+        ImGui::Unindent();
         ImGui::TreePop();
     }
 }
 
-CTAAComputePass::CJitterHelper::CJitterHelper()
-    : m_jitterMode(JitterMode::Hammersley4x)
-    , m_jitterScale(0.5f)
+CTAAComputePass::CJitterHelper::CJitterHelper(JitterMode p_jitterMode)
+    : m_jitterMode(p_jitterMode)
+    , m_jitterScale(0.03f)
     , m_jitterOffset(0.0f)
 {
 }

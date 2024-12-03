@@ -13,17 +13,21 @@ layout (location = 0) out vec4 outFragColor;
 
 void main()
 {
-    float ssaoFactor = 1.0f;
+    
+    vec3 color = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_COLOR], g_LinearSampler), inUV).xyz;
+
     if(g_Info.enabelSSAO == 1)
 	{
-		ssaoFactor = imageLoad(g_RT_StorageImages[STORE_SSAO_AND_BLUR], ivec2(gl_FragCoord.xy)).y;
+		float ssaoFactor = imageLoad(g_RT_StorageImages[STORE_SSAO_AND_BLUR], ivec2(gl_FragCoord.xy)).y;
+        color *=  ssaoFactor;
 	}
 
-    vec4 reflectedUV = imageLoad(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_FragCoord.xy));
-    vec3 reflectedColor = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_COLOR], g_LinearSampler), reflectedUV.xy).xyz;
-    vec3 color = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_COLOR], g_LinearSampler), inUV).xyz;
-    color *=  ssaoFactor;
-    color += mix(vec3(0.0), reflectedColor, reflectedUV.a);
+    if(g_Info.ssrEnabled == 1)
+    {
+        vec4 reflectedUV = imageLoad(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_FragCoord.xy));
+        vec3 reflectedColor = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_COLOR], g_LinearSampler), reflectedUV.xy).xyz;
+        color += mix(vec3(0.0), reflectedColor, reflectedUV.a);
+    }
 
     // Reinhard Operator for Tonemapping (moving from HDR to LDR)
 	//color 							    = color / (color + vec3(1.0));

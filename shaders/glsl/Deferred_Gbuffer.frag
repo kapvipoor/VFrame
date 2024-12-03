@@ -7,7 +7,6 @@
 
 #include "common.h"
 #include "MeshCommon.h"
-#include "PBRHelper.h"
 
 layout (location = 0) in vec4 inPosition;
 layout (location = 1) in vec2 inUV;
@@ -61,12 +60,14 @@ void main()
 
 		// Compute difference and convert to UVs
 		vec2 velocity							= (prevPosinClipSpace - posinClipSpace);
-		velocity								= (velocity * vec2(0.5, -0.5)) + 0.5;
+		velocity								= (velocity * vec2(0.5, -0.5));
 
 		// now correct the motion vectors with the jitter that has been applied to
 		// the current view-projection matrix only - g_Info.camViewProj
-		velocity								-= g_Info.taaJitterOffset;
-		outRoughMetalMotion.zw					= velocity;
+		// No need to do this because we have multiplied with non-jittered
+		// viewproj of this and previous frame
+		//velocity								-= g_Info.taaJitterOffset;
+		outRoughMetalMotion.ba					= velocity;
 	}
 	//PickMeshID();
 }

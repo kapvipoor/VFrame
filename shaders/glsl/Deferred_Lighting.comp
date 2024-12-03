@@ -7,7 +7,6 @@
 
 #include "Common.h"
 #include "MeshCommon.h"
-#include "PBRHelper.h"
 
 #define DISPLAY_MOUSE_POINTER
 

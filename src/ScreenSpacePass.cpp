@@ -130,6 +130,11 @@ void CSSAOBlurPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBi
 
 CSSRComputePass::CSSRComputePass(CVulkanRHI* p_rhi)
 	: CPass(p_rhi)
+	, CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
+	, m_maxDistance(5.0f)
+	, m_resolution(1.0f)
+	, m_thickness(0.11f)
+	, m_steps(2)
 {
 	m_frameBuffer.resize(1);
 }
@@ -192,6 +197,27 @@ void CSSRComputePass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertex
 {
 	p_vertexBinding.attributeDescription = m_pipeline.vertexAttributeDesc;
 	p_vertexBinding.bindingDescription = m_pipeline.vertexInBinding;
+}
+
+void CSSRComputePass::Show(CVulkanRHI* p_rhi)
+{
+	bool ssrNode = ImGui::TreeNode("SSR");
+	ImGui::SameLine(75);
+	bool isSSREnabled = IsEnabled();
+	ImGui::Checkbox(" ", &isSSREnabled);
+	Enable(isSSREnabled);
+
+	if (ssrNode)
+	{
+		ImGui::Indent();
+		ImGui::SliderFloat("Max Distance", &m_maxDistance, 0.0f, 50.0f);
+		ImGui::SliderFloat("Resolution", &m_resolution, 0.0f, 1.0f);
+		ImGui::SliderFloat("Steps", &m_steps, 1, 50);
+		ImGui::SliderFloat("Thickness", &m_thickness, 0.0f, 4.0f);
+
+		ImGui::Unindent();
+		ImGui::TreePop();
+	}
 }
 
 CCopyComputePass::CCopyComputePass(CVulkanRHI* p_rhi)
