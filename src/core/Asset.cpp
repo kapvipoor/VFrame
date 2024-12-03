@@ -2138,7 +2138,6 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 		storeRenderTargetsDesInfoList[STORE_ROUGH_METAL_MOTION]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_RoughMetal_Motion).descInfo;
 		storeRenderTargetsDesInfoList[STORE_SS_REFLECTION]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSReflection).descInfo;
 		storeRenderTargetsDesInfoList[STORE_PREV_PRIMARY_COLOR]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Prev_PrimaryColor).descInfo;
-		storeRenderTargetsDesInfoList[STORE_PRIMARY_DEPTH]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_PrimaryDepth).descInfo;
 	}
 
 	// read only texture desc info

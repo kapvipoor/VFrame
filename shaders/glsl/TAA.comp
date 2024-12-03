@@ -48,7 +48,7 @@ vec2 ComputeReprojectedUV(ivec2 in_xy)
 //#else
     else
     {
-        float z = imageLoad(g_RT_StorageImages[STORE_PRIMARY_DEPTH], in_xy).x;
+        float z = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_LinearSampler), uv).x;
         float x = (uv.x * 2.0) - 1.0;
         float y = ((1.0 - uv.y) * 2.0) - 1.0;
         vec4 projPos = vec4(x,y,z,1.0);

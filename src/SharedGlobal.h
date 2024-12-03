@@ -39,8 +39,7 @@
 #define STORE_ROUGH_METAL_MOTION		        5
 #define STORE_SS_REFLECTION     		        6
 #define STORE_PREV_PRIMARY_COLOR   		        7
-#define STORE_PRIMARY_DEPTH        		        8
-#define STORE_MAX_RENDER_TARGETS			    9
+#define STORE_MAX_RENDER_TARGETS			    8
 
 #define SHADOW_BIAS                             0.005
 
