@@ -18,6 +18,7 @@ Feature Integrated
 * [Asynchronous Asset Loading](https://github.com/kapvipoor/VFrame/blob/main/notes/Async%20Asset%20Loading.md)
 * [Forward and Deferred Rendering](https://github.com/kapvipoor/VFrame/blob/main/notes/Forward%20and%20Deferred%20Rendering.md)
 * [Screen Space Reflections](https://github.com/kapvipoor/VFrame/blob/screen_space_reflections/notes/Screen%20Space%20Reflections.md)
+* [Temporal Anti Aliasing](https://github.com/kapvipoor/VFrame/blob/taa/notes/Temporal%20Anti-Aliasing.md)
 
 4.	Object Picker
 	- Challanges Faced:	- 
