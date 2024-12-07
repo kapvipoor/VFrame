@@ -154,10 +154,7 @@ void main()
 			}
 		}
 
-		finalColor = vec4(vec3(g_Info.pbrAmbientFactor) * color.xyz + Lo, 1.0);
-		
-		// Reinhard Operator for Tonemapping (moving from HDR to LDR)
-		finalColor = finalColor / (finalColor + vec4(1.0));
+		finalColor = vec4(vec3(g_Info.pbrAmbientFactor) * color.xyz + Lo, 1.0);	
 	}
 
 	imageStore(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy, finalColor); //vec4(finalColor.xyz, 1.0f));

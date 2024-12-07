@@ -12,10 +12,19 @@
 struct ImageRaw
 {
 	std::string					name;
+	float*						raw_hdr;	// for HDR images
 	unsigned char*				raw;
 	int							width;
 	int							height;
 	int							channels;
+
+	ImageRaw()
+		: name("")
+		, raw_hdr(nullptr)
+		, raw(nullptr)
+		, width(-1)
+		, height(-1)
+		, channels(-1){}
 };
 
 struct Material

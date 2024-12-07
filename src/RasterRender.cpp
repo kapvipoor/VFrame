@@ -183,6 +183,8 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 
 	RETURN_FALSE_IF_FALSE(InitCamera());
 
+	m_ssrComputePass->Enable(false);
+
 	return true;
 }
 

@@ -170,9 +170,6 @@ void main()
 	vec3 ambient 							= vec3(g_Info.pbrAmbientFactor) * color.xyz * ssaoFactor;
 	vec3 finalColor							= ambient + Lo;
 
-	// Reinhard Operator for Tone-mapping (moving from HDR to LDR)
-	finalColor 							    = finalColor / (finalColor + vec3(1.0));
-
 	// Calculate motion vectors
 	{
 		// Perspective divide both positions

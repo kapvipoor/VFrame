@@ -170,6 +170,8 @@ public:
 
 protected:
 	CVulkanRHI::ImageList			m_textures;
+
+	uint8_t GetBytesPerChannel(VkFormat);
 };
 
 class CFixedBuffers : public CBuffers, public CUIParticipant

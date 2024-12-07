@@ -126,12 +126,27 @@ bool LoadRawImage(const char* p_path, ImageRaw& p_data)
 {
 	GetFileName(p_path, p_data.name);
 
-	p_data.raw = stbi_load(p_path, &p_data.width, &p_data.height, &p_data.channels, STBI_rgb_alpha);
+	std::string extn;
+	if (!GetFileExtention(p_path, extn))
+	{
+		std::cout << "Cannot Parse File extension from: " << p_path << std::endl;
+		return false;
+	}
+
+	if (extn == "HDR" || extn == "hdr")
+	{
+		p_data.raw_hdr = stbi_loadf(p_path, &p_data.width, &p_data.height, &p_data.channels, STBI_rgb_alpha);
+	}
+	else
+	{
+		p_data.raw = stbi_load(p_path, &p_data.width, &p_data.height, &p_data.channels, STBI_rgb_alpha);
+	}
 	
 	// forcing this for now; as STBI Image returns the number of available channels in the image and not in loaded raw data; which is irrelevant for now
 	p_data.channels = STBI_rgb_alpha;
 		
-	if (p_data.raw == nullptr)
+	if (p_data.raw == nullptr &&
+		p_data.raw_hdr == nullptr)
 	{
 		std::cout << "stbi_load Failed - " << p_path << std::endl;
 		return false;
@@ -142,7 +157,12 @@ bool LoadRawImage(const char* p_path, ImageRaw& p_data)
 
 void FreeRawImage(ImageRaw& p_data)
 {
-	free(p_data.raw);
+	if(p_data.raw != nullptr)
+		free(p_data.raw);
+
+	if (p_data.raw_hdr != nullptr)
+		free(p_data.raw_hdr);
+
 	p_data = ImageRaw{};
 }
 
@@ -184,7 +204,7 @@ bool LoadTextures(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, std::string
 	{
 		std::cout << "Loading Texture: " << textureCount << " of " << p_gltfInput.images.size() << std::endl;
 
-		ImageRaw iraw{ "", nullptr, 0, 0, 0 };
+		ImageRaw iraw{};
 		std::string path = (p_folder + "/" + image.uri);
 
 		if (image.image.empty())
@@ -216,7 +236,7 @@ bool LoadTextures(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, std::string
 
 	if (p_gltfInput.images.empty())
 	{
-		ImageRaw iraw{ "", nullptr, 0, 0, 0};
+		ImageRaw iraw{};
 		p_objScene.textureList.push_back(iraw);
 	}
 
@@ -580,7 +600,7 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 		int width, height, channels;
 		// loading diffuse textures
 		{
-			ImageRaw diffuse{ "", nullptr, 0, 0, 0};		// initializing diffuse raw texture
+			ImageRaw diffuse{};		// initializing diffuse raw texture
 			if (!material.diffuse_texname.empty())
 			{
 				std::string diffusePath = folderPath + "/" + material.diffuse_texname.c_str();
@@ -595,7 +615,7 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 			p_objScene.textureList.push_back(diffuse);
 		}
 		{
-			ImageRaw normal{ "", nullptr, 0, 0, 0};	// initialized normal raw texture
+			ImageRaw normal{};	// initialized normal raw texture
 			if (!material.bump_texname.empty())
 			{
 				std::string normalPath = folderPath + "/" + material.bump_texname.c_str();

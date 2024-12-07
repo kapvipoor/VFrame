@@ -306,25 +306,32 @@ bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 		return false;
 	}
 
-	std::vector<unsigned char> megaStg_data;
+	VkFormat cubemapFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+
+	std::vector<float> megaStg_data;
 	for (int i = 0; i< p_rawList.size(); i++)
 	{
 		int size = p_rawList[i].width * p_rawList[i].height * p_rawList[i].channels;
-		megaStg_data.insert(megaStg_data.end(), p_rawList[i].raw, p_rawList[i].raw + size);
+		megaStg_data.insert(megaStg_data.end(), p_rawList[i].raw_hdr, p_rawList[i].raw_hdr + size);
 	}
 
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(megaStg_data.size(), p_stg, 
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, p_debugName + "_transfer"));
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(megaStg_data.size() * sizeof(float), p_stg,
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+		p_debugName + "_transfer"));
 
 	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)megaStg_data.data(), p_stg));
 	CVulkanRHI::Image cubemap;
 	cubemap.descInfo.imageLayout					= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	cubemap.descInfo.sampler						= p_samplers[SamplerId::s_Linear].descInfo.sampler;
-	cubemap.format									= VK_FORMAT_R8G8B8A8_UNORM;
+	cubemap.format									= cubemapFormat;
 	cubemap.width									= p_rawList[0].width;
 	cubemap.height									= p_rawList[0].height;
 	cubemap.layerCount								= 6;
-	cubemap.bufOffset								= p_rawList[0].width * p_rawList[0].height * p_rawList[0].channels;
+	cubemap.bufOffset								= p_rawList[0].width 
+		* p_rawList[0].height 
+		* p_rawList[0].channels 
+		* GetBytesPerChannel(cubemapFormat);
 	cubemap.viewType								= VK_IMAGE_VIEW_TYPE_CUBE;
 
 	VkImageCreateInfo imgInfo						= CVulkanCore::ImageCreateInfo();
@@ -333,7 +340,7 @@ bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 	imgInfo.arrayLayers								= 6;
 	imgInfo.flags									= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 	imgInfo.usage									= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-	imgInfo.format									= VK_FORMAT_R8G8B8A8_UNORM;
+	imgInfo.format									= cubemapFormat;
 
 	RETURN_FALSE_IF_FALSE(p_rhi->CreateTexture(p_stg, cubemap, imgInfo, p_cmdBfr, p_debugName));
 	// Doing this because; if the id is set to -1, then the intent is to grow the texture list at runtime and not a fixed size
@@ -352,6 +359,21 @@ bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 void CTextures::IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id)
 {
 	p_rhi->IssueLayoutBarrier(p_imageLayout, m_textures[p_id], p_cmdBfr);
+}
+
+uint8_t CTextures::GetBytesPerChannel(VkFormat p_format)
+{
+	if (p_format >= VK_FORMAT_R8_UNORM && p_format <= VK_FORMAT_A8B8G8R8_SRGB_PACK32)
+		return 1;
+	else if (p_format >= VK_FORMAT_R16_UNORM && p_format <= VK_FORMAT_R16G16B16A16_SFLOAT)
+		return 2;
+	else if (p_format >= VK_FORMAT_R32_UINT && p_format <= VK_FORMAT_R32G32B32A32_SFLOAT)
+		return 4;
+
+	// slapping warning to avoid patching other cases. Will address them
+	// based on need.
+	std::cout << "Warning - CTextures::GetBytesPerChannel is returning 0." << std::endl;
+	return 0;
 }
 
 void CTextures::PushBackPreLoadedTexture(uint32_t p_texIndex)
@@ -1020,12 +1042,12 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 	// Load sky box cube map
 	{
 		std::filesystem::path cubemap_path[6]{
-			g_DefaultPath / "skybox_textures/f.png"
-		,	g_DefaultPath / "skybox_textures//b.png"
-		,	g_DefaultPath / "skybox_textures/t.png"
-		,	g_DefaultPath / "skybox_textures/bt.png"
-		,	g_DefaultPath / "skybox_textures/l.png"
-		,	g_DefaultPath / "skybox_textures/r.png"
+			g_DefaultPath / "skybox_hdr/pz.hdr"
+		,	g_DefaultPath / "skybox_hdr/nz.hdr"
+		,	g_DefaultPath / "skybox_hdr/py_cw.hdr"
+		,	g_DefaultPath / "skybox_hdr/ny_ccw.hdr"
+		,	g_DefaultPath / "skybox_hdr/nx.hdr"
+		,	g_DefaultPath / "skybox_hdr/px.hdr"
 		};
 
 		std::vector<ImageRaw> cubemap_raw;
@@ -1039,6 +1061,11 @@ bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samp
 		RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateCubemap(p_rhi, stg, cubemap_raw, *p_samplerList, p_cmdBfr, "skybox"));
 
 		p_stgList.push_back(stg);
+
+		for (int i = 0; i < 6; i++)
+		{
+			FreeRawImage(cubemap_raw[i]);
+		}
 	}
 
 	// Load skybox geometry
@@ -1616,8 +1643,13 @@ bool CReadOnlyTextures::CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::B
 	}
 	
 	CVulkanRHI::Buffer staging;
-	ImageRaw raw{ "ssao_noise", ssaoNoise.data(), (int)ssaoNoiseDim , (int)ssaoNoiseDim, 4};
-	
+	ImageRaw raw{};
+	raw.name = "ssao_noise";
+	raw.raw = ssaoNoise.data();
+	raw.width = (int)ssaoNoiseDim;
+	raw.height = (int)ssaoNoiseDim;
+	raw.channels = 4;
+
 	RETURN_FALSE_IF_FALSE(CreateTexture(p_rhi, staging, &raw, VK_FORMAT_R8G8B8A8_UNORM, p_cmdBfr, raw.name, CReadOnlyTextures::tr_SSAONoise));
 	
 	p_stgList.push_back(staging);

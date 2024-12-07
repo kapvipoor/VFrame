@@ -30,10 +30,10 @@ void main()
     }
 
     // Reinhard Operator for Tonemapping (moving from HDR to LDR)
-	//color 							    = color / (color + vec3(1.0));
+	color 							    = color / (color + vec3(1.0));
 	
     // Gamma Correction because all light calculation is in sRGB and not linear
-	//color 						        = pow(color, vec3(1.0/2.2));
+	color 						        = pow(color, vec3(1.0/2.2));
 	
     outFragColor                        = vec4(color, 1.0);
 }
