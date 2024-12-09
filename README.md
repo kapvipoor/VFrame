@@ -19,6 +19,7 @@ Feature Integrated
 * [Forward and Deferred Rendering](https://github.com/kapvipoor/VFrame/blob/main/notes/Forward%20and%20Deferred%20Rendering.md)
 * [Screen Space Reflections](https://github.com/kapvipoor/VFrame/blob/main/notes/Screen%20Space%20Reflections.md)
 * [Temporal Anti Aliasing](https://github.com/kapvipoor/VFrame/blob/main/notes/Temporal%20Anti-Aliasing.md)
+* [Tone Mapping](https://github.com/kapvipoor/VFrame/blob/hdr_correction/notes/Tone%20Mapping.md)
 
 4.	Object Picker
 	- Challanges Faced:	- 
