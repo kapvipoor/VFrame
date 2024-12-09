@@ -4,7 +4,7 @@
 
 layout(set = 0, binding = 0) uniform GlobalBuffer
 {
-	float	UNASSIGINED_float;
+	float	toneMapperSelect;
 	float	cameraLookFromX;
 	float	cameraLookFromY;
 	float	cameraLookFromZ;
@@ -33,6 +33,11 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 	float	taaUseMotionVectors;
 	float	taaFlickerCorrectionMode;
 	float	taaReprojectionFilter;
+	float	toneMappingExposure;
+	float	UNASSIGINED_Float0;
+	float	UNASSIGINED_Float1;
+	float	UNASSIGINED_Float2;
+	float	UNASSIGINED_Float3;
 } g_Info;
 
 layout(set = 0, binding = 1) uniform sampler g_LinearSampler;

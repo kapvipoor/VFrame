@@ -4,6 +4,9 @@
 
 CToneMapPass::CToneMapPass(CVulkanRHI* p_rhi)
     : CPass(p_rhi)
+    , CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
+    , m_toneMapper(ToneMapper::AMD)
+    , m_exposure(1.0f)
 {
     m_frameBuffer.resize(FRAME_BUFFER_COUNT);
 }
@@ -108,6 +111,26 @@ void CToneMapPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBin
 {
     p_vertexBinding.attributeDescription = m_pipeline.vertexAttributeDesc;
     p_vertexBinding.bindingDescription = m_pipeline.vertexInBinding;
+}
+
+void CToneMapPass::Show(CVulkanRHI* p_rhi)
+{
+    bool toneMappingNode = ImGui::TreeNode("Tone Mapping");
+    if (toneMappingNode)
+    {
+        ImGui::Indent();
+      
+        const char* items[] = {"None", "Reinhard", "AMD" };
+        int tonemappingMode = (int)m_toneMapper;
+        ImGui::ListBox("Tone Mapper", &tonemappingMode, items, IM_ARRAYSIZE(items), 3);
+        m_toneMapper = (ToneMapper)tonemappingMode;
+
+        ImGui::SliderFloat("Exposure", &m_exposure, 0.1f, 5.0f);
+
+        ImGui::Unindent();
+
+        ImGui::TreePop();
+    }
 }
 
 CTAAComputePass::CTAAComputePass(CVulkanRHI* p_rhi)

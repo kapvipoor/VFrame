@@ -3,9 +3,16 @@
 #include "Pass.h"
 #include "core/UI.h"
 
-class CToneMapPass : public CPass
+class CToneMapPass : public CPass, CUIParticipant
 {
 public:
+	enum ToneMapper
+	{
+		  None = 0
+		, Reinhard
+		, AMD
+	};
+
 	CToneMapPass(CVulkanRHI*);
 	~CToneMapPass();
 
@@ -17,6 +24,15 @@ public:
 	virtual void Destroy() override;
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+
+	virtual void Show(CVulkanRHI* p_rhi) override;
+
+	CToneMapPass::ToneMapper GetActiveToneMapper() { return m_toneMapper; }
+	float GetExposure() { return m_exposure; }
+
+private:
+	ToneMapper m_toneMapper;
+	float m_exposure;
 };
 
 class CTAAComputePass : public CPass, CUIParticipant

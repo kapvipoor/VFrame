@@ -1871,7 +1871,6 @@ CFixedBuffers::CFixedBuffers()
 	: CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
 	, CBuffers(CFixedBuffers::FixedBufferId::fb_max)
 {
-	m_primaryUniformData.UNASSIGINED_float		= 0.0f;
 	m_primaryUniformData.ssaoKernelSize			= 64.0f;
 	m_primaryUniformData.ssaoRadius				= 0.5f;
 	m_primaryUniformData.enableShadowPCF		= 0;
@@ -1885,8 +1884,14 @@ CFixedBuffers::CFixedBuffers()
 	m_primaryUniformData.ssrSteps				= 2;
 	m_primaryUniformData.taaResolveWeight		= 0.9f;
 	m_primaryUniformData.taaUseMotionVectors	= false;
-	m_primaryUniformData.taaFlickerCorectionMode = 0;	// None
-	m_primaryUniformData.taaReprojectionFilter	= 0;	// Standard
+	m_primaryUniformData.taaFlickerCorectionMode = 0;		// None
+	m_primaryUniformData.taaReprojectionFilter	= 0;		// Standard
+	m_primaryUniformData.toneMappingSelection	= 0.0f;
+	m_primaryUniformData.toneMappingExposure	= 1.0f;
+	m_primaryUniformData.UNASSIGNED_float0		= 0.0f;
+	m_primaryUniformData.UNASSIGNED_float1		= 0.0f;
+	m_primaryUniformData.UNASSIGNED_float2		= 0.0f;
+	m_primaryUniformData.UNASSIGNED_float3		= 0.0f;
 }
 
 CFixedBuffers::~CFixedBuffers()
@@ -1896,7 +1901,7 @@ CFixedBuffers::~CFixedBuffers()
 bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 {
 	size_t primaryUniformBufferSize =
-		(sizeof(float) * 1)					// UNASSIGINED float
+		  (sizeof(float) * 1)				// Tone Mapper Active
 		+ (sizeof(float) * 3)				// camera look-from
 		+ (sizeof(float) * 16)				// camera view projection
 		+ (sizeof(float) * 16)				// camera view projection with Jitter
@@ -1917,7 +1922,7 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(float) * 1)				// PBR ambient Factor
 		+ (sizeof(int) * 1)					// enable SSAO
 		+ (sizeof(float) * 1)				// biasSSAO
-		+ (sizeof(float) * 1);				// SSR Enable
+		+ (sizeof(float) * 1)				// SSR Enable
 		+ (sizeof(float) * 1)				// SSR Max Distance
 		+ (sizeof(float) * 1)				// SSR Resolution
 		+ (sizeof(float) * 1)				// SSR Thickness
@@ -1925,7 +1930,12 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(float) * 1)				// TAA Resolve Weight
 		+ (sizeof(float) * 1)				// TAA Use Motion Vectors
 		+ (sizeof(float) * 1)				// TAA Flicker Correction Mode
-		+ (sizeof(float) * 1);				// TAA Reprojection Filter
+		+ (sizeof(float) * 1)				// TAA Reprojection Filter
+		+ (sizeof(float) * 1)				// Tone Mapping Exposure
+		+ (sizeof(float) * 1)				// UNASSIGINED_Float_0
+		+ (sizeof(float) * 1)				// UNASSIGINED_Float_1
+		+ (sizeof(float) * 1)				// UNASSIGINED_Float_2
+		+ (sizeof(float) * 1);				// UNASSIGINED_Float_3
 		
 
 	size_t objPickerBufferSize = sizeof(uint32_t) * 1; // selected mesh ID
@@ -2029,7 +2039,7 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	skyboxModelView[15]						= 1.0;
 
 	std::vector<float> uniformValues;
-	uniformValues.push_back(m_primaryUniformData.UNASSIGINED_float);																						// UNASSIGINED
+	uniformValues.push_back((float)m_primaryUniformData.toneMappingSelection);																				// Tone Mapping Selection
 	std::copy(&m_primaryUniformData.cameraLookFrom[0], &m_primaryUniformData.cameraLookFrom[3], std::back_inserter(uniformValues));							// camera look from x, y, z
 	std::copy(&cameraViewProj[0], &cameraViewProj[16], std::back_inserter(uniformValues));																	// camera view projection matrix
 	std::copy(&cameraJitteredViewProj[0], &cameraJitteredViewProj[16], std::back_inserter(uniformValues));													// camera jittered view projection matrix
@@ -2056,6 +2066,12 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	uniformValues.push_back((float)m_primaryUniformData.taaUseMotionVectors);																				// TAA Use Motion Vector
 	uniformValues.push_back((float)m_primaryUniformData.taaFlickerCorectionMode);																			// TAA Flicker Correction Mode
 	uniformValues.push_back((float)m_primaryUniformData.taaReprojectionFilter);																				// TAA Reprojection Filter
+	uniformValues.push_back(m_primaryUniformData.toneMappingExposure);																						// Tone Mapping Exposure
+	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float0);																					// UNASSIGINED_0
+	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float1);																					// UNASSIGINED_1
+	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float2);																					// UNASSIGINED_2
+	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float3);																					// UNASSIGINED_3
+
 	
 	uint8_t* data							= (uint8_t*)(uniformValues.data());
 	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, m_buffers[p_scId], false));

@@ -184,6 +184,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 	RETURN_FALSE_IF_FALSE(InitCamera());
 
 	m_ssrComputePass->Enable(false);
+	m_taaComputePass->Enable(false);
 
 	return true;
 }
@@ -226,6 +227,8 @@ bool CRasterRender::on_update(float delta)
 		uniformData.taaUseMotionVectors				= m_taaComputePass->UseMotionVectors();
 		uniformData.taaFlickerCorectionMode			= (float)m_taaComputePass->GetFlickerCorrectionMode();
 		uniformData.taaReprojectionFilter			= (float)m_taaComputePass->GetReprojectionFilter();
+		uniformData.toneMappingSelection			= (float)m_toneMapPass->GetActiveToneMapper();
+		uniformData.toneMappingExposure				= m_toneMapPass->GetExposure();
 
 		FixedUpdateData fixedUpdate{};
 		fixedUpdate.primaryUniData					= &uniformData;

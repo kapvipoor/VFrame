@@ -190,7 +190,7 @@ public:
 
 	struct PrimaryUniformData
 	{
-		float						UNASSIGINED_float;
+		float						toneMappingSelection;
 		nm::float3					cameraLookFrom;
 		nm::float4x4				cameraViewProj;
 		nm::float4x4				cameraJitteredViewProj;
@@ -217,6 +217,11 @@ public:
 		float						taaUseMotionVectors;
 		float						taaFlickerCorectionMode;
 		float						taaReprojectionFilter;
+		float						toneMappingExposure;
+		float						UNASSIGNED_float0;
+		float						UNASSIGNED_float1;
+		float						UNASSIGNED_float2;
+		float						UNASSIGNED_float3;
 	};
 
 	CFixedBuffers();
