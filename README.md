@@ -19,7 +19,7 @@ Feature Integrated
 * [Forward and Deferred Rendering](https://github.com/kapvipoor/VFrame/blob/main/notes/Forward%20and%20Deferred%20Rendering.md)
 * [Screen Space Reflections](https://github.com/kapvipoor/VFrame/blob/main/notes/Screen%20Space%20Reflections.md)
 * [Temporal Anti Aliasing](https://github.com/kapvipoor/VFrame/blob/main/notes/Temporal%20Anti-Aliasing.md)
-* [Tone Mapping](https://github.com/kapvipoor/VFrame/blob/hdr_correction/notes/Tone%20Mapping.md)
+* [Tone Mapping](https://github.com/kapvipoor/VFrame/blob/main/notes/Tone%20Mapping.md)
 
 4.	Object Picker
 	- Challanges Faced:	- 
@@ -27,12 +27,6 @@ Feature Integrated
 	- Bugs:
 		1. Object picking is not accurate in Forward Pass
 		2. Object picking is not correctly implemented in Differed Pass
-
-5.	Skybox
-	- Challanges Faced:
-	- Algorithm Limitations:
-	- Bugs:
-
 6.	Normal Maps
 	- Challanges Faced:
 		1. Did not use the correct texture format to store Normals and so computed wrong TBN matrix (used UNORM duh!)
