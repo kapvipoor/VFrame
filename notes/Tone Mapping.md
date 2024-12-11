@@ -19,8 +19,8 @@
 * Used GIMP to rotate few mis-aligned .HDR faces and export back to .HDR
   
 ## Screenshots
-https://github.com/kapvipoor/VFrame/blob/main/notes/assets/Color%20Write%20Pipleine.PNG
+<img width="1444" alt="ColorWritePipeline" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/Color%20Write%20Pipleine.PNG">
 
-https://github.com/kapvipoor/VFrame/blob/main/notes/assets/HDR%20On_Off.PNG
+<img width="1444" alt="HDR_On_Off" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/HDR%20On_Off.PNG">
 
 
