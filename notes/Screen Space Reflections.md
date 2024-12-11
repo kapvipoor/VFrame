@@ -20,5 +20,5 @@
 * https://imanolfotia.com/blog/1
   
 ## Screenshots
-<img width="1444" alt="SSR_1" src="https://github.com/kapvipoor/VFrame/blob/screen_space_reflections/notes/assets/SSR_1.PNG">
-<img width="1444" alt="SSR_2" src="https://github.com/kapvipoor/VFrame/blob/screen_space_reflections/notes/assets/SSR_2.PNG">
+<img width="1444" alt="SSR_1" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/SSR_1.PNG">
+<img width="1444" alt="SSR_2" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/SSR_2.PNG">
