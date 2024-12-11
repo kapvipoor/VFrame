@@ -6,7 +6,7 @@
 * The lighting pass is computed in HDR. Following this, SSR and SSAO composition and tone mapping take place in the tone mapping pass. Followed by gamma correction to move to linear space before writing to swapchain buffer
 
 ## Challenges
-* Some type of adaptive exposure might be a good option. Otherwise a lot of details are over-exposed at current exposure default of 0.0f.
+* Some type of adaptive exposure might be a good option. Otherwise a lot of details are over-exposed at current exposure default of 1.0f.
 * SSR composition looks broken.
 
 ## Performance 
