@@ -183,7 +183,8 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 
 	RETURN_FALSE_IF_FALSE(InitCamera());
 
-	m_ssrComputePass->Enable(false);
+	m_rhi->SetRenderType(CVulkanRHI::RendererType::Deferred);
+	//m_ssrComputePass->Enable(false);
 	m_taaComputePass->Enable(false);
 
 	return true;

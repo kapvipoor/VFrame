@@ -141,8 +141,11 @@ bool LoadRawImage(const char* p_path, ImageRaw& p_data)
 	{
 		p_data.raw = stbi_load(p_path, &p_data.width, &p_data.height, &p_data.channels, STBI_rgb_alpha);
 	}
-	
-	// forcing this for now; as STBI Image returns the number of available channels in the image and not in loaded raw data; which is irrelevant for now
+
+	p_data.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(p_data.width, p_data.height)) + 1));
+
+	// forcing this for now; as STBI Image returns the number of available channels in the image and not in 
+	// loaded raw data; which is irrelevant for now
 	p_data.channels = STBI_rgb_alpha;
 		
 	if (p_data.raw == nullptr &&
@@ -209,14 +212,7 @@ bool LoadTextures(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, std::string
 
 		if (image.image.empty())
 		{
-			iraw.raw = stbi_load(path.c_str(), &iraw.width, &iraw.height, &iraw.channels, STBI_rgb_alpha);
-			iraw.channels = STBI_rgb_alpha;
-
-			if (iraw.raw == nullptr)
-			{
-				std::cerr << "stbi_load Failed - " << path << std::endl;
-				return false;
-			}
+			RETURN_FALSE_IF_FALSE(LoadRawImage(path.c_str(), iraw));
 		}
 		else
 		{
@@ -225,6 +221,7 @@ bool LoadTextures(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, std::string
 			iraw.width = image.width;
 			iraw.height = image.height;
 			iraw.channels = image.component;
+			iraw.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(iraw.width, iraw.height)) + 1));
 
 			iraw.raw = static_cast<unsigned char*>(malloc(image.image.size()));
 			memcpy(iraw.raw, image.image.data(), image.image.size());

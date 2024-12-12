@@ -261,23 +261,31 @@ bool CTextures::CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 	{
 		CVulkanRHI::Image img;
 
-		size_t texSize							= p_rawImg->width * p_rawImg->height * p_rawImg->channels;
+		size_t texSize = p_rawImg->width * p_rawImg->height * p_rawImg->channels;
 
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(texSize, p_stg, 
 			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, p_debugName + "_transfer"));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)p_rawImg->raw, p_stg));
 
-		img.format								= p_format;//VK_FORMAT_R8G8B8A8_UNORM;
-		img.width								= p_rawImg->width;
-		img.height								= p_rawImg->height;
-		img.viewType							= VK_IMAGE_VIEW_TYPE_2D;
+		img.format = p_format;//VK_FORMAT_R8G8B8A8_UNORM;
+		img.width = p_rawImg->width;
+		img.height = p_rawImg->height;
+		img.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		img.levelCount = p_rawImg->mipLevels;
 
-		VkImageCreateInfo imgCrtInfo			= CVulkanCore::ImageCreateInfo();
-		imgCrtInfo.extent.width					= p_rawImg->width;
-		imgCrtInfo.extent.height				= p_rawImg->height;
-		imgCrtInfo.format						= img.format;
-		imgCrtInfo.usage						= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		VkImageCreateInfo imgCrtInfo = CVulkanCore::ImageCreateInfo();
+		imgCrtInfo.extent.width = p_rawImg->width;
+		imgCrtInfo.extent.height = p_rawImg->height;
+		imgCrtInfo.format = img.format;
+		imgCrtInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		imgCrtInfo.mipLevels = p_rawImg->mipLevels;
+
+		// If the mip count is more than 1, we will use the texture
+		// to read from and write to when generating the mip chain
+		// Hence the usage needs to be both Source and Destination
+		if (imgCrtInfo.mipLevels > 1)
+			imgCrtInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateTexture(p_stg, img, imgCrtInfo, p_cmdBfr, p_debugName))
 
@@ -1093,10 +1101,10 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	//m_scenePaths.push_back(g_AssetPath/"shadow_test_3.gltf");																		//1
 	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");						//2
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
-	//defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
+	defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
 	//defaultScenePaths.push_back(g_AssetPath / "glTFSampleModels/2.0/Sponza/glTF/Sponza.gltf");
-	//defaultScenePaths.push_back(g_AssetPath/"glTF-Sample-Models/2.0/Suzanne/glTF/Suzanne.gltf");											//4													//5
-	defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf");
+	defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");											//4													//5
+	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf");
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");				//6
 	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/cube/cube.obj");																			//7
 	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/icosphere.gltf");																			//8

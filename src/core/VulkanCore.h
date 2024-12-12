@@ -174,10 +174,12 @@ public:
 		uint32_t											height;
 
 		uint32_t											layerCount;
+		uint32_t											levelCount;
 		uint32_t											bufOffset;			// assuming the buffer offset for each layer is going to be same
 
 		Image() :
 			layerCount(1)
+			, levelCount(1)
 			, bufOffset(0) {}
 	};
 
@@ -333,7 +335,7 @@ public:
 	void DestroyFence(VkFence p_fence);
 
 	void IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr);
-	void IssueImageLayoutBarrier(VkImageLayout p_old, VkImageLayout p_new, uint32_t layerCount, VkImage& p_image, VkImageUsageFlags p_usage, VkCommandBuffer p_cmdBfr);
+	void IssueImageLayoutBarrier(VkImageLayout p_old, VkImageLayout p_new, uint32_t layerCount, uint32_t lavelCount, VkImage& p_image, VkImageUsageFlags p_usage, VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel = 0);
 	void IssueBufferBarrier(VkAccessFlags p_srcAcc, VkAccessFlags p_dstAcc, VkPipelineStageFlags p_srcStg, VkPipelineStageFlags p_dstStg, VkBuffer& p_buffer, VkCommandBuffer p_cmdBfr);
 
 	bool IsFormatSupported(VkFormat p_format, VkFormatFeatureFlags p_featureflag);
@@ -343,11 +345,12 @@ public:
 	bool CreateImage(VkImageCreateInfo p_imageCreateInfo, VkImage& p_image);
 	bool AllocateImageMemory(VkImage p_image, VkMemoryPropertyFlags p_memFlags, VkDeviceMemory& p_devMem);
 	bool BindImageMemory(VkImage& p_image, VkDeviceMemory& p_devMem);
-	bool CreateImagView(VkImageUsageFlags p_usage, VkImage p_image, VkFormat p_format, VkImageViewType p_viewType, VkImageView& p_imgView);
+	bool CreateImagView(VkImageUsageFlags p_usage, VkImage p_image, VkFormat p_format, VkImageViewType p_viewType, uint32_t p_levelCount, VkImageView& p_imgView);
 	void DestroyImageView(VkImageView p_imageView);
 	void DestroyImage(VkImage p_image);
 	void ClearImage(VkCommandBuffer p_cmdBfr, VkImage p_src, VkImageLayout p_srclayout, VkClearValue p_clearValue);
 	void CopyImage(VkCommandBuffer p_cmdBfr, VkImage p_src, VkImageLayout p_srclayout, VkImage p_dest, VkImageLayout p_destLayout, uint32_t p_width, uint32_t p_height);
+	void BlitImage(VkCommandBuffer p_cmdBfr, VkImageBlit p_imgBlit, VkImage p_srcImage, VkImageLayout p_srcImageLayout, VkImage p_dstImage, VkImageLayout p_dstImageLayout, VkFormat p_imgForamt);
 
 	bool CreateSampler(Sampler& p_sampler);
 	void DestroySampler(VkSampler p_sampler);

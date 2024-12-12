@@ -1281,13 +1281,14 @@ void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkComm
 	if (p_new == p_image.curLayout)
 		return;
 
-	IssueImageLayoutBarrier(p_image.curLayout, p_new, p_image.layerCount, p_image.image, p_image.usage, p_cmdBfr);
+	IssueImageLayoutBarrier(p_image.curLayout, p_new, p_image.layerCount, p_image.levelCount, p_image.image, p_image.usage, p_cmdBfr);
 	p_image.curLayout = p_new;
 }
 
 void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_new, 
-											uint32_t layerCount, VkImage& p_image, VkImageUsageFlags p_usage,
-											VkCommandBuffer p_cmdBfr)
+											uint32_t p_layerCount, uint32_t p_levelCount, 
+											VkImage& p_image, VkImageUsageFlags p_usage,
+											VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel)
 {
 	VkImageMemoryBarrier imgMemBarrier{};
 	imgMemBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1300,9 +1301,9 @@ void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_
 	// setting affected image and specified part
 	imgMemBarrier.image = p_image;
 	imgMemBarrier.subresourceRange.baseArrayLayer = 0;
-	imgMemBarrier.subresourceRange.levelCount = 1;
-	imgMemBarrier.subresourceRange.layerCount = layerCount;
-	imgMemBarrier.subresourceRange.baseMipLevel = 0;
+	imgMemBarrier.subresourceRange.levelCount = p_levelCount;
+	imgMemBarrier.subresourceRange.layerCount = p_layerCount;
+	imgMemBarrier.subresourceRange.baseMipLevel = p_baseMipLevel;
 	
 	if (p_usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
 	{
@@ -1358,6 +1359,11 @@ void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_
 	case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
 		imgMemBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 		dst = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		break;
+
+	case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+		imgMemBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+		dst = VK_PIPELINE_STAGE_TRANSFER_BIT;
 		break;
 
 	default:
@@ -1482,7 +1488,8 @@ bool CVulkanCore::BindImageMemory(VkImage& p_image, VkDeviceMemory& p_devMem)
 
 }
 
-bool CVulkanCore::CreateImagView(VkImageUsageFlags p_usage, VkImage p_image, VkFormat p_format, VkImageViewType p_viewType, VkImageView& p_imgView)
+bool CVulkanCore::CreateImagView(VkImageUsageFlags p_usage, VkImage p_image, VkFormat p_format, 
+	VkImageViewType p_viewType, uint32_t p_levelCount, VkImageView& p_imgView)
 {
 	VkImageAspectFlags aspectFlag = VK_IMAGE_ASPECT_COLOR_BIT;
 	if (p_usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
@@ -1499,7 +1506,7 @@ bool CVulkanCore::CreateImagView(VkImageUsageFlags p_usage, VkImage p_image, VkF
 	imgviewCreateInfo.subresourceRange.baseMipLevel = 0;
 	imgviewCreateInfo.subresourceRange.layerCount = (p_viewType == VK_IMAGE_VIEW_TYPE_CUBE) ? 6 : 1;
 	imgviewCreateInfo.subresourceRange.baseArrayLayer = 0;
-	imgviewCreateInfo.subresourceRange.levelCount = 1;
+	imgviewCreateInfo.subresourceRange.levelCount = p_levelCount;
 	VkResult res = vkCreateImageView(m_vkDevice, &imgviewCreateInfo, nullptr, &p_imgView);
 	if (res != VK_SUCCESS)
 	{
@@ -1547,6 +1554,21 @@ void CVulkanCore::CopyImage(VkCommandBuffer p_cmdBfr, VkImage p_src, VkImageLayo
 	vkCmdCopyImage(p_cmdBfr, p_src, p_srclayout, p_dest, p_destLayout, 1, &imageCopyRegion);
 }
 
+void CVulkanCore::BlitImage(VkCommandBuffer p_cmdBfr, VkImageBlit p_imgBlit, VkImage p_srcImage, 
+	VkImageLayout p_srcImageLayout, VkImage p_dstImage, VkImageLayout p_dstImageLayout, VkFormat p_imgForamt)
+{
+	// Check for device support for Linear Blitting
+	VkFormatProperties props{};
+	vkGetPhysicalDeviceFormatProperties(m_vkPhysicalDevice, p_imgForamt,&props);
+	if (!(props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
+	{
+		std::cerr << "CVulkanCore::BlitImage Filed since physical device does not support Linear Filtering on Blit operation" << std::endl; 
+		return;
+	}
+
+	vkCmdBlitImage(p_cmdBfr, p_srcImage, p_srcImageLayout, p_dstImage, p_dstImageLayout, 1, &p_imgBlit, VK_FILTER_LINEAR);
+}
+
 bool CVulkanCore::CreateSampler(Sampler& p_sampler)
 {
 	VkSamplerCreateInfo samplerInfo{};
@@ -1575,7 +1597,7 @@ bool CVulkanCore::CreateSampler(Sampler& p_sampler)
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	samplerInfo.mipLodBias = 0.0f;
 	samplerInfo.minLod = 0.0f;
-	samplerInfo.maxLod = 1.0f;
+	samplerInfo.maxLod = 100.0f;
 
 	VkResult res = vkCreateSampler(m_vkDevice, &samplerInfo, nullptr, &p_sampler.descInfo.sampler);
 	if (res != VK_SUCCESS)
