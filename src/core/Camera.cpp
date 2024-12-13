@@ -186,7 +186,7 @@ bool COrthoCamera::Init(InitData* p_initData)
     OrthInitdData* orthoInitData = dynamic_cast<OrthInitdData*>(p_initData);
     if (!orthoInitData)
     {
-        std::cout << "dynamic_cast<OrthInitdData*>(p_initData) failed";
+        std::cerr << "COrthoCamera::Init Errror: dynamic_cast<OrthInitdData*>(p_initData) failed" << std::endl;
         return false;
     }        
 

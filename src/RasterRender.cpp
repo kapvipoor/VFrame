@@ -297,7 +297,7 @@ bool CRasterRender::on_update(float delta)
 		int meshID = -1;
 		RETURN_FALSE_IF_FALSE(m_rhi->ReadFromBuffer((uint8_t*)&meshID, m_fixedAssets->GetFixedBuffers()->GetBuffer(CFixedBuffers::fb_ObjectPickerRead)));
 		m_loadableAssets->GetScene()->SetSelectedRenderableMesh(meshID);
-		std::cout << "Picked Mesh: " << (meshID - 1) << std::endl;
+		std::clog << "Picked Mesh: " << (meshID - 1) << std::endl;
 	}
 
 	return true;
@@ -320,7 +320,7 @@ void CRasterRender::on_present()
 	VkResult res = vkQueuePresentKHR(queue, &presentInfo);
 	if (res != VK_SUCCESS)
 	{
-		std::cerr << "vkQueueSubmit failed " << res << std::endl;
+		std::cerr << "CRasterRender::on_present Error: vkQueueSubmit failed " << res << std::endl;
 	}
 
 	m_rhi->WaitToFinish(queue);

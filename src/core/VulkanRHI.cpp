@@ -177,7 +177,10 @@ bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_
 		feature |= VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;
 
 	if (!IsFormatSupported(p_format, feature))
+	{	
+		std::cerr << "Failed to Create Render Target (CVulkanRHI::CreateRenderTarget): " << p_DebugName << std::endl;
 		return false;
+	}
 
 	p_renderTarget.usage							= p_usage;
 	p_renderTarget.format							= p_format;

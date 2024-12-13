@@ -92,9 +92,9 @@ void main()
 
     if(g_Info.ssrEnabled == 1)
     {
-        vec4 reflectedUV = imageLoad(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_FragCoord.xy));
+        vec3 reflectedUV = imageLoad(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_FragCoord.xy)).xyz;
         vec3 reflectedColor = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_COLOR], g_LinearSampler), reflectedUV.xy).xyz;
-        color += mix(vec3(0.0), reflectedColor, reflectedUV.a);
+        color += mix(vec3(0.0), reflectedColor, reflectedUV.z);
     }
 
     // Applying Exposure

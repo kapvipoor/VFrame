@@ -129,7 +129,7 @@ bool LoadRawImage(const char* p_path, ImageRaw& p_data)
 	std::string extn;
 	if (!GetFileExtention(p_path, extn))
 	{
-		std::cout << "Cannot Parse File extension from: " << p_path << std::endl;
+		std::cerr << "LoadRawImage Error: Cannot Parse File extension from: " << p_path << std::endl;
 		return false;
 	}
 
@@ -151,7 +151,7 @@ bool LoadRawImage(const char* p_path, ImageRaw& p_data)
 	if (p_data.raw == nullptr &&
 		p_data.raw_hdr == nullptr)
 	{
-		std::cout << "stbi_load Failed - " << p_path << std::endl;
+		std::cerr << "LoadRawImage Error: stbi_load Failed - " << p_path << std::endl;
 		return false;
 	}
 
@@ -175,7 +175,7 @@ bool LoadMaterials(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, uint32_t p
 	int materialCount = 0;
 	for (auto& gltf_mat : p_gltfInput.materials)
 	{
-		std::cout << "Loading Material: " << materialCount << " of " << p_gltfInput.materials.size() << std::endl;
+		std::clog << "Loading Material: " << materialCount + 1 << " of " << p_gltfInput.materials.size() << std::endl;
 
 		Material mat;
 		if (gltf_mat.values.find("baseColorTexture") != gltf_mat.values.end())
@@ -205,7 +205,7 @@ bool LoadTextures(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, std::string
 	int textureCount = 0;
 	for (const auto& image : p_gltfInput.images)
 	{
-		std::cout << "Loading Texture: " << textureCount << " of " << p_gltfInput.images.size() << std::endl;
+		std::clog << "Loading Texture: " << textureCount + 1 << " of " << p_gltfInput.images.size() << std::endl;
 
 		ImageRaw iraw{};
 		std::string path = (p_folder + "/" + image.uri);
@@ -422,7 +422,7 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 	std::string fileExtn;
 	if(!GetFileExtention(p_path, fileExtn))
 	{
-		std::cout << "Failed to Get Extn - " << p_path << std::endl;
+		std::cerr << "LoadGltf Error: Failed to Get Extn - " << p_path << std::endl;
 		return false;
 	}
 
@@ -430,7 +430,7 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 	{
 		if (!gltfContext.LoadASCIIFromFile(&input, &error, &warning, p_path))
 		{
-			std::cerr << "Failed to load Gltf - " << p_path << std::endl;
+			std::cerr << "LoadGltf Error: Failed to load Gltf - " << p_path << std::endl;
 			std::cerr << error << std::endl;
 			return false;
 		}
@@ -439,9 +439,8 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 	{
 		if (!gltfContext.LoadBinaryFromFile(&input, &error, &warning, p_path))
 		{
-			std::cerr << "Failed to load Gltf - " << p_path << std::endl;
+			std::cerr << "LoadGltf Error: Failed to load Gltf - " << p_path << std::endl;
 			std::cerr << error << std::endl;
-			return false;
 			return false;
 		}
 	}
@@ -466,7 +465,7 @@ bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loa
 	const tinygltf::Scene& scene = input.scenes[0];
 	for (size_t n_id = 0; n_id < scene.nodes.size(); n_id++)
 	{
-		std::cout << "Loading GLTF Node: " << n_id << " of " << scene.nodes.size() << std::endl;
+		std::clog << "Loading GLTF Node: " << n_id << " of " << scene.nodes.size() << std::endl;
 		const tinygltf::Node node = input.nodes[n_id];
 		LoadNode(node, input, objMesh, p_loadData, p_objScene.materialOffset, nm::float4x4::identity());
 	}
@@ -519,7 +518,7 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 	{
 		if (!objReader.Error().empty())
 		{
-			std::cerr << "TinyObjReader: " << objReader.Error();
+			std::cerr << "TinyObjReader Error: " << objReader.Error();
 		}
 		return false;
 	}
@@ -607,7 +606,7 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 				diffuse.channels = channels;
 			}
 			else
-				std::cout << "Diffuse Mat Not Found: " << material.name << std::endl;
+				std::clog << "Diffuse Mat Not Found: " << material.name << std::endl;
 
 			p_objScene.textureList.push_back(diffuse);
 		}
@@ -623,7 +622,7 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 			}
 			else
 			{
-				std::cout << "Normal Mat Not Found: " << material.name << std::endl;
+				std::clog << "Normal Mat Not Found: " << material.name << std::endl;
 			}
 
 			p_objScene.textureList.push_back(normal);
@@ -638,12 +637,12 @@ bool WriteToDisk(const std::filesystem::path& pPath, size_t pDataSize, char* pDa
 	std::ofstream myfile(pPath.string().c_str(), std::ios::out | std::ios::binary);
 	if (myfile.is_open())
 	{
-		std::cout << "Writing to disk successful: " << pPath << std::endl;
+		std::clog << "Writing to disk successful: " << pPath << std::endl;
 		myfile.write(pData, pDataSize);
 		myfile.close();
 		return true;
 	}
-	std::cout << "Writing to disk failed: " << pPath << std::endl;
+	std::cerr << "WriteToDisk Error: Writing to disk failed: " << pPath << std::endl;
 	return false;		
 }
 

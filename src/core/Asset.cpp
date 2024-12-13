@@ -128,7 +128,7 @@ void CRenderable::DestroyRenderable(CVulkanRHI* p_rhi)
 bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, 
 	const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t p_id)
 {
-	std::cout << "Creating Vertex and Index Buffer for " << p_debugStr << std::endl;
+	std::clog << "Creating Vertex and Index Buffer for " << p_debugStr << std::endl;
 
 	{
 		CVulkanRHI::Buffer vertexStg;
@@ -255,7 +255,7 @@ bool CTextures::CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_
 bool CTextures::CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const ImageRaw* p_rawImg, VkFormat p_format, 
 							  CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id)
 {
-	std::cout << "Creating GPU Texture Buffer for " << p_debugName << std::endl;
+	std::clog << "Creating GPU Texture Buffer for " << p_debugName << std::endl;
 
 	if (p_rawImg->raw != nullptr)
 	{
@@ -310,7 +310,7 @@ bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 {
 	if (p_rawList.size() != 6)
 	{
-		std::cout << "Error: Cannot create cube map because raw data has slices less/more than 6" << std::endl;
+		std::cerr << "CTextures::CreateCubemap Error: Cannot create cube map because raw data has slices less/more than 6: " << p_debugName << std::endl;
 		return false;
 	}
 
@@ -485,7 +485,7 @@ bool CRenderableUI::Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_c
 
 	if (!LoadFonts(p_rhi, stgList, cmdBfr))
 	{
-		std::cout << "Error: Failed to UI Fonts" << std::endl;
+		std::cerr << "CRenderableUI::Create Error: Failed to Load UI Fonts" << std::endl;
 		return false;
 	}
 
@@ -501,7 +501,7 @@ bool CRenderableUI::Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_c
 
 	if (!CreateUIDescriptors(p_rhi))
 	{
-		std::cout << "Error: Failed to create UI Descriptors" << std::endl;
+		std::cerr << "CRenderableUI::Create Error: Failed to create UI Descriptors" << std::endl;
 		return false;
 	}
 
@@ -541,7 +541,7 @@ bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUp
 
 bool CRenderableUI::LoadFonts(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	std::cout << "Loading UI Resources" << std::endl;
+	std::clog << "Loading UI Resources" << std::endl;
 
 	ImGuiIO& imguiIO						= ImGui::GetIO();
 	ImageRaw tex;
@@ -832,25 +832,25 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 
 	if (!LoadDefaultTexture(p_rhi, stgList, cmdBfr))
 	{
-		std::cout << "Error: Failed to Create Default Texture" << std::endl;
+		std::cerr << "CScene::Create Error: Failed to Load Default Texture" << std::endl;
 		return false;
 	}
 
 	if (!LoadSkybox(p_rhi, p_samplerList, stgList, cmdBfr))
 	{
-		std::cout << "Error: Failed to Load Sky box" << std::endl;
+		std::cerr << "CScene::Create Error: Failed to Load Sky box" << std::endl;
 		return false;
 	}
 
 	if (!LoadDefaultScene(p_rhi, stgList, cmdBfr))
 	{
-		std::cout << "Error: Failed to Load Scene" << std::endl;
+		std::cerr << "CScene::Create Error: Failed to Load Scene" << std::endl;
 		return false;
 	}
 
 	if (!LoadLights(p_rhi, stgList, cmdBfr))
 	{
-		std::cout << "Error: Failed to Load Lights" << std::endl;
+		std::cerr << "CScene::Create Error: Failed to Load Lights" << std::endl;
 		return false;
 	}
 
@@ -985,7 +985,7 @@ bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 		// the raw data is updated and the entire GPU resource is reloaded
 		if (!LoadLights(p_rhi, stgList, cmdBfr))
 		{
-			std::cout << "Error: Failed to Load Lights" << std::endl;
+			std::cerr << "CScene::Update Error: Failed to Update Lights" << std::endl;
 			return false;
 		}		
 
@@ -1026,7 +1026,7 @@ bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 
 bool CScene::LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	std::cout << "Loading Default resources" << std::endl;
+	std::clog << "Loading Default resources" << std::endl;
 
 	// load default texture to compensate for bad textures
 	{
@@ -1045,7 +1045,7 @@ bool CScene::LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg
 
 bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	std::cout << "Loading Skybox Resources" << std::endl;
+	std::clog << "Loading Skybox Resources" << std::endl;
 
 	// Load sky box cube map
 	{
@@ -1125,7 +1125,7 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	
 	for (unsigned int i = 0; i < defaultScenePaths.size(); i++)
 	{
-		std::cout << "Loading Scene Resources - " << defaultScenePaths[i] << std::endl;
+		std::clog << "Loading Scene Resources - " << defaultScenePaths[i] << std::endl;
 
 		ObjLoadData loadData{};
 		loadData.flipUV = flipYList[i];
@@ -1221,7 +1221,7 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 
 bool CScene::LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer& p_cmdBfr, bool p_dumpBinaryToDisk)
 {
-	std::cout << "Loading Light resources" << std::endl;
+	std::clog << "Loading Light resources" << std::endl;
 
 	// storage buffer for Lights
 	{
@@ -1354,13 +1354,13 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 
 		if (!GetFileExtention(p_path, fileExtn))
 		{
-			std::cout << "Failed to Get Extn - " << p_path << std::endl;
+			std::cerr << "CScene::AddEntity Error: Failed to Get Extn - " << p_path << std::endl;
 			return false;
 		}
 				
 		if (!GetFileName(p_path, assetName, "\\"))
 		{
-			std::cout << "Failed to Get Filename - " << p_path << std::endl;
+			std::cerr << "CScene::AddEntity Error: Failed to Get Filename - " << p_path << std::endl;
 			return false;
 		}
 
@@ -1446,7 +1446,7 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 							CRenderableMesh* mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform);
 							mesh->m_submeshes = meshraw.submeshes;
 
-							std::cout << "Setting Bounding Volume" << std::endl;
+							std::clog << "Setting Bounding Volume" << std::endl;
 							BVolume* bVol = new BBox(meshraw.bbox);
 							mesh->SetBoundingVolume(bVol);
 
@@ -1492,7 +1492,7 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 								return false;
 							}
 
-							std::cout << "Creating GPU Material buffer" << std::endl;
+							std::clog << "Creating GPU Material buffer" << std::endl;
 
 							CVulkanRHI::Buffer matStg;
 							RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(Material) * m_materialsList.size(), matStg,
@@ -1511,19 +1511,19 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 							RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(matStg, m_material_storage, cmdBfr));
 						}
 
-						std::cout << "Cleaning Raw Vertex and Index resource from RAM" << std::endl;
+						std::clog << "Cleaning Raw Vertex and Index resource from RAM" << std::endl;
 						sceneraw.meshList.clear();
 
 						for (auto& tex : sceneraw.textureList)
 						{
-							std::cout << "Cleaning Raw Texture resource from RAM - " << tex.name << std::endl;
+							std::clog << "Cleaning Raw Texture resource from RAM - " << tex.name << std::endl;
 							FreeRawImage(tex);
 						}
 
 						sceneraw.textureList.clear();
 					}
 
-					std::cout << "Preparing to transfer resources to Device visible memory locations" << std::endl;
+					std::clog << "Preparing to transfer resources to Device visible memory locations" << std::endl;
 					if (!p_rhi->EndCommandBuffer(cmdBfr))
 						return false;
 
@@ -1532,23 +1532,23 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 
 					// Submit command buffer and wait for completion
 					bool waitForFinish = true;
-					std::cout << "Submitting command buffer" << std::endl;
+					std::clog << "Submitting command buffer" << std::endl;
 					RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish,
 						VK_NULL_HANDLE, false, nullptr, nullptr, CVulkanRHI::QueueType::qt_Secondary));
 					m_assetLoadingTracker.progress = 0.8f;
 
 					// Destroy local staging resources
-					std::cout << "Cleaning all Staging buffers" << std::endl;
+					std::clog << "Cleaning all Staging buffers" << std::endl;
 					for (auto& stg : stgList)
 						p_rhi->FreeMemoryDestroyBuffer(stg);
 
 					// Reset the command pool
-					std::cout << "Resetting Command Pool" << std::endl;
+					std::clog << "Resetting Command Pool" << std::endl;
 					p_rhi->ResetCommandPool(m_assetLoaderCommandPool);
 					m_assetLoadingTracker.progress = 1.0f;
 					
 					// Update the bindless descriptors
-					std::cout << "Updating Scene's Bindless Texture Descriptors" << std::endl;
+					std::clog << "Updating Scene's Bindless Texture Descriptors" << std::endl;
 					if(!imageInfoList.empty())
 					{
 						for (uint32_t i = 0; i < FRAME_BUFFER_COUNT; i++)
@@ -1562,7 +1562,7 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 						}
 					}					
 
-					std::cout << "Asset Loading Successful." << std::endl;
+					std::clog << "Asset Loading Successful." << std::endl;
 					m_assetLoadingTracker.state = AssetLoadingState::als_RequestComplete;
 
 					return true;
@@ -1803,7 +1803,7 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,	VK_FORMAT_D32_SFLOAT_S8_UINT,	4096, 4096,					 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	"directional_shadow",	sample_depth));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"primary_color",		sample_storage_color_src));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RoughMetal_Motion,		VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"Rough_Metal_Motion",	sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"ss_reflection",		sample_storage_color_dest));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,			VK_FORMAT_R16G16B16A16_SFLOAT,		fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,				"ss_reflection",		sample_storage_color_dest));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Prev_PrimaryColor,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"prev_primary_color",	sample_storage_color_dest));
 
 	return true;
@@ -2445,7 +2445,7 @@ bool CRenderableDebug::CreateDebugDescriptors(CVulkanRHI* p_rhi, const CFixedBuf
 
 bool CRenderableDebug::CreateBoxSphereBuffers(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	std::cout << "Loading Debug Resources" << std::endl;
+	std::clog << "Loading Debug Resources" << std::endl;
 	MeshRaw	debugMeshes;
 	// we are going to instance the bounding boxes
 	// so loading the mesh only once as a template

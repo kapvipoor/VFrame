@@ -29,7 +29,7 @@ void main()
     vec2 texSize = vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
     vec2 texCoord = vec2(gl_GlobalInvocationID.xy)/texSize;
 
-    vec4 uv = vec4(0.0);
+    vec3 uv = vec3(0.0);
 
     // This is the primary position from where a reflected ray is going to be launched off
     // This is in view space
@@ -39,7 +39,7 @@ void main()
     float roughness = imageLoad(g_RT_StorageImages[STORE_ROUGH_METAL_MOTION], ivec2(gl_GlobalInvocationID.xy)).x;
     if ( positionFrom.w <= 0.0 || roughness == 1.0) 
     { 
-         imageStore(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_GlobalInvocationID.xy), uv);
+         imageStore(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_GlobalInvocationID.xy), vec4(uv, 0.0));
          return;
     }
 
@@ -71,7 +71,7 @@ void main()
 
     if(endFrag.w < 0)
     {
-        imageStore(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_GlobalInvocationID.xy), uv);
+        imageStore(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_GlobalInvocationID.xy), vec4(uv, 0.0));
         return;
     }
 
@@ -193,10 +193,8 @@ void main()
         * ((uv.y < 0 || uv.y > 1) ? 0 : 1 ) // why dont we check this during the steps iteration and early break, set visibility and exit?
         ;
     
-    visibility = clamp(visibility, 0 , 1);
-    
-    uv.ba=vec2(visibility);
-  
-    imageStore(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_GlobalInvocationID.xy), uv);
+    uv.z = clamp(visibility, 0 , 1);
+      
+    imageStore(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_GlobalInvocationID.xy), vec4(uv, 0.0));
 }
 

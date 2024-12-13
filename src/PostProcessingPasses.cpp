@@ -50,7 +50,7 @@ bool CToneMapPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
     m_pipeline.enableDepthWrite = false;
     if (!m_rhi->CreateGraphicsPipeline(uiShaderpaths, m_pipeline, "TonemapGfxPipeline"))
     {
-        std::cout << "Error Creating Tone Mapping Pipeline" << std::endl;
+        std::cerr << "CToneMapPass::CreatePipeline Error: Error Creating Tone Mapping Pipeline" << std::endl;
         return false;
     }
 

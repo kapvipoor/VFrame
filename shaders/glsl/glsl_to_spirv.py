@@ -38,8 +38,8 @@ if os.path.isdir(abs_folder_path):
         
         print("Building '%s'" % (glslFilename))
         
-        #
-        
+        # Use these options -Od -gVS to disable optimization. 
+        # Useful when debugging shaders
         p = subprocess.Popen(["glslangValidator", "-V", glslFilename, "-o", spirFilename], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, error = p.communicate()
         

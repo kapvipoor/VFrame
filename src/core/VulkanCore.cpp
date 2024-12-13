@@ -15,21 +15,21 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsMessengerCallback(VkDebugUtilsMessageSe
 
 	if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
 	{
-		std::cerr << "Vulkan Info: "
+		std::cout << "Vulkan Info: "
 			<< "{" << callback_data->messageIdNumber << "} - "
 			<< "{" << callback_data->pMessageIdName << "}: "
 			<< "{" << callback_data->pMessage << std::endl;
 	}
 	else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
 	{
-		std::cerr << "Vulkan Warning: "
+		std::cout << "Vulkan Warning: "
 			<< "{" << callback_data->messageIdNumber << "} - "
 			<< "{" << callback_data->pMessageIdName << "}: "
 			<< "{" << callback_data->pMessage << std::endl;
 	}
 	else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
 	{
-		std::cerr << "Vulkan Error: "
+		std::cout << "Vulkan Error: "
 			<< "{" << callback_data->messageIdNumber << "} - "
 			<< "{" << callback_data->pMessageIdName << "}: "
 			<< "{" << callback_data->pMessage << std::endl;
@@ -417,7 +417,7 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	if (enabledFeatures.geometryShader != supportedFeatures.geometryShader &&
 		enabledFeatures.fragmentStoresAndAtomics != supportedFeatures.fragmentStoresAndAtomics)
 	{
-		std::cout << "vkGetPhysicalDeviceFeatures: Requested features not supported by device. " << std::endl;
+		std::cerr << "CVulkanCore::CreateDevice Error: vkGetPhysicalDeviceFeatures: Requested features not supported by device. " << std::endl;
 		return false;
 	}
 
@@ -1602,7 +1602,7 @@ bool CVulkanCore::CreateSampler(Sampler& p_sampler)
 	VkResult res = vkCreateSampler(m_vkDevice, &samplerInfo, nullptr, &p_sampler.descInfo.sampler);
 	if (res != VK_SUCCESS)
 	{
-		std::cout << "vkCreateSampler failed: " << res << std::endl;
+		std::cerr << "CVulkanCore::CreateSampler: vkCreateSampler failed: " << res << std::endl;
 		return false;
 	}
 
@@ -1698,7 +1698,7 @@ bool CVulkanCore::FlushMemoryRanges(std::vector<VkMappedMemoryRange>* p_memRange
 {
 	if (p_memRanges == nullptr)
 	{
-		std::cout << "FlushMemoryRanges failed becasue p_memRanges is nullptr " << std::endl;
+		std::cerr << "CVulkanCore::FlushMemoryRanges Error: FlushMemoryRanges failed becasue p_memRanges is nullptr " << std::endl;
 		return false;
 	}
 
@@ -1708,7 +1708,7 @@ bool CVulkanCore::FlushMemoryRanges(std::vector<VkMappedMemoryRange>* p_memRange
 		VkResult res = vkFlushMappedMemoryRanges(m_vkDevice, 1, &mapped);
 		if (res != VK_SUCCESS)
 		{
-			std::cout << "CVulkanCore::FlushMemoryRanges " << mapped.size << std::endl;
+			std::cerr << "CVulkanCore::FlushMemoryRanges Error: CVulkanCore::FlushMemoryRanges " << mapped.size << std::endl;
 			return false;
 		}
 	}
@@ -1830,20 +1830,20 @@ bool CVulkanCore::ListAvailableInstanceLayers(std::vector<const char*> reqList)
 		return false;
 	}
 
-	std::cerr << "listing supported instance layers" << std::endl;
+	std::cout << "listing supported instance layers" << std::endl;
 	for (auto& layer : supportedLayerPropList)
 	{
-		std::cerr << "	" << layer.layerName;
+		std::cout << "	" << layer.layerName;
 
 		for (auto& reqExtn : reqList)
 		{
 			if (std::strcmp(reqExtn, layer.layerName) == 0)
 			{
-				std::cerr << "----------------------------LOADED";
+				std::cout << "----------------------------LOADED";
 			}
 		}
 
-		std::cerr << std::endl;
+		std::cout << std::endl;
 	}
 
 	return true;
@@ -1868,20 +1868,20 @@ bool CVulkanCore::ListAvailableInstanceExtensions(std::vector<const char*> reqLi
 		return false;
 	}
 
-	std::cerr << "listing supported instance extensions" << std::endl;
+	std::cout << "listing supported instance extensions" << std::endl;
 	for (auto& exten : supportedInstanceExtensionList)
 	{
-		std::cerr << "	" << exten.extensionName;
+		std::cout << "	" << exten.extensionName;
 
 		for (auto& reqExtn : reqList)
 		{
 			if (std::strcmp(reqExtn, exten.extensionName) == 0)
 			{
-				std::cerr << "----------------------------LOADED";
+				std::cout << "----------------------------LOADED";
 			}
 		}
 
-		std::cerr << std::endl;
+		std::cout << std::endl;
 	}
 
 	return true;

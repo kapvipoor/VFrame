@@ -55,7 +55,7 @@ bool CForwardPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 	m_pipeline.enableDepthWrite								= true;
 	if (!m_rhi->CreateGraphicsPipeline(fwdShaderpaths, m_pipeline, "ForwardGfxPipeline"))
 	{
-		std::cout << "Error Creating Forward Pipeline" << std::endl;
+		std::cerr << "CForwardPass::CreatePipeline Error: Error Creating Forward Pipeline" << std::endl;
 		return false;
 	}
 
@@ -177,7 +177,7 @@ bool CSkyboxPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 	m_pipeline.enableDepthWrite								= false;
 	if (!m_rhi->CreateGraphicsPipeline(skyBoxShaderpaths, m_pipeline, "SkyboxGfxPipeline"))
 	{
-		std::cout << "Error Creating Skybox Pipeline" << std::endl;
+		std::cerr << "CSkyboxPass::CreatePipeline Error: Error Creating Skybox Pipeline" << std::endl;
 		return false;
 	}
 
@@ -293,7 +293,7 @@ bool CDeferredPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 	m_pipeline.pipeLayout									= p_pipeline.pipeLayout;
 	if (!m_rhi->CreateGraphicsPipeline(dfrdShaderpaths, m_pipeline, "DeferredGfxPipeline"))
 	{
-		std::cout << "Error Creating Deferred Pipeline" << std::endl;
+		std::cerr << "CDeferredPass::CreatePipeline Error: Error Creating Deferred Pipeline" << std::endl;
 		return false;
 	}
 
@@ -487,7 +487,7 @@ bool CSkyboxDeferredPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 	m_pipeline.enableDepthWrite								= false;
 	if (!m_rhi->CreateGraphicsPipeline(skyBoxShaderpaths, m_pipeline, "SkyboxDeferredGfxPipeline"))
 	{
-		std::cout << "Error Creating CSkyboxDeferredPass Pipeline" << std::endl;
+		std::cerr << "CSkyboxDeferredPass::CreatePipeline Error: Error Creating CSkyboxDeferredPass Pipeline" << std::endl;
 		return false;
 	}
 

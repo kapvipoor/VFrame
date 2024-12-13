@@ -84,7 +84,7 @@ bool CUIPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	m_pipeline.enableDepthWrite					= false;
 	if (!m_rhi->CreateGraphicsPipeline(uiShaderpaths, m_pipeline, "UIGfxPipeline"))
 	{
-		std::cout << "Error Creating UI Pipeline" << std::endl;
+		std::cerr << "CUIPass::CreatePipeline Error: Error Creating UI Pipeline" << std::endl;
 		return false;
 	}
 
@@ -279,7 +279,7 @@ bool CDebugDrawPass::CreatePipeline(CVulkanRHI::Pipeline p_Pipeline)
 	m_pipeline.isWireframe									= true;
 	if (!m_rhi->CreateGraphicsPipeline(shadowPassShaderpaths, m_pipeline, "DebugDrawGfxPipeline"))
 	{
-		std::cout << "Error Creating Debug Display Pipeline" << std::endl;
+		std::cerr << "CDebugDrawPass::CreatePipeline Error: Error Creating Debug Display Pipeline" << std::endl;
 		return false;
 	}
 
