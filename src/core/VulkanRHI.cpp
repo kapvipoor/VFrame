@@ -163,7 +163,7 @@ void CVulkanRHI::CreateMipmaps(Image& p_image, VkCommandBuffer& p_cmdBfr)
 	}
 }
 
-bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_t p_height, 
+bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_t p_height, uint32_t p_mipLevel,
 	VkImageLayout p_layout, VkImageUsageFlags p_usage, Image& p_renderTarget, std::string p_DebugName)
 {
 	VkFormatFeatureFlags feature;
@@ -188,6 +188,7 @@ bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_
 	p_renderTarget.height							= p_height;
 	p_renderTarget.width							= p_width;
 	p_renderTarget.curLayout						= VK_IMAGE_LAYOUT_UNDEFINED;
+	p_renderTarget.levelCount						= p_mipLevel;
 
 	VkImageCreateInfo imageCreateInfo{};
 	imageCreateInfo.sType							= VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -195,7 +196,7 @@ bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_
 	imageCreateInfo.format							= p_renderTarget.format;
 	imageCreateInfo.imageType						= VK_IMAGE_TYPE_2D;
 	imageCreateInfo.tiling							= VK_IMAGE_TILING_OPTIMAL;
-	imageCreateInfo.mipLevels						= 1;
+	imageCreateInfo.mipLevels						= p_mipLevel;
 	imageCreateInfo.arrayLayers						= 1;
 	imageCreateInfo.initialLayout					= VK_IMAGE_LAYOUT_UNDEFINED;
 	imageCreateInfo.usage							= p_usage;
@@ -208,7 +209,7 @@ bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_
 		return false;
 	if (!BindImageMemory(p_renderTarget.image, p_renderTarget.devMem))
 		return false;
-	if (!CreateImagView(p_usage, p_renderTarget.image, p_renderTarget.format, VK_IMAGE_VIEW_TYPE_2D, 1 /* mip count */, p_renderTarget.descInfo.imageView))
+	if (!CreateImagView(p_usage, p_renderTarget.image, p_renderTarget.format, VK_IMAGE_VIEW_TYPE_2D, p_mipLevel, p_renderTarget.descInfo.imageView))
 		return false;
 	
 	SetDebugName((uint64_t)p_renderTarget.image, VK_OBJECT_TYPE_IMAGE, (p_DebugName + "_rt").c_str());

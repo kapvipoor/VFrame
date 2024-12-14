@@ -12,32 +12,72 @@ CForwardPass::~CForwardPass()
 
 bool CForwardPass::CreateRenderpass(RenderData* p_renderData)
 {
-	CVulkanRHI::Renderpass* renderPass						= &m_pipeline.renderpassData;
-	CVulkanRHI::Image positionRT							= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Position);
-	CVulkanRHI::Image normalRT								= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Normal);
-	CVulkanRHI::Image primaryColorRT						= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
-	CVulkanRHI::Image primaryDepthRT						= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
-	CVulkanRHI::Image rMMMotion								= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_RoughMetal_Motion);
+	enum AttachId
+	{
+		  Posiiton = 0
+		, Normal
+		, PrimaryColor
+		, RoughMetalMotion
+		, max
+	};
 
-	renderPass->AttachColor(positionRT.format,			VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachColor(normalRT.format,			VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachColor(primaryColorRT.format,		VK_ATTACHMENT_LOAD_OP_LOAD,		VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachColor(rMMMotion.format,			VK_ATTACHMENT_LOAD_OP_CLEAR,		VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachDepth(primaryDepthRT.format,		VK_ATTACHMENT_LOAD_OP_CLEAR,	VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,	VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+	std::vector<CVulkanRHI::Image> ColorRTList;
+	ColorRTList.push_back(p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Position));
+	ColorRTList.push_back(p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Normal));
+	ColorRTList.push_back(p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor));
+	ColorRTList.push_back(p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_RoughMetal_Motion));
+	
+	CVulkanRHI::Image depthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
 
-	if (!m_rhi->CreateRenderpass(*renderPass))
-		return false;
-		
-	renderPass->framebufferWidth							= primaryDepthRT.width;
-	renderPass->framebufferHeight							= primaryDepthRT.height;
+	std::vector<VkFormat> colorAttachFormats;
+	
+	for (const auto& image : ColorRTList)
+	{
+		colorAttachFormats.push_back(image.format);
 
-	std::vector<VkImageView> attachments(5, VkImageView{});
-	attachments[0]											= positionRT.descInfo.imageView;
-	attachments[1]											= normalRT.descInfo.imageView;
-	attachments[2]											= primaryColorRT.descInfo.imageView;
-	attachments[3]											= rMMMotion.descInfo.imageView;
-	attachments[4]											= primaryDepthRT.descInfo.imageView;
-	RETURN_FALSE_IF_FALSE(m_rhi->CreateFramebuffer(renderPass->renderpass, m_frameBuffer[0], attachments.data(), (uint32_t)attachments.size(), renderPass->framebufferWidth, renderPass->framebufferHeight));
+		VkRenderingAttachmentInfo attachment{};
+		attachment.sType				= VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+		attachment.pNext				= nullptr;
+		attachment.imageView			= image.descInfo.imageView;
+		attachment.imageLayout			= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		attachment.resolveMode			= VK_RESOLVE_MODE_NONE;
+		attachment.resolveImageView		= VK_NULL_HANDLE;
+		attachment.loadOp				= VK_ATTACHMENT_LOAD_OP_CLEAR;
+		attachment.storeOp				= VK_ATTACHMENT_STORE_OP_STORE;
+				
+		m_colorAttachInfos.push_back(attachment);
+	}
+
+	m_colorAttachInfos[AttachId::PrimaryColor].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+	m_colorAttachInfos[AttachId::RoughMetalMotion].clearValue = VkClearValue{ 0.0, 0.0, 0.0, 0.0 };
+
+	m_pipeline.colorAttachFormats		= colorAttachFormats;
+	m_pipeline.depthAttachFormat		= depthRT.format;
+
+	m_depthAttachInfo					= VkRenderingAttachmentInfo{};
+	m_depthAttachInfo.sType				= VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+	m_depthAttachInfo.pNext				= nullptr;
+	m_depthAttachInfo.imageView			= depthRT.descInfo.imageView;
+	m_depthAttachInfo.imageLayout		= VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	m_depthAttachInfo.resolveMode		= VK_RESOLVE_MODE_NONE;
+	m_depthAttachInfo.resolveImageView= VK_NULL_HANDLE;
+	m_depthAttachInfo.loadOp			= VK_ATTACHMENT_LOAD_OP_CLEAR;
+	m_depthAttachInfo.storeOp			= VK_ATTACHMENT_STORE_OP_STORE;
+	m_depthAttachInfo.clearValue		= VkClearValue{ 1.0, 0};
+
+	m_renderingInfo						= VkRenderingInfo{};
+	m_renderingInfo.sType				= VK_STRUCTURE_TYPE_RENDERING_INFO;
+	m_renderingInfo.pNext				= nullptr;
+	m_renderingInfo.flags				= 0;
+	m_renderingInfo.renderArea.offset.x = 0;
+	m_renderingInfo.renderArea.offset.y = 0;
+	m_renderingInfo.renderArea.extent.width = m_rhi->GetRenderWidth();
+	m_renderingInfo.renderArea.extent.height = m_rhi->GetRenderHeight();
+	m_renderingInfo.layerCount			= 1;
+	m_renderingInfo.viewMask			= 0;
+	m_renderingInfo.colorAttachmentCount = (uint32_t)m_colorAttachInfos.size();
+	m_renderingInfo.pColorAttachments	= m_colorAttachInfos.data();
+	m_renderingInfo.pDepthAttachment	= &m_depthAttachInfo;
 
 	return true;
 }
@@ -53,6 +93,7 @@ bool CForwardPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 	m_pipeline.cullMode										= VK_CULL_MODE_BACK_BIT;
 	m_pipeline.enableDepthTest								= true;
 	m_pipeline.enableDepthWrite								= true;
+
 	if (!m_rhi->CreateGraphicsPipeline(fwdShaderpaths, m_pipeline, "ForwardGfxPipeline"))
 	{
 		std::cerr << "CForwardPass::CreatePipeline Error: Error Creating Forward Pipeline" << std::endl;
@@ -78,12 +119,12 @@ bool CForwardPass::Render(RenderData* p_renderData)
 	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Forward"));
 	{
 		// x,y  holds roughness and metal and z,w holds velocity x,y
-		m_rhi->SetClearColorValue(renderPass, 3, VkClearColorValue{ 0.0f, 0.0f, 0.0f, 0.0f });
-		m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
+		//m_rhi->SetClearColorValue(renderPass, 3, VkClearColorValue{ 0.0f, 0.0f, 0.0f, 0.0f });
+		//m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
+		vkCmdBeginRendering(cmdBfr, &m_renderingInfo);
 		{
-
-			m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
-			m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
+			m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)m_rhi->GetRenderWidth(), -(float)m_rhi->GetRenderHeight());
+			m_rhi->SetScissors(cmdBfr, 0, 0, m_rhi->GetRenderWidth(), m_rhi->GetRenderHeight());
 
 			vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
 
@@ -110,7 +151,8 @@ bool CForwardPass::Render(RenderData* p_renderData)
 				}
 			}
 		}
-		m_rhi->EndRenderPass(cmdBfr);
+		vkCmdEndRendering(cmdBfr);
+		//m_rhi->EndRenderPass(cmdBfr);
 	}
 	m_rhi->EndCommandBuffer(cmdBfr);
 	

@@ -174,14 +174,53 @@ bool CSSRComputePass::Render(RenderData* p_renderData)
 	uint32_t dispatchDim_x = m_rhi->GetRenderWidth() / THREAD_GROUP_SIZE_X;
 	uint32_t dispatchDim_y = m_rhi->GetRenderHeight() / THREAD_GROUP_SIZE_Y;
 
-	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Compute SSR"));
+	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "SSR"));
 
-	p_renderData->fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, cmdBfr, CRenderTargets::rt_SSReflection);
-	
-	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeline);
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
-	vkCmdDispatch(cmdBfr, dispatchDim_x, dispatchDim_y, 1);
+	// Down sample Normal Maps
+	{
+		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Normal);
+
+		int32_t mipWidth = normalRT.width;
+		int32_t mipHeight = normalRT.height;
+		VkImageLayout curLayout = normalRT.curLayout;
+		for (uint32_t i = 1; i < normalRT.levelCount; i++)
+		{
+			m_rhi->InsertMarker(cmdBfr, std::string("Down sampling Normal: Res/" + std::to_string(pow(2,i))).c_str());
+			uint32_t baseMipLevel = i - 1;
+
+			m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, normalRT, cmdBfr, baseMipLevel);
+			
+			VkImageBlit imgBlt{};
+			imgBlt.srcOffsets[0] = { 0, 0, 0 };
+			imgBlt.srcOffsets[1] = { mipWidth, mipHeight, 1 };
+			imgBlt.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			imgBlt.srcSubresource.baseArrayLayer = 0;
+			imgBlt.srcSubresource.mipLevel = baseMipLevel;
+			imgBlt.srcSubresource.layerCount = 1;
+			imgBlt.dstOffsets[0] = { 0, 0, 0 };
+			imgBlt.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
+			imgBlt.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			imgBlt.dstSubresource.mipLevel = i;
+			imgBlt.dstSubresource.baseArrayLayer = 0;
+			imgBlt.dstSubresource.layerCount = 1;
+			m_rhi->BlitImage(cmdBfr, imgBlt, normalRT.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, normalRT.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, normalRT.format);
+
+			m_rhi->IssueLayoutBarrier(curLayout, normalRT, cmdBfr, baseMipLevel);
+
+			mipWidth = (mipWidth > 1) ? mipWidth / 2 : 1;
+			mipHeight = (mipHeight > 1) ? mipHeight / 2 : 1;	
+		}
+	}
+
+	m_rhi->InsertMarker(cmdBfr, "Compute");
+	{
+		p_renderData->fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, cmdBfr, CRenderTargets::rt_SSReflection);
+
+		vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeline);
+		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
+		vkCmdDispatch(cmdBfr, dispatchDim_x, dispatchDim_y, 1);
+	}
 
 	RETURN_FALSE_IF_FALSE(m_rhi->EndCommandBuffer(cmdBfr));
 

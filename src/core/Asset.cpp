@@ -242,10 +242,11 @@ CTextures::CTextures(int p_maxSize)
 		m_textures.resize(p_maxSize);
 }
 
-bool CTextures::CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_format, uint32_t p_width, uint32_t p_height, VkImageLayout p_layout, std::string p_debugName, VkImageUsageFlags p_usage)
+bool CTextures::CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_format, uint32_t p_width, uint32_t p_height, 
+	uint32_t p_mipLevel, VkImageLayout p_layout, std::string p_debugName, VkImageUsageFlags p_usage)
 {
 	CVulkanRHI::Image renderTarget;
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateRenderTarget(p_format, p_width, p_height, p_layout, p_usage, renderTarget, p_debugName));
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateRenderTarget(p_format, p_width, p_height, p_mipLevel, p_layout, p_usage, renderTarget, p_debugName));
 
 	m_textures[p_id] = renderTarget;
 
@@ -1789,22 +1790,25 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	uint32_t fullResWidth = p_rhi->GetRenderWidth();
 	uint32_t fullResHeight = p_rhi->GetRenderHeight();
 
+	VkImageLayout general = VK_IMAGE_LAYOUT_GENERAL;
+	VkImageLayout shaderRead = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
 	VkImageUsageFlags sample_depth = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 	VkImageUsageFlags sample_storage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 	VkImageUsageFlags sample_storage_color = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	VkImageUsageFlags sample_storage_color_src = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	VkImageUsageFlags sample_storage_color_dest = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryDepth,			VK_FORMAT_D32_SFLOAT_S8_UINT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	"primary_depth",		sample_depth));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Position,				VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"position",				sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Normal,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"normal",				sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Albedo,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"albedo",				sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAO_Blur,				VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"ssao_and_blur",		sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,	VK_FORMAT_D32_SFLOAT_S8_UINT,	4096, 4096,					 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	"directional_shadow",	sample_depth));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"primary_color",		sample_storage_color_src));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RoughMetal_Motion,		VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"Rough_Metal_Motion",	sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,			VK_FORMAT_R16G16B16A16_SFLOAT,		fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,				"ss_reflection",		sample_storage_color_dest));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Prev_PrimaryColor,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"prev_primary_color",	sample_storage_color_dest));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryDepth,			VK_FORMAT_D32_SFLOAT_S8_UINT,	fullResWidth, fullResHeight, 1, shaderRead,	"primary_depth",		sample_depth));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Position,				VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"position",				sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Normal,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 3, general,	"normal",				sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Albedo,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"albedo",				sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAO_Blur,				VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1, general,	"ssao_and_blur",		sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,	VK_FORMAT_D32_SFLOAT_S8_UINT,	4096, 4096,					 1, shaderRead,	"directional_shadow",	sample_depth));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"primary_color",		sample_storage_color_src));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RoughMetal_Motion,		VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"Rough_Metal_Motion",	sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,			VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"ss_reflection",		sample_storage_color_dest));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Prev_PrimaryColor,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"prev_primary_color",	sample_storage_color_dest));
 
 	return true;
 }

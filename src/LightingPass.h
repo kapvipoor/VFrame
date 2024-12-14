@@ -16,6 +16,10 @@ public:
 	virtual void Destroy() override;
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+private:
+	std::vector<VkRenderingAttachmentInfo> m_colorAttachInfos;
+	VkRenderingAttachmentInfo m_depthAttachInfo;
+	VkRenderingInfo m_renderingInfo;
 };
 
 class CSkyboxPass : public CPass

@@ -43,7 +43,7 @@ public:
 	bool CreateAllocateBindBuffer(size_t p_size, Buffer& p_buffer, VkBufferUsageFlags p_bfrUsg, VkMemoryPropertyFlags p_propFlagm, std::string p_DebugName);
 	bool CreateTexture(Buffer& p_staging, Image& p_Image, VkImageCreateInfo p_createInfo, VkCommandBuffer& p_cmdBfr, std::string p_DebugName);
 	void CreateMipmaps(Image& p_image, VkCommandBuffer& p_cmdBfr);
-	bool CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_t p_height, VkImageLayout p_Layout, VkImageUsageFlags p_usage, Image& p_renderTarget, std::string p_DebugName);
+	bool CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_t p_height, uint32_t p_mipLevel, VkImageLayout p_Layout, VkImageUsageFlags p_usage, Image& p_renderTarget, std::string p_DebugName);
 	void ClearImage(CommandBuffer p_cmdBfr, CVulkanRHI::Image p_src, VkClearValue p_clearValue);
 	void CopyImage(CommandBuffer p_cmdBfr, CVulkanRHI::Image p_src, CVulkanRHI::Image p_dest);
 

@@ -151,7 +151,7 @@ public:
 	CTextures(int p_maxSize = 0);
 	~CTextures() {};
 
-	bool CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_format,uint32_t p_width, uint32_t p_height, VkImageLayout p_layout, std::string p_debugName, VkImageUsageFlags p_usage);
+	bool CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_format,uint32_t p_width, uint32_t p_height, uint32_t p_mipLevel, VkImageLayout p_layout, std::string p_debugName, VkImageUsageFlags p_usage);
 	bool CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& stg, const ImageRaw*, VkFormat p_format, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id = -1);
 	bool CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const std::vector<ImageRaw>&, const CVulkanRHI::SamplerList& p_samplers, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id = -1);
 

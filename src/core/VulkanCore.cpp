@@ -274,7 +274,7 @@ bool CVulkanCore::CreateInstance(const char* p_applicaitonName)
 
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	appInfo.apiVersion = VK_API_VERSION_1_2;
+	appInfo.apiVersion = VK_API_VERSION_1_3;
 	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.pApplicationName = p_applicaitonName;
 
@@ -370,6 +370,7 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 		deviceExtensionList.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 		deviceExtensionList.push_back(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
 		deviceExtensionList.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+		deviceExtensionList.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 		//deviceExtensionList.push_back(VK_NV_RAY_TRACING_EXTENSION_NAME);
 #if VULKAN_DEBUG_MARKERS == 1
 		deviceExtensionList.push_back(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
@@ -421,9 +422,15 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 		return false;
 	}
 
+	// Enable support for dynamic rendering
+	VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
+	dynamicRenderingFeatures.sType										= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+	dynamicRenderingFeatures.dynamicRendering							= VK_TRUE;
+
 	// Enable support for bindless
 	VkPhysicalDeviceDescriptorIndexingFeaturesEXT bindlessDescFeatures{};
-	bindlessDescFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+	bindlessDescFeatures.sType											= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+	bindlessDescFeatures.pNext											= &dynamicRenderingFeatures;
 	bindlessDescFeatures.shaderSampledImageArrayNonUniformIndexing		= VK_TRUE;
 	bindlessDescFeatures.runtimeDescriptorArray							= VK_TRUE;
 	bindlessDescFeatures.descriptorBindingVariableDescriptorCount		= VK_TRUE;
@@ -921,6 +928,21 @@ void CVulkanCore::SetScissors(VkCommandBuffer p_cmdBfr, uint32_t p_offX, uint32_
 	vkCmdSetScissor(p_cmdBfr, 0, 1, &l_vkScissor);
 }
 
+bool CVulkanCore::HasStencilComponent(VkFormat p_format)
+{
+	switch (p_format)
+	{
+	case VK_FORMAT_S8_UINT:
+	case VK_FORMAT_D16_UNORM_S8_UINT:
+	case VK_FORMAT_D24_UNORM_S8_UINT:
+	case VK_FORMAT_D32_SFLOAT_S8_UINT:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
 bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipeline& pData, std::string p_debugName)
 {
 	pData.vertexShader = VK_NULL_HANDLE;
@@ -1016,24 +1038,45 @@ bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipel
 	multisampleCreateInfo.alphaToCoverageEnable = VK_FALSE;
 	multisampleCreateInfo.alphaToOneEnable		= VK_FALSE;
 
-	Renderpass rpData = pData.renderpassData;
+	Renderpass rpData									= pData.renderpassData;
+	uint32_t colorAttachCount							= (uint32_t)rpData.colorAttachmentRefList.size();
+
+	bool useDynamicRendering							= false;
+	VkPipelineRenderingCreateInfoKHR pipelineRenderingInfo = VkPipelineRenderingCreateInfoKHR{};
+	if (!pData.colorAttachFormats.empty())
+	{
+		useDynamicRendering								= true;
+		pData.renderpassData.renderpass					= VK_NULL_HANDLE;
+		colorAttachCount								= pData.colorAttachFormats.size();
+
+		pipelineRenderingInfo.sType						= VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+		pipelineRenderingInfo.pNext						= nullptr;
+		pipelineRenderingInfo.viewMask					= 0;
+		pipelineRenderingInfo.colorAttachmentCount		= (uint32_t)pData.colorAttachFormats.size();
+		pipelineRenderingInfo.pColorAttachmentFormats	= pipelineRenderingInfo.colorAttachmentCount > 0 ? pData.colorAttachFormats.data() : nullptr;
+		pipelineRenderingInfo.depthAttachmentFormat		= pData.depthAttachFormat;
+		pipelineRenderingInfo.stencilAttachmentFormat	= HasStencilComponent(pipelineRenderingInfo.depthAttachmentFormat) ? pipelineRenderingInfo.depthAttachmentFormat : VK_FORMAT_UNDEFINED;
+	}
+	
+	bool isDepthAttached = (!useDynamicRendering && rpData.isDepthAttached()) ||
+		(useDynamicRendering && pData.depthAttachFormat != VK_FORMAT_UNDEFINED);
+
 	VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
 	depthStencilInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	if (rpData.isDepthAttached() == true)
+	if (isDepthAttached)
 	{
-		depthStencilInfo.flags					= 0;
-		depthStencilInfo.depthTestEnable		= pData.enableDepthTest; //VK_TRUE;
-		depthStencilInfo.depthWriteEnable		= pData.enableDepthWrite; //VK_TRUE;
-		depthStencilInfo.depthCompareOp			= pData.depthCmpOp;
-		depthStencilInfo.depthBoundsTestEnable	= VK_FALSE;
-		depthStencilInfo.stencilTestEnable		= VK_FALSE;
-		depthStencilInfo.back.failOp			= VK_STENCIL_OP_KEEP;
-		depthStencilInfo.back.passOp			= VK_STENCIL_OP_KEEP;
-		depthStencilInfo.back.compareOp			= VK_COMPARE_OP_ALWAYS;
-		depthStencilInfo.front					= depthStencilInfo.back;
+		depthStencilInfo.flags							= 0;
+		depthStencilInfo.depthTestEnable				= pData.enableDepthTest; //VK_TRUE;
+		depthStencilInfo.depthWriteEnable				= pData.enableDepthWrite; //VK_TRUE;
+		depthStencilInfo.depthCompareOp					= pData.depthCmpOp;
+		depthStencilInfo.depthBoundsTestEnable			= VK_FALSE;
+		depthStencilInfo.stencilTestEnable				= VK_FALSE;
+		depthStencilInfo.back.failOp					= VK_STENCIL_OP_KEEP;
+		depthStencilInfo.back.passOp					= VK_STENCIL_OP_KEEP;
+		depthStencilInfo.back.compareOp					= VK_COMPARE_OP_ALWAYS;
+		depthStencilInfo.front							= depthStencilInfo.back;
 	}
-
-	uint32_t colorAttachCount = (uint32_t)rpData.colorAttachmentRefList.size();
+	
 	std::vector<VkPipelineColorBlendAttachmentState> colorBlendState(colorAttachCount, VkPipelineColorBlendAttachmentState{});
 	VkPipelineColorBlendStateCreateInfo colorBlendCreateInfo{};
 	if (colorAttachCount > 0) // color attachment are in use
@@ -1071,6 +1114,7 @@ bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipel
 	dynamicCreateInfo.pDynamicStates			= dynamicState;
 
 	VkGraphicsPipelineCreateInfo gfxPipelineCreateInfo{};
+	gfxPipelineCreateInfo.pNext					= useDynamicRendering ? &pipelineRenderingInfo : nullptr;
 	gfxPipelineCreateInfo.sType					= VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	gfxPipelineCreateInfo.stageCount			= (uint32_t)shaderStageCreateInfo.size();
 	gfxPipelineCreateInfo.pStages				= shaderStageCreateInfo.data();
@@ -1275,13 +1319,13 @@ bool CVulkanCore::WaitToFinish(VkQueue p_queue)
 	return true;
 }
 
-void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr)
+void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel)
 {
 	p_image.descInfo.imageLayout = p_new;
 	if (p_new == p_image.curLayout)
 		return;
 
-	IssueImageLayoutBarrier(p_image.curLayout, p_new, p_image.layerCount, p_image.levelCount, p_image.image, p_image.usage, p_cmdBfr);
+	IssueImageLayoutBarrier(p_image.curLayout, p_new, p_image.layerCount, p_image.levelCount, p_image.image, p_image.usage, p_cmdBfr, p_baseMipLevel);
 	p_image.curLayout = p_new;
 }
 
