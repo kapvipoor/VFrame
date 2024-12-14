@@ -69,9 +69,6 @@ private:
 	CVulkanRHI::CommandBufferList		m_cmdBfrsInUse;
 
 	CPerspectiveCamera*					m_primaryCamera;
-	//COrthoCamera*						m_sunLightCamera;
-	//CDirectionaLight*					m_sunLight;
-	//CPerspectiveCamera m_sunLightCamera;
 		
 	bool								m_pickObject;
 

@@ -1,7 +1,7 @@
 #include "ShadowPass.h"
 
 CStaticShadowPrepass::CStaticShadowPrepass(CVulkanRHI* p_rhi)
-	: CPass(p_rhi)
+	: CStaticRenderPass(p_rhi)
 {
 	m_frameBuffer.resize(1);
 	m_bReuseShadowMap = false;
@@ -150,13 +150,6 @@ bool CStaticShadowPrepass::Render(RenderData* p_renderData)
 	m_rhi->EndCommandBuffer(p_renderData->cmdBfr);
 
 	return true;
-}
-
-void CStaticShadowPrepass::Destroy()
-{
-	m_rhi->DestroyFramebuffer(m_frameBuffer[0]);
-	m_rhi->DestroyRenderpass(m_pipeline.renderpassData.renderpass);
-	m_rhi->DestroyPipeline(m_pipeline);
 }
 
 void CStaticShadowPrepass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)

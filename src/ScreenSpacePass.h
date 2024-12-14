@@ -2,61 +2,50 @@
 
 #include "Pass.h"
 
-class CSSAOComputePass : public CPass
+class CSSAOComputePass : public CComputePass, CUIParticipant
 {
 public:
 	CSSAOComputePass(CVulkanRHI*);
 	~CSSAOComputePass();
 
-	virtual bool CreateRenderpass(RenderData*) override;
 	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
 
 	virtual bool Update(UpdateData*) override;
-	virtual bool Render(RenderData*) override;
-	virtual void Destroy() override;
+	virtual bool Dispatch(RenderData*) override;
 
-	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+	virtual void Show(CVulkanRHI* p_rhi) override;
 
 private:
+	float m_bias;
+	nm::float2 m_noiseScale;
+	float m_kernelSize;
+	float m_kernelRadius;
 };
 
-class CSSAOBlurPass : public CPass
+class CSSAOBlurPass : public CComputePass
 {
 public:
 	CSSAOBlurPass(CVulkanRHI*);
 	~CSSAOBlurPass();
 
-	virtual bool CreateRenderpass(RenderData*) override;
 	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
 
 	virtual bool Update(UpdateData*) override;
-	virtual bool Render(RenderData*) override;
-	virtual void Destroy() override;
-
-	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+	virtual bool Dispatch(RenderData*) override;
 };
 
-class CSSRComputePass : public CPass, CUIParticipant
+class CSSRComputePass : public CComputePass, CUIParticipant
 {
 public:
 	CSSRComputePass(CVulkanRHI*);
 	~CSSRComputePass();
 
-	virtual bool CreateRenderpass(RenderData*) override;
 	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
 
 	virtual bool Update(UpdateData*) override;
-	virtual bool Render(RenderData*) override;
-	virtual void Destroy() override;
-
-	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+	virtual bool Dispatch(RenderData*) override;
 
 	virtual void Show(CVulkanRHI* p_rhi) override;
-
-	float GetMaxDistance() { return m_maxDistance; }
-	float GetResolution() { return m_resolution; }
-	float GetThickness() { return m_thickness; }
-	float GetSteps() { return m_steps; }
 
 private:
 	float	m_maxDistance;	// Maximum Ray Distance
@@ -65,20 +54,16 @@ private:
 	float	m_steps;		// Number of steps for hit point refinement in step 2 (binary search iterations)
 };
 
-class CCopyComputePass : public CPass
+class CCopyComputePass : public CComputePass
 {
 public:
 	CCopyComputePass(CVulkanRHI*);
 	~CCopyComputePass();
 
-	virtual bool CreateRenderpass(RenderData*) override;
 	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
 
 	virtual bool Update(UpdateData*) override;
-	virtual bool Render(RenderData*) override;
-	virtual void Destroy() override;
-
-	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+	virtual bool Dispatch(RenderData*) override;
 
 private:
 };

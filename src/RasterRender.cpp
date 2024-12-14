@@ -153,7 +153,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 	RETURN_FALSE_IF_FALSE(m_fixedAssets->Create(m_rhi, m_vkCmdPool));
 
 	RETURN_FALSE_IF_FALSE(m_loadableAssets->Create(m_rhi, *m_fixedAssets, m_vkCmdPool));
-	
+
 	RETURN_FALSE_IF_FALSE(m_primaryDescriptors->Create(m_rhi, *m_fixedAssets, *m_loadableAssets));
 
 	RETURN_FALSE_IF_FALSE(CreatePasses());
@@ -184,7 +184,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 	RETURN_FALSE_IF_FALSE(InitCamera());
 
 	//m_rhi->SetRenderType(CVulkanRHI::RendererType::Deferred);
-	//m_ssrComputePass->Enable(false);
+	m_ssrComputePass->Enable(false);
 	m_taaComputePass->Enable(false);
 
 	return true;
@@ -208,37 +208,6 @@ bool CRasterRender::on_update(float delta)
 	GetCurrentMousePosition(mousepos_x, mousepos_y);
 	
 	{
-		CFixedBuffers::PrimaryUniformData uniformData = m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
-		uniformData.cameraInvView					= nm::inverse(m_primaryCamera->GetView());
-		uniformData.cameraLookFrom					= m_primaryCamera->GetLookFrom();
-		uniformData.cameraProj						= m_primaryCamera->GetProjection();
-		uniformData.cameraView						= m_primaryCamera->GetView();
-		uniformData.cameraViewProj					= m_primaryCamera->GetViewProj();
-		uniformData.cameraJitteredViewProj			= m_primaryCamera->GetJitteredViewProj();
-		uniformData.cameraInvViewProj				= m_primaryCamera->GetInvViewProj();
-		uniformData.cameraPreViewProj				= m_primaryCamera->GetPreViewProj();
-		uniformData.mousePos						= nm::float2((float)mousepos_x, (float)mousepos_y);
-		uniformData.skyboxModelView					= m_primaryCamera->GetView();
-		uniformData.ssrEnable						= m_ssrComputePass->IsEnabled();
-		uniformData.ssrMaxDistance					= m_ssrComputePass->GetMaxDistance();
-		uniformData.ssrResolution					= m_ssrComputePass->GetResolution();
-		uniformData.ssrThickness					= m_ssrComputePass->GetThickness();
-		uniformData.ssrSteps						= m_ssrComputePass->GetSteps();
-		uniformData.taaResolveWeight				= m_taaComputePass->GetResolveWeight();
-		uniformData.taaUseMotionVectors				= m_taaComputePass->UseMotionVectors();
-		uniformData.taaFlickerCorectionMode			= (float)m_taaComputePass->GetFlickerCorrectionMode();
-		uniformData.taaReprojectionFilter			= (float)m_taaComputePass->GetReprojectionFilter();
-		uniformData.toneMappingSelection			= (float)m_toneMapPass->GetActiveToneMapper();
-		uniformData.toneMappingExposure				= m_toneMapPass->GetExposure();
-
-		FixedUpdateData fixedUpdate{};
-		fixedUpdate.primaryUniData					= &uniformData;
-		fixedUpdate.swapchainIndex					= m_swapchainIndex;
-		fixedUpdate.sceneGraph						= m_sceneGraph;
-		RETURN_FALSE_IF_FALSE(m_fixedAssets->Update(m_rhi, fixedUpdate));
-	}
-	
-	{
 		LoadedUpdateData loadedUpdate{};
 		loadedUpdate.curMousePos					= nm::float2((float)mousepos_x, (float)mousepos_y);
 		loadedUpdate.isLeftMouseDown				= m_keys[LEFT_MOUSE_BUTTON].down;
@@ -246,16 +215,30 @@ bool CRasterRender::on_update(float delta)
 		loadedUpdate.screenRes						= nm::float2((float)s_Window.screenWidth, (float)s_Window.screenHeight);
 		loadedUpdate.swapchainIndex					= m_swapchainIndex;
 		loadedUpdate.timeElapsed					= delta;
-		loadedUpdate.viewMatrix						= m_primaryCamera->GetView();
 		loadedUpdate.commandPool					= m_vkCmdPool;
 		loadedUpdate.cameraData						= camUpdateData;
+		loadedUpdate.camView						= m_primaryCamera->GetView();
+		loadedUpdate.camProjection					= m_primaryCamera->GetProjection();
 
-		RETURN_FALSE_IF_FALSE(m_loadableAssets->Update(m_rhi, loadedUpdate, m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData()));
+		RETURN_FALSE_IF_FALSE(m_loadableAssets->Update(m_rhi, loadedUpdate));
 	}
 
 	{
+		CFixedBuffers::PrimaryUniformData* uniformData = m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
+		uniformData->cameraInvView					= nm::inverse(m_primaryCamera->GetView());
+		uniformData->cameraLookFrom					= m_primaryCamera->GetLookFrom();
+		uniformData->cameraProj						= m_primaryCamera->GetProjection();
+		uniformData->cameraView						= m_primaryCamera->GetView();
+		uniformData->cameraViewProj					= m_primaryCamera->GetViewProj();
+		uniformData->cameraJitteredViewProj			= m_primaryCamera->GetJitteredViewProj();
+		uniformData->cameraInvViewProj				= m_primaryCamera->GetInvViewProj();
+		uniformData->cameraPreViewProj				= m_primaryCamera->GetPreViewProj();
+		uniformData->mousePos						= nm::float2((float)mousepos_x, (float)mousepos_y);
+		uniformData->skyboxModelView				= m_primaryCamera->GetView();
+
 		CPass::UpdateData updateData{};
 		updateData.sceneGraph						= m_sceneGraph;
+		updateData.uniformData						= uniformData;
 
 		m_staticShadowPass->Update(&updateData);
 		m_skyboxForwardPass->Update(&updateData);
@@ -270,6 +253,10 @@ bool CRasterRender::on_update(float delta)
 		m_toneMapPass->Update(&updateData);
 		m_taaComputePass->Update(&updateData);
 		m_uiPass->Update(&updateData);
+
+		FixedUpdateData fixedUpdate{};
+		fixedUpdate.swapchainIndex					= m_swapchainIndex;
+		RETURN_FALSE_IF_FALSE(m_fixedAssets->Update(m_rhi, fixedUpdate));
 	}
 	
 	RenderFrame(m_rhi->GetRendererType());
@@ -468,11 +455,9 @@ bool CRasterRender::CreatePasses()
 	RETURN_FALSE_IF_FALSE(m_forwardPass->Initalize(&renderData, pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
-	pipeline.renderpassData					= m_forwardPass->GetRenderpass();			// reusing render-pass from forward pass
 	pipeline.pipeLayout						= primaryAndSceneLayout;
 	pipeline.vertexInBinding				= vertexBindinginUse.bindingDescription;
 	pipeline.vertexAttributeDesc			= vertexBindinginUse.attributeDescription;
-	m_skyboxForwardPass->SetFrameBuffer(m_forwardPass->GetFrameBuffer());
 	RETURN_FALSE_IF_FALSE(m_skyboxForwardPass->Initalize(&renderData, pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
@@ -489,13 +474,13 @@ bool CRasterRender::CreatePasses()
 
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= primaryLayout;
-	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Initalize(nullptr, pipeline));
-	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Initalize(nullptr, pipeline));
+	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Initalize(pipeline));
+	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Initalize(pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= primaryAndSceneLayout;
-	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Initalize(nullptr, pipeline));
-	RETURN_FALSE_IF_FALSE(m_ssrComputePass->Initalize(&renderData, pipeline));
+	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Initalize(pipeline));
+	RETURN_FALSE_IF_FALSE(m_ssrComputePass->Initalize(pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= debugLayout;
@@ -507,7 +492,7 @@ bool CRasterRender::CreatePasses()
 
 	pipeline = CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout = primaryLayout;
-	RETURN_FALSE_IF_FALSE(m_taaComputePass->Initalize(&renderData, pipeline));
+	RETURN_FALSE_IF_FALSE(m_taaComputePass->Initalize(pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= uiLayout;
@@ -630,23 +615,23 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 	}
 
 	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO];
-	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Render(&renderData));
+	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Dispatch(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
 	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO_Blur];
-	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Render(&renderData));
+	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Dispatch(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
 	if (p_renderType == CVulkanRHI::RendererType::Deferred)
 	{
 		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Deferred_Lighting];
-		RETURN_FALSE_IF_FALSE(m_deferredLightPass->Render(&renderData));
+		RETURN_FALSE_IF_FALSE(m_deferredLightPass->Dispatch(&renderData));
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
 		if (m_ssrComputePass->IsEnabled())
 		{
 			renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSR];
-			RETURN_FALSE_IF_FALSE(m_ssrComputePass->Render(&renderData));
+			RETURN_FALSE_IF_FALSE(m_ssrComputePass->Dispatch(&renderData));
 			m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 		}
 	}
@@ -662,7 +647,7 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 	if (m_taaComputePass->IsEnabled())
 	{
 		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_TAA];
-		RETURN_FALSE_IF_FALSE(m_taaComputePass->Render(&renderData));
+		RETURN_FALSE_IF_FALSE(m_taaComputePass->Dispatch(&renderData));
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 	}
 

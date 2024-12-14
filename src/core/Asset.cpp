@@ -519,11 +519,10 @@ void CRenderableUI::Destroy(CVulkanRHI* p_rhi)
 	DestroyTextures(p_rhi);
 }
 
-bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate, CFixedBuffers::PrimaryUniformData& p_primUniData)
+bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 {
 	m_latestFPS.Add(p_loadedUpdate.timeElapsed);
 
-	m_primUniforms							= p_primUniData;
 	ImGuiIO& imguiIO						= ImGui::GetIO();
 	imguiIO.DisplaySize						= ImVec2(p_loadedUpdate.screenRes[0], p_loadedUpdate.screenRes[1]);
 	imguiIO.DeltaTime						= p_loadedUpdate.timeElapsed;
@@ -535,7 +534,7 @@ bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUp
 	ImGuizmo::BeginFrame();
 
 	ShowUI(p_rhi);
-	ShowGuizmo(p_rhi);
+	ShowGuizmo(p_rhi, p_loadedUpdate.camView, p_loadedUpdate.camProjection);
 
 	return true;
 }
@@ -575,7 +574,7 @@ bool CRenderableUI::CreateUIDescriptors(CVulkanRHI* p_rhi)
 	return true;
 }
 
-bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
+bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi, nm::float4x4 p_camView, nm::float4x4 p_camProjection)
 {
 	// ImGuizmo Type Selection
 	{
@@ -610,14 +609,12 @@ bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
 		ImGuizmo::SetOrthographic(false);
 		ImGuizmo::SetRect(0.0f, 0.0f, (float)p_rhi->GetScreenWidth(), (float)p_rhi->GetScreenHeight());
 
-		nm::float4x4 camView		= m_primUniforms.cameraView;
-		nm::float4x4 camProj		= m_primUniforms.cameraProj;
 		nm::Transform transform		= m_selectedEntity->GetTransform();
 
 		if (m_guizmo.type == Guizmo::Translation)
 		{
 			nm::float4x4 translation = transform.GetTranslate();
-			if (ImGuizmo::Manipulate(&camView.column[0][0], &camProj.column[0][0], ImGuizmo::OPERATION::TRANSLATE, ImGuizmo::LOCAL, &translation.column[0][0]))
+			if (ImGuizmo::Manipulate(&p_camView.column[0][0], &p_camProjection.column[0][0], ImGuizmo::OPERATION::TRANSLATE, ImGuizmo::LOCAL, &translation.column[0][0]))
 			{
 				if (!(transform.GetTranslate() == translation))
 				{
@@ -629,7 +626,7 @@ bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
 		else if (m_guizmo.type == Guizmo::Rotation)
 		{
 			nm::float4x4 guizmoTransform = transform.GetTranslate() * transform.GetRotate();
-			if (ImGuizmo::Manipulate(&camView.column[0][0], &camProj.column[0][0], ImGuizmo::OPERATION::ROTATE, ImGuizmo::LOCAL, &guizmoTransform.column[0][0]))
+			if (ImGuizmo::Manipulate(&p_camView.column[0][0], &p_camProjection.column[0][0], ImGuizmo::OPERATION::ROTATE, ImGuizmo::LOCAL, &guizmoTransform.column[0][0]))
 			{
 				nm::float4x4 rotate = nm::float4x4::identity();
 				rotate.column[0][0] = guizmoTransform.column[0][0];
@@ -651,7 +648,7 @@ bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
 		else if (m_guizmo.type == Guizmo::Scale)
 		{
 			nm::float4x4 guizmoTransform = transform.GetTranslate() * transform.GetScale();
-			if (ImGuizmo::Manipulate(&camView.column[0][0], &camProj.column[0][0], ImGuizmo::OPERATION::SCALE, ImGuizmo::LOCAL, &guizmoTransform.column[0][0]))
+			if (ImGuizmo::Manipulate(&p_camView.column[0][0], &p_camProjection.column[0][0], ImGuizmo::OPERATION::SCALE, ImGuizmo::LOCAL, &guizmoTransform.column[0][0]))
 			{
 				nm::float4x4 scaling = nm::float4x4::identity();
 				scaling.column[0][0] = guizmoTransform.column[0][0];
@@ -1009,7 +1006,7 @@ bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 	for (auto& mesh : m_meshes)
 	{
 		mesh->SetDirty(false);
-		mesh->m_viewNormalTransform					= (p_loadedUpdate.viewMatrix * mesh->GetTransform().GetTransform());	// nm::inverse(nm::transpose(p_loadedUpdate.viewMatrix * mesh->GetTransform().GetTransform()));
+		mesh->m_viewNormalTransform					= (p_loadedUpdate.camView * mesh->GetTransform().GetTransform());	// nm::inverse(nm::transpose(p_loadedUpdate.viewMatrix * mesh->GetTransform().GetTransform()));
 
 		const float* modelMat						= &(mesh->GetTransform().GetTransform()).column[0][0];
 
@@ -1613,10 +1610,9 @@ bool CReadOnlyTextures::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers,
 	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_commandPool, &cmdBfr, 1, &debugMarker));
 	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
 
-	CFixedBuffers::PrimaryUniformData& priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
+	CFixedBuffers::PrimaryUniformData* priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
 	RETURN_FALSE_IF_FALSE(CreateSSAOKernelTexture(p_rhi, stgList, priUnidata, cmdBfr));
-	p_fixedBuffers.SetPrimaryUniformData(priUnidata);
-
+	
 	if (!p_rhi->EndCommandBuffer(cmdBfr))
 		return false;
 
@@ -1636,11 +1632,10 @@ void CReadOnlyTextures::Destroy(CVulkanRHI* p_rhi)
 	DestroyTextures(p_rhi);
 }
 
-bool CReadOnlyTextures::CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData& p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
+bool CReadOnlyTextures::CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData* p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	uint32_t ssaoNoiseDim						= 4;
-	p_primaryUniformData.ssaoNoiseScale			= nm::float2((float)p_rhi->GetRenderWidth() / (float)ssaoNoiseDim, (float)p_rhi->GetRenderHeight() / (float)ssaoNoiseDim);
-
+	uint32_t ssaoNoiseDim = p_rhi->GetRenderWidth() / (uint32_t)p_primaryUniformData->ssaoNoiseScale[0];
+	
 	std::vector<unsigned char> ssaoNoise;
 	// introducing good random rotation can reduce number of samples required
 	for (uint32_t i = 0; i < (ssaoNoiseDim * ssaoNoiseDim); i++)
@@ -1680,9 +1675,8 @@ bool CReadOnlyBuffers::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers, 
 	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_commandPool, &cmdBfr, 1, &debugMarker));
 	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
 
-	CFixedBuffers::PrimaryUniformData& priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
+	CFixedBuffers::PrimaryUniformData* priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
 	RETURN_FALSE_IF_FALSE(CreateSSAONoiseBuffer(p_rhi, stgList, priUnidata, cmdBfr));
-	p_fixedBuffers.SetPrimaryUniformData(priUnidata);
 
 	if (!p_rhi->EndCommandBuffer(cmdBfr))
 		return false;
@@ -1703,13 +1697,13 @@ void CReadOnlyBuffers::Destroy(CVulkanRHI* p_rhi)
 	DestroyBuffers(p_rhi);
 }
 
-bool CReadOnlyBuffers::CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData& p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
+bool CReadOnlyBuffers::CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData* p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	p_primaryUniformData.ssaoKernelSize			= 64.f;
-	p_primaryUniformData.ssaoRadius				= 0.5f;
+	p_primaryUniformData->ssaoKernelSize			= 64.f;
+	p_primaryUniformData->ssaoRadius				= 0.5f;
 
 	std::vector<nm::float4> ssaoKernel;
-	for (uint32_t i = 0; i < p_primaryUniformData.ssaoKernelSize; i++)
+	for (uint32_t i = 0; i < p_primaryUniformData->ssaoKernelSize; i++)
 	{
 		// creating random values along a semi-sphere oriented along surface normal (Z axis) in tangent space
 		nm::float4 sample = {
@@ -1767,10 +1761,10 @@ void CLoadableAssets::Destroy(CVulkanRHI* p_rhi)
 	m_readOnlyTextures.Destroy(p_rhi);
 }
 
-bool CLoadableAssets::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_updateData, CFixedBuffers::PrimaryUniformData& p_primUniData)
+bool CLoadableAssets::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_updateData)
 {
 	RETURN_FALSE_IF_FALSE(m_scene.Update(p_rhi, p_updateData));
-	RETURN_FALSE_IF_FALSE(m_ui.Update(p_rhi, p_updateData, p_primUniData));
+	RETURN_FALSE_IF_FALSE(m_ui.Update(p_rhi, p_updateData));
 	return true;
 }
 
@@ -1884,6 +1878,7 @@ CFixedBuffers::CFixedBuffers()
 	, CBuffers(CFixedBuffers::FixedBufferId::fb_max)
 {
 	m_primaryUniformData.ssaoKernelSize			= 64.0f;
+	m_primaryUniformData.ssaoNoiseScale         = nm::float2((float)RENDER_RESOLUTION_X / 4.0f, (float)RENDER_RESOLUTION_Y / 4.0f);
 	m_primaryUniformData.ssaoRadius				= 0.5f;
 	m_primaryUniformData.enableShadowPCF		= 0;
 	m_primaryUniformData.pbrAmbientFactor		= 0.1f;
@@ -1986,21 +1981,6 @@ void CFixedBuffers::Show(CVulkanRHI* p_rhi)
 		}
 		if (ImGui::TreeNode("Camera"))
 		{
-			ImGui::TreePop();
-		}
-		if (ImGui::TreeNode("SSAO"))
-		{
-			bool enableSSAO = (bool)m_primaryUniformData.enableSSAO;
-			ImGui::Checkbox("Enable SSAO ", &enableSSAO);
-			m_primaryUniformData.enableSSAO = (int)enableSSAO;
-
-			float ssaoBias = m_primaryUniformData.biasSSAO;
-			ImGui::SliderFloat("SSAO Bias", &ssaoBias, 0.00f, 0.1f);
-			m_primaryUniformData.biasSSAO = ssaoBias;
-
-			ImGui::InputFloat2("Noise Scale", &m_primaryUniformData.ssaoNoiseScale[0]);
-			ImGui::InputFloat("Kernel Size", &m_primaryUniformData.ssaoKernelSize);
-			ImGui::InputFloat("Kernel Radius", &m_primaryUniformData.ssaoRadius);
 			ImGui::TreePop();
 		}
 		if (ImGui::TreeNode("Shadow"))
@@ -2120,7 +2100,6 @@ void CFixedAssets::Destroy(CVulkanRHI* p_rhi)
 
 bool CFixedAssets::Update(CVulkanRHI* p_rhi, const FixedUpdateData& p_updateData)
 {
-	m_fixedBuffers.SetPrimaryUniformData(*p_updateData.primaryUniData);
 	RETURN_FALSE_IF_FALSE(m_fixedBuffers.Update(p_rhi, p_updateData.swapchainIndex));
 	return true;
 }

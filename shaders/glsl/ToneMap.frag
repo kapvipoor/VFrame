@@ -80,8 +80,7 @@ vec3 Reinhard(vec3 color)
 }
 
 void main()
-{
-    
+{    
     vec3 color = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_COLOR], g_LinearSampler), inUV).xyz;
 
     if(g_Info.enabelSSAO == 1)

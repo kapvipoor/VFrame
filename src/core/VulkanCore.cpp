@@ -1047,7 +1047,7 @@ bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipel
 	{
 		useDynamicRendering								= true;
 		pData.renderpassData.renderpass					= VK_NULL_HANDLE;
-		colorAttachCount								= pData.colorAttachFormats.size();
+		colorAttachCount								= (uint32_t)pData.colorAttachFormats.size();
 
 		pipelineRenderingInfo.sType						= VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
 		pipelineRenderingInfo.pNext						= nullptr;

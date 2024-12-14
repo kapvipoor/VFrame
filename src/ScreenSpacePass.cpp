@@ -2,19 +2,16 @@
 #include "core/RandGen.h"
 
 CSSAOComputePass::CSSAOComputePass(CVulkanRHI* p_rhi)
-	: CPass(p_rhi)
-{
-	m_frameBuffer.resize(1);
-}
+	: CComputePass(p_rhi)
+	, CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
+	, m_kernelSize(64.0f)
+	, m_kernelRadius(0.5f)
+	, m_bias(0.015f)
+	, m_noiseScale(nm::float2((float)p_rhi->GetRenderWidth() / 4.0f, (float)p_rhi->GetRenderHeight() / 4.0f))
+{}
 
 CSSAOComputePass::~CSSAOComputePass()
 {
-}
-
-bool CSSAOComputePass::CreateRenderpass(RenderData* p_renderData)
-{
-	// compute pass, no Renderpass to create
-	return true;
 }
 
 bool CSSAOComputePass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
@@ -28,12 +25,18 @@ bool CSSAOComputePass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	return true;
 }
 
-bool CSSAOComputePass::Update(UpdateData*)
+bool CSSAOComputePass::Update(UpdateData* p_updateData)
 {
+	p_updateData->uniformData->biasSSAO = m_bias;
+	p_updateData->uniformData->enableSSAO = m_isEnabled;
+	p_updateData->uniformData->ssaoKernelSize = m_kernelSize;
+	p_updateData->uniformData->ssaoNoiseScale = m_noiseScale;
+	p_updateData->uniformData->ssaoRadius = m_kernelRadius;
+
 	return true;
 }
 
-bool CSSAOComputePass::Render(RenderData* p_renderData)
+bool CSSAOComputePass::Dispatch(RenderData* p_renderData)
 {
 	uint32_t scId											= p_renderData->scIdx;
 	CVulkanRHI::CommandBuffer cmdBfr						= p_renderData->cmdBfr;
@@ -54,31 +57,28 @@ bool CSSAOComputePass::Render(RenderData* p_renderData)
 	return true;
 }
 
-void CSSAOComputePass::Destroy()
+void CSSAOComputePass::Show(CVulkanRHI* p_rhi)
 {
-	m_rhi->DestroyPipeline(m_pipeline);
-}
+	bool ssaoNode = ImGui::TreeNode("SSAO");
+	ImGui::SameLine(75);
+	ImGui::Checkbox(" ", &m_isEnabled);
 
-void CSSAOComputePass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
-{
-	p_vertexBinding.attributeDescription					= m_pipeline.vertexAttributeDesc;
-	p_vertexBinding.bindingDescription						= m_pipeline.vertexInBinding;
+	if (ssaoNode)
+	{
+		ImGui::SliderFloat("SSAO Bias", &m_bias, 0.00f, 0.1f);
+		ImGui::InputFloat2("Noise Scale", &m_noiseScale[0]);
+		ImGui::InputFloat("Kernel Size", &m_kernelSize);
+		ImGui::InputFloat("Kernel Radius", &m_kernelRadius);
+		ImGui::TreePop();
+	}
 }
 
 CSSAOBlurPass::CSSAOBlurPass(CVulkanRHI* p_rhi)
-	: CPass(p_rhi)
-{
-}
+	: CComputePass(p_rhi)
+{}
 
 CSSAOBlurPass::~CSSAOBlurPass()
-{
-}
-
-bool CSSAOBlurPass::CreateRenderpass(RenderData* p_renderData)
-{
-	// compute pass, not Renderpass to create
-	return true;
-}
+{}
 
 bool CSSAOBlurPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 {
@@ -96,7 +96,7 @@ bool CSSAOBlurPass::Update(UpdateData*)
 	return true;
 }
 
-bool CSSAOBlurPass::Render(RenderData* p_renderData)
+bool CSSAOBlurPass::Dispatch(RenderData* p_renderData)
 {
 	uint32_t scId											= p_renderData->scIdx;
 	CVulkanRHI::CommandBuffer cmdBfr						= p_renderData->cmdBfr;
@@ -116,37 +116,17 @@ bool CSSAOBlurPass::Render(RenderData* p_renderData)
 	return true;
 }
 
-void CSSAOBlurPass::Destroy()
-{
-	m_rhi->DestroyPipeline(m_pipeline);
-}
-
-void CSSAOBlurPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
-{
-	p_vertexBinding.attributeDescription			= m_pipeline.vertexAttributeDesc;
-	p_vertexBinding.bindingDescription				= m_pipeline.vertexInBinding;
-}
-
-
 CSSRComputePass::CSSRComputePass(CVulkanRHI* p_rhi)
-	: CPass(p_rhi)
+	: CComputePass(p_rhi)
 	, CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
 	, m_maxDistance(5.0f)
 	, m_resolution(1.0f)
 	, m_thickness(0.11f)
 	, m_steps(2)
-{
-	m_frameBuffer.resize(1);
-}
+{}
 
 CSSRComputePass::~CSSRComputePass()
 {
-}
-
-bool CSSRComputePass::CreateRenderpass(RenderData* p_renderData)
-{
-	// compute pass, not Renderpass to create
-	return true;
 }
 
 bool CSSRComputePass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
@@ -160,12 +140,18 @@ bool CSSRComputePass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	return true;
 }
 
-bool CSSRComputePass::Update(UpdateData*)
+bool CSSRComputePass::Update(UpdateData* p_updateData)
 {
+	p_updateData->uniformData->ssrEnable		= IsEnabled();
+	p_updateData->uniformData->ssrMaxDistance	= m_maxDistance;
+	p_updateData->uniformData->ssrResolution	= m_resolution;
+	p_updateData->uniformData->ssrThickness		= m_thickness;
+	p_updateData->uniformData->ssrSteps			= m_steps;
+
 	return true;
 }
 
-bool CSSRComputePass::Render(RenderData* p_renderData)
+bool CSSRComputePass::Dispatch(RenderData* p_renderData)
 {
 	uint32_t scId = p_renderData->scIdx;
 	CVulkanRHI::CommandBuffer cmdBfr = p_renderData->cmdBfr;
@@ -185,7 +171,7 @@ bool CSSRComputePass::Render(RenderData* p_renderData)
 		VkImageLayout curLayout = normalRT.curLayout;
 		for (uint32_t i = 1; i < normalRT.levelCount; i++)
 		{
-			m_rhi->InsertMarker(cmdBfr, std::string("Down sampling Normal: Res/" + std::to_string(pow(2,i))).c_str());
+			m_rhi->InsertMarker(cmdBfr, std::string("Down sampling Normal: Res/" + std::to_string(uint32_t(pow(2,i)))).c_str());
 			uint32_t baseMipLevel = i - 1;
 
 			m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, normalRT, cmdBfr, baseMipLevel);
@@ -227,17 +213,6 @@ bool CSSRComputePass::Render(RenderData* p_renderData)
 	return true;
 }
 
-void CSSRComputePass::Destroy()
-{
-	m_rhi->DestroyPipeline(m_pipeline);
-}
-
-void CSSRComputePass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
-{
-	p_vertexBinding.attributeDescription = m_pipeline.vertexAttributeDesc;
-	p_vertexBinding.bindingDescription = m_pipeline.vertexInBinding;
-}
-
 void CSSRComputePass::Show(CVulkanRHI* p_rhi)
 {
 	bool ssrNode = ImGui::TreeNode("SSR");
@@ -260,19 +235,11 @@ void CSSRComputePass::Show(CVulkanRHI* p_rhi)
 }
 
 CCopyComputePass::CCopyComputePass(CVulkanRHI* p_rhi)
-	: CPass(p_rhi)
-{
-	m_frameBuffer.resize(1);
-}
+	: CComputePass(p_rhi)
+{}
 
 CCopyComputePass::~CCopyComputePass()
 {
-}
-
-bool CCopyComputePass::CreateRenderpass(RenderData* p_renderData)
-{
-	// compute pass, not Renderpass to create
-	return true;
 }
 
 bool CCopyComputePass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
@@ -291,7 +258,7 @@ bool CCopyComputePass::Update(UpdateData*)
 	return true;
 }
 
-bool CCopyComputePass::Render(RenderData* p_renderData)
+bool CCopyComputePass::Dispatch(RenderData* p_renderData)
 {
 	uint32_t scId = p_renderData->scIdx;
 	CVulkanRHI::CommandBuffer cmdBfr = p_renderData->cmdBfr;
@@ -310,15 +277,4 @@ bool CCopyComputePass::Render(RenderData* p_renderData)
 	RETURN_FALSE_IF_FALSE(m_rhi->EndCommandBuffer(cmdBfr));
 	
 	return true;
-}
-
-void CCopyComputePass::Destroy()
-{
-	m_rhi->DestroyPipeline(m_pipeline);
-}
-
-void CCopyComputePass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
-{
-	p_vertexBinding.attributeDescription = m_pipeline.vertexAttributeDesc;
-	p_vertexBinding.bindingDescription = m_pipeline.vertexInBinding;
 }

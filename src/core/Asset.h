@@ -82,12 +82,13 @@ struct LoadedUpdateData
 {
 	uint32_t							swapchainIndex;
 	float								timeElapsed;
-	nm::float4x4						viewMatrix;
 	nm::float2							screenRes;
 	nm::float2							curMousePos;
 	bool								isLeftMouseDown;
 	bool								isRightMouseDown;
 	VkCommandPool						commandPool;
+	nm::float4x4						camProjection;
+	nm::float4x4						camView;
 	CCamera::UpdateData					cameraData;
 
 };
@@ -230,9 +231,7 @@ public:
 	bool Create(CVulkanRHI*);
 	void Destroy(CVulkanRHI*);
 
-	PrimaryUniformData& GetPrimaryUnifromData() { return m_primaryUniformData; }
-	const PrimaryUniformData& GetPrimaryUnifromData() const { return m_primaryUniformData; }
-	void SetPrimaryUniformData(const PrimaryUniformData& p_primUniData) { m_primaryUniformData = p_primUniData; }
+	PrimaryUniformData* GetPrimaryUnifromData() { return &m_primaryUniformData; }
 
 	bool Update(CVulkanRHI*, uint32_t p_scId);
 
@@ -244,9 +243,7 @@ private:
 
 struct FixedUpdateData
 {
-	int									swapchainIndex;
-	CFixedBuffers::PrimaryUniformData*	primaryUniData;
-	CSceneGraph*						sceneGraph;
+	int	swapchainIndex;
 };
 
 class CRenderTargets : public CTextures, public CUIParticipant
@@ -351,7 +348,7 @@ public:
 	bool Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool);
 	void Destroy(CVulkanRHI* p_rhi);
 
-	bool Update(CVulkanRHI* p_rhi, const LoadedUpdateData& , CFixedBuffers::PrimaryUniformData& );
+	bool Update(CVulkanRHI* p_rhi, const LoadedUpdateData&);
 	bool PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx);
 
 private:
@@ -359,12 +356,11 @@ private:
 	bool								m_showImguiDemo;
 	CCircularList						m_latestFPS;
 	CUIParticipantManager*				m_participantManager;
-	CFixedBuffers::PrimaryUniformData	m_primUniforms;
-	
+		
 	bool LoadFonts(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 	bool CreateUIDescriptors(CVulkanRHI* p_rhi);
 	bool ShowUI(CVulkanRHI* p_rhi);
-	bool ShowGuizmo(CVulkanRHI* p_rhi);
+	bool ShowGuizmo(CVulkanRHI* p_rhi, nm::float4x4 p_camView, nm::float4x4 p_camProjection);
 };
 
 class CRenderableMesh : public CRenderable, public CEntity
@@ -549,7 +545,7 @@ public:
 	void Destroy(CVulkanRHI*);
 
 private:
-	bool CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData&, CVulkanRHI::CommandBuffer& p_cmdBfr);
+	bool CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData*, CVulkanRHI::CommandBuffer& p_cmdBfr);
 };
 
 class CReadOnlyBuffers : public CBuffers
@@ -568,7 +564,7 @@ public:
 	void Destroy(CVulkanRHI*);
 
 private:
-	bool CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData&, CVulkanRHI::CommandBuffer& p_cmdBfr);
+	bool CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData*, CVulkanRHI::CommandBuffer& p_cmdBfr);
 };
 
 class CLoadableAssets;
@@ -595,7 +591,7 @@ public:
 	bool Create(CVulkanRHI*, const CFixedAssets&, const CVulkanRHI::CommandPool& );
 	void Destroy(CVulkanRHI*);
 
-	bool Update(CVulkanRHI*, const LoadedUpdateData&, CFixedBuffers::PrimaryUniformData&);
+	bool Update(CVulkanRHI*, const LoadedUpdateData&);
 
 	CScene* GetScene() { return &m_scene;}
 	const CRenderableUI* GetUI() const { return &m_ui; }

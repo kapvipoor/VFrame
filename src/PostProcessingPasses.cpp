@@ -3,7 +3,7 @@
 #include "PostProcessingPasses.h"
 
 CToneMapPass::CToneMapPass(CVulkanRHI* p_rhi)
-    : CPass(p_rhi)
+    : CStaticRenderPass(p_rhi)
     , CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
     , m_toneMapper(ToneMapper::AMD)
     , m_exposure(1.0f)
@@ -59,6 +59,9 @@ bool CToneMapPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 
 bool CToneMapPass::Update(UpdateData* p_updateData)
 {
+    p_updateData->uniformData->toneMappingSelection = (float)m_toneMapper;
+    p_updateData->uniformData->toneMappingExposure = m_exposure;
+
     return true;
 }
 
@@ -99,14 +102,6 @@ bool CToneMapPass::Render(RenderData* p_renderData)
     return true;
 }
 
-void CToneMapPass::Destroy()
-{
-    m_rhi->DestroyFramebuffer(m_frameBuffer[0]);
-    m_rhi->DestroyFramebuffer(m_frameBuffer[1]);
-    m_rhi->DestroyRenderpass(m_pipeline.renderpassData.renderpass);
-    m_rhi->DestroyPipeline(m_pipeline);
-}
-
 void CToneMapPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
 {
     p_vertexBinding.attributeDescription = m_pipeline.vertexAttributeDesc;
@@ -134,7 +129,7 @@ void CToneMapPass::Show(CVulkanRHI* p_rhi)
 }
 
 CTAAComputePass::CTAAComputePass(CVulkanRHI* p_rhi)
-    : CPass(p_rhi)
+    : CComputePass(p_rhi)
     , CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
     , m_activeJitterMode(CJitterHelper::JitterMode::Hammersley16x)
     , m_resolveWeight(0.93f)
@@ -142,20 +137,12 @@ CTAAComputePass::CTAAComputePass(CVulkanRHI* p_rhi)
     , m_flickerCorrectionMode(FlickerCorrection::None)
     , m_reprojectionFilter(ReprojectionFilter::Standard)
 {
-    m_frameBuffer.resize(1);
-    //m_isEnabled = false; // for now disabling it by default
-	m_jitterHelper = new CJitterHelper(m_activeJitterMode);
+    m_jitterHelper = new CJitterHelper(m_activeJitterMode);
 }
 
 CTAAComputePass::~CTAAComputePass()
 {
 	delete m_jitterHelper;
-}
-
-bool CTAAComputePass::CreateRenderpass(RenderData*)
-{
-    // compute pass, no render pass to create
-    return true;
 }
 
 bool CTAAComputePass::CreatePipeline(CVulkanRHI::Pipeline p_Pipeline)
@@ -169,12 +156,17 @@ bool CTAAComputePass::CreatePipeline(CVulkanRHI::Pipeline p_Pipeline)
     return true;
 }
 
-bool CTAAComputePass::Update(UpdateData*)
+bool CTAAComputePass::Update(UpdateData* p_updateData)
 {
+    p_updateData->uniformData->taaResolveWeight         = m_resolveWeight;
+    p_updateData->uniformData->taaUseMotionVectors      = m_useMotionVectors;
+    p_updateData->uniformData->taaFlickerCorectionMode  = (float)m_flickerCorrectionMode;
+    p_updateData->uniformData->taaReprojectionFilter    = (float)m_reprojectionFilter;
+
     return true;
 }
 
-bool CTAAComputePass::Render(RenderData* p_renderData)
+bool CTAAComputePass::Dispatch(RenderData* p_renderData)
 {
     uint32_t scId = p_renderData->scIdx;
     CVulkanRHI::CommandBuffer cmdBfr = p_renderData->cmdBfr;
@@ -192,17 +184,6 @@ bool CTAAComputePass::Render(RenderData* p_renderData)
     m_rhi->EndCommandBuffer(cmdBfr);
 
     return true;
-}
-
-void CTAAComputePass::Destroy()
-{
-    m_rhi->DestroyPipeline(m_pipeline);
-}
-
-void CTAAComputePass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
-{
-    p_vertexBinding.attributeDescription = m_pipeline.vertexAttributeDesc;
-    p_vertexBinding.bindingDescription = m_pipeline.vertexInBinding;
 }
 
 void CTAAComputePass::Show(CVulkanRHI* p_rhi)

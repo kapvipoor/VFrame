@@ -194,6 +194,33 @@ public:
 		float												maxAnisotropy;
 	};
 
+	// Dynamic Rendering
+	static VkRenderingAttachmentInfo RenderingAttachinfo()
+	{
+		VkRenderingAttachmentInfo attachment{};
+		attachment.sType									= VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+		attachment.pNext									= nullptr;
+		attachment.imageLayout								= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		attachment.resolveMode								= VK_RESOLVE_MODE_NONE;
+		attachment.resolveImageView							= VK_NULL_HANDLE;
+		attachment.loadOp									= VK_ATTACHMENT_LOAD_OP_CLEAR;
+		attachment.storeOp									= VK_ATTACHMENT_STORE_OP_STORE;
+		return attachment;
+	}
+
+	static VkRenderingInfo RenderingInfo()
+	{
+		VkRenderingInfo renderingInfo{};
+		renderingInfo.sType									= VK_STRUCTURE_TYPE_RENDERING_INFO;
+		renderingInfo.pNext									= nullptr;
+		renderingInfo.flags									= 0;
+		renderingInfo.renderArea.offset.x					= 0;
+		renderingInfo.renderArea.offset.y					= 0;
+		renderingInfo.layerCount							= 1;
+		renderingInfo.viewMask								= 0;
+		return renderingInfo;
+	}
+
 	static VkImageCreateInfo ImageCreateInfo()
 	{
 		VkImageCreateInfo p_createInfo{};

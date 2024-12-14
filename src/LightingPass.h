@@ -2,27 +2,24 @@
 
 #include "Pass.h"
 
-class CForwardPass : public CPass
+class CForwardPass : public CDynamicRenderingPass
 {
 public:
 	CForwardPass(CVulkanRHI*);
 	~CForwardPass();
 
-	virtual bool CreateRenderpass(RenderData* p_renderData) override;
+	virtual bool CreateRenderingInfo(RenderData* p_renderData) override;
 	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
 
 	virtual bool Update(UpdateData*) override;
 	virtual bool Render(RenderData*) override;
-	virtual void Destroy() override;
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 private:
-	std::vector<VkRenderingAttachmentInfo> m_colorAttachInfos;
-	VkRenderingAttachmentInfo m_depthAttachInfo;
-	VkRenderingInfo m_renderingInfo;
+
 };
 
-class CSkyboxPass : public CPass
+class CSkyboxPass : public CStaticRenderPass
 {
 public:
 	CSkyboxPass(CVulkanRHI*);
@@ -33,12 +30,11 @@ public:
 
 	virtual bool Update(UpdateData*) override;
 	virtual bool Render(RenderData*) override;
-	virtual void Destroy() override;
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 };
 
-class CSkyboxDeferredPass : public CPass
+class CSkyboxDeferredPass : public CStaticRenderPass
 {
 public:
 	CSkyboxDeferredPass(CVulkanRHI*);
@@ -49,39 +45,35 @@ public:
 
 	virtual bool Update(UpdateData*) override;
 	virtual bool Render(RenderData*) override;
-	virtual void Destroy() override;
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 };
 
-class CDeferredPass : public CPass
+class CDeferredPass : public CDynamicRenderingPass
 {
 public:
 	CDeferredPass(CVulkanRHI*);
 	~CDeferredPass();
 
-	virtual bool CreateRenderpass(RenderData* p_renderData) override;
+	virtual bool CreateRenderingInfo(RenderData* p_renderData) override;
 	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
 
 	virtual bool Update(UpdateData*) override;
 	virtual bool Render(RenderData*) override;
-	virtual void Destroy() override;
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 };
 
-class CDeferredLightingPass : public CPass
+class CDeferredLightingPass : public CComputePass
 {
 public:
 	CDeferredLightingPass(CVulkanRHI*);
 	~CDeferredLightingPass();
 
-	virtual bool CreateRenderpass(RenderData* p_renderData) override;
 	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
 
 	virtual bool Update(UpdateData*) override;
-	virtual bool Render(RenderData*) override;
-	virtual void Destroy() override;
+	virtual bool Dispatch(RenderData*) override;
+private:
 
-	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 };

@@ -2,7 +2,7 @@
 #include "external/imgui/imgui.h"
 
 CUIPass::CUIPass(CVulkanRHI* p_rhi)
-	: CPass(p_rhi)
+	: CStaticRenderPass(p_rhi)
 {
 	m_frameBuffer.resize(FRAME_BUFFER_COUNT);
 }
@@ -193,14 +193,6 @@ bool CUIPass::Render(RenderData* p_renderData)
 	return true;
 }
 
-void CUIPass::Destroy()
-{
-	m_rhi->DestroyFramebuffer(m_frameBuffer[0]);
-	m_rhi->DestroyFramebuffer(m_frameBuffer[1]);
-	m_rhi->DestroyRenderpass(m_pipeline.renderpassData.renderpass);
-	m_rhi->DestroyPipeline(m_pipeline);
-}
-
 void CUIPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
 {
 	p_vertexBinding.attributeDescription					= m_pipeline.vertexAttributeDesc;
@@ -208,7 +200,7 @@ void CUIPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
 }
 
 CDebugDrawPass::CDebugDrawPass(CVulkanRHI* p_rhi)
-	: CPass(p_rhi)
+	: CStaticRenderPass(p_rhi)
 {
 	m_frameBuffer.resize(1);
 }
@@ -339,12 +331,6 @@ bool CDebugDrawPass::Render(RenderData* p_renderData)
 	m_rhi->EndCommandBuffer(cmdBfr);
 	
 	return true;
-}
-
-void CDebugDrawPass::Destroy()
-{
-	// No need to destroy render pass and frame buffers because they have been reused from forward pass.
-	m_rhi->DestroyPipeline(m_pipeline);
 }
 
 void CDebugDrawPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
