@@ -4,7 +4,7 @@
 
 // 0 disable vulkan debug
 // 1 enable vulkan debug
-#define VULKAN_DEBUG 1
+#define VULKAN_DEBUG 0
 
 #if VULKAN_DEBUG == 1
 // 1 show vulkan validations errors
@@ -164,8 +164,12 @@ public:
 
 	struct Image
 	{
+	private:
+		uint32_t											levelCount;
+	public:
+
 		VkImageUsageFlags									usage;
-		VkImageLayout										curLayout;
+		std::vector<VkImageLayout>							curLayout;
 
 		VkDescriptorImageInfo								descInfo;
 		VkImage												image;
@@ -178,13 +182,17 @@ public:
 		uint32_t											height;
 
 		uint32_t											layerCount;
-		uint32_t											levelCount;
 		uint32_t											bufOffset;			// assuming the buffer offset for each layer is going to be same
+
+		uint32_t GetLevelCount() { return levelCount; }
+		void SetLevelCount(uint32_t p_levelCount) { levelCount = p_levelCount; curLayout.resize(levelCount); }
 
 		Image() :
 			layerCount(1)
 			, levelCount(1)
-			, bufOffset(0) {}
+			, bufOffset(0) {
+			curLayout.resize(1);
+		}
 	};
 
 	struct Sampler
@@ -366,7 +374,8 @@ public:
 	bool ResetFence(VkFence& p_fence);
 	void DestroyFence(VkFence p_fence);
 
-	void IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel = 0);
+	void IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr);
+	void IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel);
 	void IssueImageLayoutBarrier(VkImageLayout p_old, VkImageLayout p_new, uint32_t layerCount, uint32_t lavelCount, VkImage& p_image, VkImageUsageFlags p_usage, VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel = 0);
 	void IssueBufferBarrier(VkAccessFlags p_srcAcc, VkAccessFlags p_dstAcc, VkPipelineStageFlags p_srcStg, VkPipelineStageFlags p_dstStg, VkBuffer& p_buffer, VkCommandBuffer p_cmdBfr);
 

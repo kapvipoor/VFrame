@@ -1,0 +1,199 @@
+#version 450
+
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_ARB_shading_language_420pack : enable
+#extension GL_GOOGLE_include_directive : enable
+
+#include "Common.h"
+
+float FindIntersection_Linear(vec3 samplePositionInTS, vec3 vReflDirInTS, float maxTraceDistance, inout vec3 intersection)
+{
+    vec3 vReflectionEndPosInTS = samplePositionInTS + vReflDirInTS * maxTraceDistance;
+
+    // DP is the iteration constant that we wish to march along the reflected ray in texture space such that we dont
+    // under sample (sample same value over and over) or over sample (miss pixels when sampling)
+    // This is essentially the reflected ray in TS
+    vec3 dp = vReflectionEndPosInTS - samplePositionInTS;
+    ivec2 sampleScreenPos = ivec2(samplePositionInTS.xy) * ivec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
+    ivec2 endPosScreenPos = ivec2(vReflectionEndPosInTS.xy) * ivec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
+
+    // This is the number of pixels the reflected ray covers along x and y
+    ivec2 dp2 = endPosScreenPos - sampleScreenPos;
+    int max_dist = max(abs(dp2.x), abs(dp2.y));
+    // We essentially divide the reflected ray in texture space into number of pixels we are going to cover
+    // This is similar to technique proposed here - https://lettier.github.io/3d-game-shaders-for-beginners/screen-space-reflection.html
+    dp /= max_dist;
+
+    // This the sample step size that we will iterate over
+    vec4 rayPosInTS = vec4(samplePositionInTS + dp, 0.0);
+    vec4 vRayDirInTS = vec4(dp.xyz, 0.0);
+    vec4 rayStartPos = rayPosInTS;
+
+    int hitIndex = -1;
+    for(int i = 0; i < max_dist && i < g_Info.ssrSteps; i++)
+    {
+        float depth0 = 0;
+        //float depth1 = 0;
+        //float depth2 = 0;
+        //float depth3 = 0;
+
+        vec4 rayPosInTS0 = rayPosInTS + vRayDirInTS * 0;
+        //vec4 rayPosInTS1 = rayPosInTS + vRayDirInTS * 1;
+        //vec4 rayPosInTS2 = rayPosInTS + vRayDirInTS * 2;
+        //vec4 rayPosInTS3 = rayPosInTS + vRayDirInTS * 3;
+
+        //depth3 = (texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), rayPosInTS3.xy).x ) ;
+        //depth2 = (texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), rayPosInTS2.xy).x ) ;
+        //depth1 = (texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), rayPosInTS1.xy).x ) ;
+        depth0 = (texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), rayPosInTS0.xy).x ) ;
+        
+        //{
+        //    float thickness = rayPosInTS3.z - depth3;
+        //    hitIndex = (thickness >= 0 && thickness < g_Info.ssrThickness) ? (i+3) : hitIndex;
+        //}
+        //
+        //{
+        //    float thickness = rayPosInTS2.z - depth2;
+        //    hitIndex = (thickness >= 0 && thickness < g_Info.ssrThickness) ? (i+2) : hitIndex;
+        //}
+        //
+        //{
+        //    float thickness = rayPosInTS1.z - depth1;
+        //    hitIndex = (thickness >= 0 && thickness < g_Info.ssrThickness) ? (i+1) : hitIndex;
+        //}
+        
+        {
+            float thickness = rayPosInTS0.z - depth0;
+            if(thickness >= 0 && thickness < g_Info.ssrThickness)
+            {
+                hitIndex = i;
+                break;
+            }
+            //hitIndex = (thickness >= 0 && thickness < g_Info.ssrThickness) ? (i) : hitIndex;
+        }
+
+        //if(hitIndex != -1) break;
+
+        //rayPosInTS = rayPosInTS3 + vRayDirInTS;
+
+        rayPosInTS += vRayDirInTS;
+    }
+
+    bool intersected = hitIndex >= 0;
+    intersection = rayStartPos.xyz + vRayDirInTS.xyz * hitIndex;
+
+    float intensity = intersected ? 1 : 0;
+    return intensity;
+}
+
+// DEBUGGING REMINIDER : In case this function does not behave as intended, remember to check if the sampleDepth being in
+// (0,1) range is of any issue
+
+// In this function, we move from ThreadID representing a Pixel to clip space by adding 0.5. Then convert that to view space 
+// by sampling depth and computing the current position in view space. We the calculate the reflection vector in view space 
+// by using the current positing and normal sampled for current position. Then reflected vector is multiplied with max distance
+// to calculate the end-point-of-reflected-ray. Also ensure that its z is not less than 0. 
+// We then convert both the end-point-of-reflected-way and current position to clip space and then calculate the reflected ray
+// in clip space. The current position is then converted to texture space (uv) and so is the end-point-of-reflected-ray-in-clip-space
+// to texture space as well.
+// The purpose is to walk along the reflectedTS by samplePosTS + (reflectTS * delta) and look for intersection by sampling the 
+// depth
+void ComputePosAndReflection(vec2 texCoord, vec3 sampleNormalInVS, inout vec3 outSamplePosInTS, inout vec3 outReflDirInTS, inout float outMaxDistance)
+{
+    float sampleDepth = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), texCoord).x;
+       
+    // We are computing the sample position in (-1,1) for x and y. But since this is Vulkan, the depth 
+    // here ranges between (0,1). Also we add 0.5 to gl_GlobalInvocationID because we wish to compute the 
+    // current uv for the current pixel at it center
+    vec2 sampleUV = vec2(gl_GlobalInvocationID.xy + 0.5) / vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
+    vec4 samplePosInCS = vec4((sampleUV * 2.0f) - 1.0f, sampleDepth, 1.0f);  
+    samplePosInCS.y *= -1;  // flipping y
+
+    vec4 samplePositionInVS = g_Info.invCamProj * samplePosInCS;
+    samplePositionInVS /= samplePositionInVS.w;
+
+    // In view space, camera is at (0,0,0). Hence Camera to Sample vector is just the vector itself.
+    // Also normalizing because it is a vector. This is the incident vector moving from camera to
+    // position
+    vec3 vCamToSampleInVS = normalize(samplePositionInVS.xyz);
+
+    // Remember normal has already been normalized after sampling from the Normal texture
+    vec4 vReflectionInVs = vec4(reflect(vCamToSampleInVS, sampleNormalInVS), 0.0f);
+
+    // We are in this situation for learning and visual debugging, passing the max distance 
+    // of the reflection ray as a uniform. 
+    vec4 vReflectionEndPosInVS = samplePositionInVS + vReflectionInVs * g_Info.ssrMaxDistance;
+    // We do this to ensure that vReflectionEndPosInVS.z is non-neg to avoid odd behavior
+    // during the perspective transformation
+    vReflectionEndPosInVS /= (vReflectionEndPosInVS.z < 0 ? vReflectionEndPosInVS.z : 1);
+    vec4 vReflectionEndPosInCS = g_Info.camProj * vec4(vReflectionEndPosInVS.xyz, 1.0);
+    vReflectionEndPosInCS /= vReflectionEndPosInCS.w;
+    vec3 vReflectionDir = normalize((vReflectionEndPosInCS - samplePosInCS).xyz);
+
+    // Now transform the reflection direction to Texture Space
+    samplePosInCS.xy *= vec2(0.5f, -0.5f);
+    samplePosInCS.xy += vec2(0.5f, 0.5f);
+
+    // Since this is a vector, we do not add the 0.5 screen correction offset
+    vReflectionDir.xy *= vec2(0.5f, -0.5f);
+
+    outSamplePosInTS = samplePosInCS.xyz;
+    outReflDirInTS = vReflectionDir.xyz;
+
+    // Some logic here to ensure that maxDistance is within the screen bounds. Going over is futile since
+    // we will keep sampling clamped values at the end of the texture. 
+    outMaxDistance = outReflDirInTS.x>=0 ? (1 - outSamplePosInTS.x)/outReflDirInTS.x  : -outSamplePosInTS.x/outReflDirInTS.x;
+    outMaxDistance = min(outMaxDistance, outReflDirInTS.y<0 ? (-outSamplePosInTS.y/outReflDirInTS.y)  : ((1-outSamplePosInTS.y)/outReflDirInTS.y));
+    outMaxDistance = min(outMaxDistance, outReflDirInTS.z<0 ? (-outSamplePosInTS.z/outReflDirInTS.z) : ((1-outSamplePosInTS.z)/outReflDirInTS.z));
+}
+
+layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) in;
+void main()
+{
+    vec2 texSize = vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
+    vec2 texCoord = vec2(gl_GlobalInvocationID.xy)/texSize;
+
+    // Final color 
+    vec4 finalColor = vec4(0.0f);
+    
+    // normal in view space 
+    vec3 normal = texture(sampler2D(g_RT_SampledImages[SAMPLE_NORMAL], g_LinearSampler), texCoord).xyz;
+
+    // Roughness map 
+    float roughness = texture(sampler2D(g_RT_SampledImages[SAMPLE_ROUGH_METAL_MOTION], g_LinearSampler), texCoord).x;
+
+    // sky color incase nothing is hit, we can sample the skybox here if needed
+    vec4 skyColor  = vec4(0.0f);
+
+    vec4 reflectionColor = vec4(0.0f);
+
+    // Early exit if the surface is rough
+    if(roughness == 1)
+    {
+        imageStore(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_GlobalInvocationID.xy), reflectionColor);
+        return;
+    }
+
+    // setting the default color to skyColor
+    reflectionColor = skyColor;
+
+    // This is the sample position in Texture Space (uv). And it is computed by calculating the uv from this Pixel's
+    // center. z is the depth
+    vec3 samplePosinTS = vec3(0);
+
+    // This is the reflected vector in Texture Space (uv). z is the depth here
+    vec3 vRefDirInTS = vec3(0);
+
+    // We are passing a max distance as a uniform, however we will ensure it is with-in the screen bounds
+    float maxTraceDistance = 0;
+
+    // compute the position, reflection vector and max trace distance of this sample in texture space
+    ComputePosAndReflection(texCoord, normal, samplePosinTS, vRefDirInTS, maxTraceDistance);
+
+    // find intersection in texture space by tracing the reflection ray
+    vec3 intersection = vec3(0);
+    float intensity = FindIntersection_Linear(samplePosinTS, vRefDirInTS, maxTraceDistance, intersection) * roughness;
+
+    imageStore(g_RT_StorageImages[STORE_SS_REFLECTION], ivec2(gl_GlobalInvocationID.xy), vec4(intersection,intensity));
+}
+

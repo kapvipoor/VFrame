@@ -161,43 +161,6 @@ bool CSSRComputePass::Dispatch(RenderData* p_renderData)
 	uint32_t dispatchDim_y = m_rhi->GetRenderHeight() / THREAD_GROUP_SIZE_Y;
 
 	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "SSR"));
-
-	// Down sample Normal Maps
-	{
-		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Normal);
-
-		int32_t mipWidth = normalRT.width;
-		int32_t mipHeight = normalRT.height;
-		VkImageLayout curLayout = normalRT.curLayout;
-		for (uint32_t i = 1; i < normalRT.levelCount; i++)
-		{
-			m_rhi->InsertMarker(cmdBfr, std::string("Down sampling Normal: Res/" + std::to_string(uint32_t(pow(2,i)))).c_str());
-			uint32_t baseMipLevel = i - 1;
-
-			m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, normalRT, cmdBfr, baseMipLevel);
-			
-			VkImageBlit imgBlt{};
-			imgBlt.srcOffsets[0] = { 0, 0, 0 };
-			imgBlt.srcOffsets[1] = { mipWidth, mipHeight, 1 };
-			imgBlt.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			imgBlt.srcSubresource.baseArrayLayer = 0;
-			imgBlt.srcSubresource.mipLevel = baseMipLevel;
-			imgBlt.srcSubresource.layerCount = 1;
-			imgBlt.dstOffsets[0] = { 0, 0, 0 };
-			imgBlt.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
-			imgBlt.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			imgBlt.dstSubresource.mipLevel = i;
-			imgBlt.dstSubresource.baseArrayLayer = 0;
-			imgBlt.dstSubresource.layerCount = 1;
-			m_rhi->BlitImage(cmdBfr, imgBlt, normalRT.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, normalRT.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, normalRT.format);
-
-			m_rhi->IssueLayoutBarrier(curLayout, normalRT, cmdBfr, baseMipLevel);
-
-			mipWidth = (mipWidth > 1) ? mipWidth / 2 : 1;
-			mipHeight = (mipHeight > 1) ? mipHeight / 2 : 1;	
-		}
-	}
-
 	m_rhi->InsertMarker(cmdBfr, "Compute");
 	{
 		p_renderData->fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, cmdBfr, CRenderTargets::rt_SSReflection);
@@ -227,7 +190,7 @@ void CSSRComputePass::Show(CVulkanRHI* p_rhi)
 		ImGui::SliderFloat("Max Distance", &m_maxDistance, 0.0f, 50.0f);
 		ImGui::SliderFloat("Resolution", &m_resolution, 0.0f, 1.0f);
 		ImGui::SliderFloat("Steps", &m_steps, 1, 50);
-		ImGui::SliderFloat("Thickness", &m_thickness, 0.0f, 4.0f);
+		ImGui::SliderFloat("Thickness", &m_thickness, 0.0f, 5.00f);
 
 		ImGui::Unindent();
 		ImGui::TreePop();

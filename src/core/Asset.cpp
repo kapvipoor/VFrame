@@ -273,7 +273,7 @@ bool CTextures::CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 		img.width = p_rawImg->width;
 		img.height = p_rawImg->height;
 		img.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		img.levelCount = p_rawImg->mipLevels;
+		img.SetLevelCount(p_rawImg->mipLevels);
 
 		VkImageCreateInfo imgCrtInfo = CVulkanCore::ImageCreateInfo();
 		imgCrtInfo.extent.width = p_rawImg->width;
@@ -1792,10 +1792,11 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	VkImageUsageFlags sample_storage_color = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	VkImageUsageFlags sample_storage_color_src = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	VkImageUsageFlags sample_storage_color_dest = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	VkImageUsageFlags sample_storage_color_src_dest = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryDepth,			VK_FORMAT_D32_SFLOAT_S8_UINT,	fullResWidth, fullResHeight, 1, shaderRead,	"primary_depth",		sample_depth));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Position,				VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"position",				sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Normal,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 3, general,	"normal",				sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Normal,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"normal",				sample_storage_color));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Albedo,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"albedo",				sample_storage_color));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAO_Blur,				VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1, general,	"ssao_and_blur",		sample_storage_color));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,	VK_FORMAT_D32_SFLOAT_S8_UINT,	4096, 4096,					 1, shaderRead,	"directional_shadow",	sample_depth));
@@ -1916,6 +1917,7 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(float) * 16)				// camera projection
 		+ (sizeof(float) * 16)				// camera view
 		+ (sizeof(float) * 16)				// inverse camera view
+		+ (sizeof(float) * 16)				// inverse camera projection
 		+ (sizeof(float) * 16)				// skybox model view
 		+ (sizeof(float) * 2)				// mouse position (x,y)
 		+ (sizeof(float) * 2)				// SSAO Noise Scale
@@ -2022,6 +2024,7 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	float* cameraProj						= const_cast<float*>(&m_primaryUniformData.cameraProj.column[0][0]);
 	float* cameraView						= const_cast<float*>(&m_primaryUniformData.cameraView.column[0][0]);
 	float* cameraInvView					= const_cast<float*>(&m_primaryUniformData.cameraInvView.column[0][0]);
+	float* cameraInvProj					= const_cast<float*>(&m_primaryUniformData.cameraInvProj.column[0][0]);
 	float* skyboxModelView					= const_cast<float*>(&m_primaryUniformData.skyboxModelView.column[0][0]);
 	
 	// canceling out translation for skybox rendering
@@ -2040,6 +2043,7 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	std::copy(&cameraProj[0], &cameraProj[16], std::back_inserter(uniformValues));																			// camera projection matrix
 	std::copy(&cameraView[0], &cameraView[16], std::back_inserter(uniformValues));																			// camera view matrix
 	std::copy(&cameraInvView[0], &cameraInvView[16], std::back_inserter(uniformValues));																	// inverse camera view matrix
+	std::copy(&cameraInvProj[0], &cameraInvProj[16], std::back_inserter(uniformValues));																	// inverse camera projection matrix
 	std::copy(&skyboxModelView[0], &skyboxModelView[16], std::back_inserter(uniformValues));																// skybox model view
 	uniformValues.push_back((float)m_primaryUniformData.mousePos[0]);	uniformValues.push_back((float)m_primaryUniformData.mousePos[1]);					// mouse pos
 	uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[0]); uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[1]);			// SSAO noise scale
@@ -2127,7 +2131,8 @@ bool CFixedAssets::CreateSamplers(CVulkanRHI* p_rhi)
 	struct SamplerData { uint32_t id; VkFilter filter; VkImageLayout layout; };
 	std::vector<SamplerData> samplerDataList
 	{
-		{s_Linear, VK_FILTER_LINEAR, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}
+			{s_Linear, VK_FILTER_LINEAR, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}
+		,   {s_Nearest, VK_FILTER_NEAREST, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}
 	};
 
 	for (const auto& samp : samplerDataList)
@@ -2199,6 +2204,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 	{
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Gloabl_Uniform,			1,								uniform,		all},			0);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Linear_Sampler,			1,								sampler,		all},			0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Nearest_Sampler,			1,								sampler,		all},			0);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_ObjPicker_Storage,			1,								storage_buf,	fragment},		0);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SSAOKernel_Storage,		1,								storage_buf,	compute,},		0);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_PrimaryRead_TexArray,		CReadOnlyTextures::tr_max,		sampled_img,	compute},		0);
@@ -2210,6 +2216,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 	{
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Gloabl_Uniform,			1,								uniform,		all},			1);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Linear_Sampler,			1,								sampler,		all},			1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Nearest_Sampler,			1,								sampler,		all},			1);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_ObjPicker_Storage,			1,								storage_buf,	fragment},		1);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SSAOKernel_Storage,		1,								storage_buf,	compute},		1);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_PrimaryRead_TexArray,		CReadOnlyTextures::tr_max,		sampled_img,	compute},		1);
@@ -2223,6 +2230,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 	{
 		BindlessWrite(i, BindingDest::bd_Gloabl_Uniform, &fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_0 + i).descInfo);
 		BindlessWrite(i, BindingDest::bd_Linear_Sampler, &(*samplers)[s_Linear].descInfo);
+		BindlessWrite(i, BindingDest::bd_Linear_Sampler, &(*samplers)[s_Nearest].descInfo);
 		BindlessWrite(i, BindingDest::bd_ObjPicker_Storage, &fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo);
 		BindlessWrite(i, BindingDest::bd_SSAOKernel_Storage, &readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo);
 		BindlessWrite(i, BindingDest::bd_PrimaryRead_TexArray, readTexDesInfoList.data(), (uint32_t)readTexDesInfoList.size());

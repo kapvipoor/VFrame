@@ -183,8 +183,8 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 
 	RETURN_FALSE_IF_FALSE(InitCamera());
 
-	//m_rhi->SetRenderType(CVulkanRHI::RendererType::Deferred);
-	m_ssrComputePass->Enable(false);
+	m_rhi->SetRenderType(CVulkanRHI::RendererType::Deferred);
+	m_ssrComputePass->Enable(true);
 	m_taaComputePass->Enable(false);
 
 	return true;
@@ -226,6 +226,7 @@ bool CRasterRender::on_update(float delta)
 	{
 		CFixedBuffers::PrimaryUniformData* uniformData = m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
 		uniformData->cameraInvView					= nm::inverse(m_primaryCamera->GetView());
+		uniformData->cameraInvProj					= nm::inverse(m_primaryCamera->GetProjection());
 		uniformData->cameraLookFrom					= m_primaryCamera->GetLookFrom();
 		uniformData->cameraProj						= m_primaryCamera->GetProjection();
 		uniformData->cameraView						= m_primaryCamera->GetView();

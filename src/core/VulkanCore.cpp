@@ -174,7 +174,7 @@ void CVulkanCore::cleanUp()
 	vkDestroySurfaceKHR(m_vkInstance, m_vkSurface, nullptr);
 	vkDestroyDevice(m_vkDevice, nullptr);
 
-#ifdef VULKAN_DEBUG
+#if VULKAN_DEBUG == 1
 	if (m_debugUtilsMessenger != VK_NULL_HANDLE)
 	{
 		PFN_vkDestroyDebugUtilsMessengerEXT pfnvkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_vkInstance, "vkDestroyDebugUtilsMessengerEXT");
@@ -1319,14 +1319,24 @@ bool CVulkanCore::WaitToFinish(VkQueue p_queue)
 	return true;
 }
 
+void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr)
+{
+	p_image.descInfo.imageLayout = p_new;
+	if (p_new == p_image.curLayout[0])
+		return;
+
+	IssueImageLayoutBarrier(p_image.curLayout[0], p_new, p_image.layerCount, 1, p_image.image, p_image.usage, p_cmdBfr);
+	p_image.curLayout[0] = p_new;
+}
+
 void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel)
 {
 	p_image.descInfo.imageLayout = p_new;
-	if (p_new == p_image.curLayout)
+	if (p_new == p_image.curLayout[p_baseMipLevel])
 		return;
 
-	IssueImageLayoutBarrier(p_image.curLayout, p_new, p_image.layerCount, p_image.levelCount, p_image.image, p_image.usage, p_cmdBfr, p_baseMipLevel);
-	p_image.curLayout = p_new;
+	IssueImageLayoutBarrier(p_image.curLayout[p_baseMipLevel], p_new, 1, 1, p_image.image, p_image.usage, p_cmdBfr, p_baseMipLevel);
+	p_image.curLayout[p_baseMipLevel] = p_new;
 }
 
 void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_new, 

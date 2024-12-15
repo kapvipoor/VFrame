@@ -57,6 +57,7 @@ private:
 enum SamplerId
 {
 	  s_Linear						= 0
+	, s_Nearest
 	, s_max
 };
 
@@ -70,12 +71,13 @@ enum BindingDest
 {	  // Set 0 - Primary				  // Set 1 - Scene				  // Set 1 - UI		      // Set 1 - DebugDraw
 	  bd_Gloabl_Uniform				= 0	, bd_Scene_MeshInfo_Uniform	= 0	, bd_UI_TexArray	= 0 , bd_Debug_Transforms_Uniform = 0
 	, bd_Linear_Sampler				= 1	, bd_CubeMap_Texture		= 1	, bd_UI_max
-	, bd_ObjPicker_Storage			= 2	, bd_Material_Storage		= 2
-	, bd_SSAOKernel_Storage			= 3 , bd_Scene_Lights			= 3
-	, bd_PrimaryRead_TexArray		= 4 , bd_SceneRead_TexArray		= 4
-	, bd_RTs_StorageImages			= 5 , bd_Scene_max				= 5
-	, bd_RTs_SampledImages			= 6
-	, bd_Primary_max				= 7
+	, bd_Nearest_Sampler			= 2 , bd_Material_Storage		= 2
+	, bd_ObjPicker_Storage			= 3	, bd_Scene_Lights			= 3
+	, bd_SSAOKernel_Storage			= 4 , bd_SceneRead_TexArray		= 4
+	, bd_PrimaryRead_TexArray		= 5 , bd_Scene_max				= 5
+	, bd_RTs_StorageImages			= 6 
+	, bd_RTs_SampledImages			= 7
+	, bd_Primary_max				= 8
 };
 
 struct LoadedUpdateData
@@ -200,6 +202,7 @@ public:
 		nm::float4x4				cameraProj;
 		nm::float4x4				cameraView;
 		nm::float4x4				cameraInvView;
+		nm::float4x4				cameraInvProj;
 		nm::float4x4				skyboxModelView;
 		nm::float2					mousePos;
 		nm::float2					ssaoNoiseScale;

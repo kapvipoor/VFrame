@@ -15,6 +15,7 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 	mat4	camProj;
 	mat4	camView;
 	mat4	invCamView;
+	mat4	invCamProj;
 	mat4	skyboxView;
 	vec2	mousePosition;
 	vec2	ssaoNoiseScale;
@@ -41,20 +42,21 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 } g_Info;
 
 layout(set = 0, binding = 1) uniform sampler g_LinearSampler;
+layout(set = 0, binding = 2) uniform sampler g_NearestSampler;
 
-layout(set = 0, binding = 2) buffer ObjPickerStorage
+layout(set = 0, binding = 3) buffer ObjPickerStorage
 {
 	uint id;
 } g_objpickerStorage;
 
-layout(set = 0, binding = 3) buffer SSAOKernel
+layout(set = 0, binding = 4) buffer SSAOKernel
 {
 	vec4 kernel[1];
 } g_SSAOStorage;
 
-layout(set = 0, binding = 4) uniform texture2D g_ReadOnlyTexures[1];
-layout(set = 0, binding = 5) uniform image2D g_RT_StorageImages[STORE_MAX_RENDER_TARGETS];
-layout(set = 0, binding = 6) uniform texture2D g_RT_SampledImages[SAMPLE_MAX_RENDER_TARGETS];
+layout(set = 0, binding = 5) uniform texture2D g_ReadOnlyTexures[1];
+layout(set = 0, binding = 6) uniform image2D g_RT_StorageImages[STORE_MAX_RENDER_TARGETS];
+layout(set = 0, binding = 7) uniform texture2D g_RT_SampledImages[SAMPLE_MAX_RENDER_TARGETS];
 
 vec2 XY2UV(in vec2 xy, in vec2 resolution)
 {

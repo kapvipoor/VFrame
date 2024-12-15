@@ -113,17 +113,17 @@ bool CVulkanRHI::CreateTexture(Buffer& p_staging, Image& p_Image,
 	if (!BindImageMemory(p_Image.image, p_Image.devMem))
 		return false;
 
-	IssueImageLayoutBarrier(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image.layerCount, p_Image.levelCount, p_Image.image, p_Image.usage, p_cmdBfr);
+	IssueImageLayoutBarrier(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image.layerCount, p_Image.GetLevelCount(), p_Image.image, p_Image.usage, p_cmdBfr);
 	UploadFromHostToDevice(p_staging, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image, p_cmdBfr);
 
-	if (p_Image.levelCount > 1)
+	if (p_Image.GetLevelCount() > 1)
 		CreateMipmaps(p_Image, p_cmdBfr);
 	else
-		IssueImageLayoutBarrier(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image.descInfo.imageLayout, p_Image.layerCount, p_Image.levelCount, p_Image.image, p_Image.usage, p_cmdBfr);
+		IssueImageLayoutBarrier(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image.descInfo.imageLayout, p_Image.layerCount, p_Image.GetLevelCount(), p_Image.image, p_Image.usage, p_cmdBfr);
 	
 	SetDebugName((uint64_t)p_Image.image, VK_OBJECT_TYPE_IMAGE, (p_DebugName + "_image").c_str());
 
-	if (!CreateImagView(p_createInfo.usage, p_Image.image, p_Image.format, p_Image.viewType, p_Image.levelCount, p_Image.descInfo.imageView))
+	if (!CreateImagView(p_createInfo.usage, p_Image.image, p_Image.format, p_Image.viewType, p_Image.GetLevelCount(), p_Image.descInfo.imageView))
 		return false;
 	
 	SetDebugName((uint64_t)p_Image.descInfo.imageView, VK_OBJECT_TYPE_IMAGE_VIEW, (p_DebugName + "_image_view").c_str());
@@ -135,7 +135,7 @@ void CVulkanRHI::CreateMipmaps(Image& p_image, VkCommandBuffer& p_cmdBfr)
 {
 	int32_t mipWidth = p_image.width;
 	int32_t mipHeight = p_image.height;
-	for (uint32_t i = 1; i < p_image.levelCount; i++)
+	for (uint32_t i = 1; i < p_image.GetLevelCount(); i++)
 	{
 		uint32_t baseMipLevel = i - 1;
 
@@ -163,7 +163,7 @@ void CVulkanRHI::CreateMipmaps(Image& p_image, VkCommandBuffer& p_cmdBfr)
 	}
 }
 
-bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_t p_height, uint32_t p_mipLevel,
+bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_t p_height, uint32_t p_levelCount,
 	VkImageLayout p_layout, VkImageUsageFlags p_usage, Image& p_renderTarget, std::string p_DebugName)
 {
 	VkFormatFeatureFlags feature;
@@ -186,9 +186,10 @@ bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_
 	p_renderTarget.format							= p_format;
 	p_renderTarget.descInfo.imageLayout				= p_layout;
 	p_renderTarget.height							= p_height;
-	p_renderTarget.width							= p_width;
-	p_renderTarget.curLayout						= VK_IMAGE_LAYOUT_UNDEFINED;
-	p_renderTarget.levelCount						= p_mipLevel;
+	p_renderTarget.width							= p_width;	
+	p_renderTarget.SetLevelCount(p_levelCount);
+	for(uint32_t  i = 0; i < p_levelCount; i++)
+		p_renderTarget.curLayout[i] = VK_IMAGE_LAYOUT_UNDEFINED;
 
 	VkImageCreateInfo imageCreateInfo{};
 	imageCreateInfo.sType							= VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -196,7 +197,7 @@ bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_
 	imageCreateInfo.format							= p_renderTarget.format;
 	imageCreateInfo.imageType						= VK_IMAGE_TYPE_2D;
 	imageCreateInfo.tiling							= VK_IMAGE_TILING_OPTIMAL;
-	imageCreateInfo.mipLevels						= p_mipLevel;
+	imageCreateInfo.mipLevels						= p_levelCount;
 	imageCreateInfo.arrayLayers						= 1;
 	imageCreateInfo.initialLayout					= VK_IMAGE_LAYOUT_UNDEFINED;
 	imageCreateInfo.usage							= p_usage;
@@ -209,7 +210,7 @@ bool CVulkanRHI::CreateRenderTarget(VkFormat p_format, uint32_t p_width, uint32_
 		return false;
 	if (!BindImageMemory(p_renderTarget.image, p_renderTarget.devMem))
 		return false;
-	if (!CreateImagView(p_usage, p_renderTarget.image, p_renderTarget.format, VK_IMAGE_VIEW_TYPE_2D, p_mipLevel, p_renderTarget.descInfo.imageView))
+	if (!CreateImagView(p_usage, p_renderTarget.image, p_renderTarget.format, VK_IMAGE_VIEW_TYPE_2D, p_levelCount, p_renderTarget.descInfo.imageView))
 		return false;
 	
 	SetDebugName((uint64_t)p_renderTarget.image, VK_OBJECT_TYPE_IMAGE, (p_DebugName + "_rt").c_str());
