@@ -1,1 +1,4 @@
 shaders/spirv/*
+build/.vs/*
+build/x64/*
+build/VFrame/*

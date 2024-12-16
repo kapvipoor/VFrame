@@ -1,0 +1,292 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="external">
+      <UniqueIdentifier>{415faebe-a7d8-49c0-8de5-7bd9e22a3ddd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="shaders">
+      <UniqueIdentifier>{f9b32463-f077-486b-8f1a-4fbfb1361676}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="external\imgui">
+      <UniqueIdentifier>{451b2779-4f9d-43b0-b857-ce60e06cf3eb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core">
+      <UniqueIdentifier>{28b40672-2436-4e96-81a0-eefc3d68f655}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="frontend">
+      <UniqueIdentifier>{1a418ed5-4954-49f3-84ee-373c841f8246}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="frontend\Passes">
+      <UniqueIdentifier>{894c2b50-92fa-4d76-a156-45cb52261a52}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\Vulkan">
+      <UniqueIdentifier>{3ea0c6dd-0ec3-4263-8f92-a96751ab0d42}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="external\imguizmo">
+      <UniqueIdentifier>{129ea800-f8f5-4bb2-bf7f-b73ef56a95c8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="external\tinygltf">
+      <UniqueIdentifier>{c59e95ea-232b-49e8-851b-70d5e27bc274}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="external\FidelityFX">
+      <UniqueIdentifier>{5795658c-62ab-4ca3-9d04-7c420dde864b}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="small.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="VFrame.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Src\core\Camera.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Src\core\RandGen.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Src\core\Global.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\external\tinygltf\stb_image.h">
+      <Filter>external\tinygltf</Filter>
+    </ClInclude>
+    <ClInclude Include="..\external\tinygltf\stb_image_write.h">
+      <Filter>external\tinygltf</Filter>
+    </ClInclude>
+    <ClInclude Include="..\external\tinygltf\tiny_gltf.h">
+      <Filter>external\tinygltf</Filter>
+    </ClInclude>
+    <ClInclude Include="..\external\NiceMath.h">
+      <Filter>external</Filter>
+    </ClInclude>
+    <ClInclude Include="..\external\tiny_obj_loader.h">
+      <Filter>external</Filter>
+    </ClInclude>
+    <ClInclude Include="..\external\imgui\imgui.h">
+      <Filter>external\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\external\imgui\imconfig.h">
+      <Filter>external\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\external\imgui\imgui_internal.h">
+      <Filter>external\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Src\RasterRender.h">
+      <Filter>frontend</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Pass.h">
+      <Filter>frontend\Passes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\ShadowPass.h">
+      <Filter>frontend\Passes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Src\core\VulkanCore.h">
+      <Filter>core\Vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\VulkanRHI.h">
+      <Filter>core\Vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LightingPass.h">
+      <Filter>frontend\Passes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\UIPass.h">
+      <Filter>frontend\Passes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\external\imguizmo\ImGuizmo.h">
+      <Filter>external\imguizmo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\external\imguizmo\ImSequencer.h">
+      <Filter>external\imguizmo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\external\imguizmo\ImZoomSlider.h">
+      <Filter>external\imguizmo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\Asset.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shaders\glsl\Common.h">
+      <Filter>shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shaders\glsl\MeshCommon.h">
+      <Filter>shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shaders\glsl\UICommon.h">
+      <Filter>shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shaders\glsl\DebugCommon.h">
+      <Filter>shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\SceneGraph.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Src\core\WinCore.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shaders\glsl\PBRHelper.h">
+      <Filter>shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\AssetLoader.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\UI.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\Light.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\ScreenSpacePass.h">
+      <Filter>frontend\Passes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\SharedGlobal.h">
+      <Filter>frontend</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\PostProcessingPasses.h">
+      <Filter>frontend\Passes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\external\imgui\backends\imgui_impl_win32.h">
+      <Filter>external\imgui</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Src\core\AssetLoader.cpp">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\core\Global.cpp">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\external\imgui\imgui.cpp">
+      <Filter>external\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\external\imgui\imgui_demo.cpp">
+      <Filter>external\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\external\imgui\imgui_draw.cpp">
+      <Filter>external\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\external\imgui\imgui_tables.cpp">
+      <Filter>external\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\external\imgui\imgui_widgets.cpp">
+      <Filter>external\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\core\WinCore.cpp">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\wWinMain.cpp">
+      <Filter>frontend</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\RasterRender.cpp">
+      <Filter>frontend</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ShadowPass.cpp">
+      <Filter>frontend\Passes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\core\VulkanCore.cpp">
+      <Filter>core\Vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\core\VulkanRHI.cpp">
+      <Filter>core\Vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\LightingPass.cpp">
+      <Filter>frontend\Passes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\UIPass.cpp">
+      <Filter>frontend\Passes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\external\imguizmo\ImGuizmo.cpp">
+      <Filter>external\imguizmo</Filter>
+    </ClCompile>
+    <ClCompile Include="..\external\imguizmo\ImSequencer.cpp">
+      <Filter>external\imguizmo</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\core\Asset.cpp">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\core\SceneGraph.cpp">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\core\Camera.cpp">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\core\UI.cpp">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\core\Light.cpp">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ScreenSpacePass.cpp">
+      <Filter>frontend\Passes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\PostProcessingPasses.cpp">
+      <Filter>frontend\Passes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\external\imgui\backends\imgui_impl_win32.cpp">
+      <Filter>external\imgui</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\Src\VFrame.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\shaders\glsl\Deferred_Gbuffer.frag">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\Deferred_Gbuffer.vert">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\Deferred_Lighting.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\Forward.frag">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\Forward.vert">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\LightDepthPrepass.vert">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\RayTracer.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\Skybox.frag">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\SkyBox.vert">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\SSAO.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\SSAOBlur.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\UI.frag">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\UI.vert">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\DebugDisplay.frag">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\DebugDisplay.vert">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\FulllScreenQuad.vert">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\SSR.comp">
+      <Filter>shaders</Filter>
+    </None>
+  </ItemGroup>
+</Project>
