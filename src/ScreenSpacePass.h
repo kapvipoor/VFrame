@@ -2,6 +2,9 @@
 
 #include "Pass.h"
 
+#include "external/FidelityFX/host/backends/vk/ffx_vk.h"
+#include "external/FidelityFX/host/ffx_sssr.h"
+
 class CSSAOComputePass : public CComputePass, CUIParticipant
 {
 public:
@@ -66,4 +69,28 @@ public:
 	virtual bool Dispatch(RenderData*) override;
 
 private:
+};
+
+class CFidelityFXSSSRPass : public CStaticRenderPass, CUIParticipant
+{
+public:
+	CFidelityFXSSSRPass(CVulkanRHI*);
+	~CFidelityFXSSSRPass();
+
+	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
+
+	virtual bool Initalize(RenderData* p_renderData, CVulkanRHI::Pipeline p_pipeline) override;
+	virtual bool Update(UpdateData*) override;
+	virtual bool Render(RenderData*) override;
+
+	virtual void Show(CVulkanRHI* p_rhi) override;
+
+private:
+	FfxInterface* m_ffxInterface;
+
+	FfxResource GetColorResource(const CVulkanRHI::Image&);
+	FfxResource GetDepthResource(const CVulkanRHI::Image&);
+
+	bool InitFfxContext();
+	bool InitSSSRContext(RenderData* p_renderData);
 };

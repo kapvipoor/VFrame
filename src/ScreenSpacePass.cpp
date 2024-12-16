@@ -241,3 +241,130 @@ bool CCopyComputePass::Dispatch(RenderData* p_renderData)
 	
 	return true;
 }
+
+CFidelityFXSSSRPass::CFidelityFXSSSRPass(CVulkanRHI* p_rhi)
+	: CStaticRenderPass(p_rhi)
+	, CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
+{
+}
+
+CFidelityFXSSSRPass::~CFidelityFXSSSRPass()
+{
+}
+
+bool CFidelityFXSSSRPass::CreatePipeline(CVulkanRHI::Pipeline)
+{
+	return true;
+}
+
+bool CFidelityFXSSSRPass::Initalize(RenderData* p_renderData, CVulkanRHI::Pipeline p_pipeline)
+{
+	RETURN_FALSE_IF_FALSE(InitFfxContext());
+	RETURN_FALSE_IF_FALSE(InitSSSRContext(p_renderData));
+
+	return true;
+}
+
+bool CFidelityFXSSSRPass::Update(UpdateData*)
+{
+	return false;
+}
+
+bool CFidelityFXSSSRPass::Render(RenderData* p_renderData)
+{
+
+	FfxSssrDispatchDescription dispatchParam = {};
+	dispatchParam.commandList = p_renderData->cmdBfr;
+	dispatchParam.color = GetColorResource(p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::RenderTargetId::rt_PrimaryColor));
+	dispatchParam.depth = GetDepthResource(p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::RenderTargetId::rt_PrimaryDepth));
+
+	return false;
+}
+
+void CFidelityFXSSSRPass::Show(CVulkanRHI* p_rhi)
+{
+}
+
+FfxResource CFidelityFXSSSRPass::GetColorResource(const CVulkanRHI::Image& p_Image)
+{
+	FfxResource colorResource{};
+
+	FfxResourceDescription desc = {};
+	desc.type		= FFX_RESOURCE_TYPE_TEXTURE2D;
+	desc.format		= FFX_SURFACE_FORMAT_R32G32B32A32_FLOAT;
+	desc.width		= p_Image.width;
+	desc.height		= p_Image.height;
+	desc.depth		= 1.0f;
+	desc.mipCount	= 1;
+	desc.flags		= FFX_RESOURCE_FLAGS_NONE;
+	desc.usage		= FFX_RESOURCE_USAGE_UAV;	
+
+	colorResource.description = desc;
+	colorResource.state = FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ;
+
+	return colorResource;
+}
+
+FfxResource CFidelityFXSSSRPass::GetDepthResource(const CVulkanRHI::Image& p_Image)
+{
+	FfxResource depthResource{};
+
+	FfxResourceDescription desc = {};
+	desc.type		= FFX_RESOURCE_TYPE_TEXTURE2D;
+	//desc.format		= VK_FORMAT_D32_SFLOAT_S8_UINT;
+	desc.width		= p_Image.width;
+	desc.height		= p_Image.height;
+	desc.depth		= 1.0f;
+	desc.mipCount	= 1;
+	desc.flags		= FFX_RESOURCE_FLAGS_NONE;
+	desc.usage		= FFX_RESOURCE_USAGE_UAV;
+
+	depthResource.description = desc;
+	depthResource.state = FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ;
+
+	return depthResource;
+}
+
+bool CFidelityFXSSSRPass::InitFfxContext()
+{
+	const size_t scratchBufferSize = ffxGetScratchMemorySizeVK(m_rhi->GetPhysicalDevice(), FFX_SSSR_CONTEXT_COUNT);
+	void* scratchBuffer = calloc(scratchBufferSize, 1);
+
+	// Create a scratch space for SSSR. For now only populating the interface
+	FfxErrorCode errorCode = ffxGetInterfaceVK(m_ffxInterface, m_rhi->GetDevice(), scratchBuffer, scratchBufferSize, FFX_SSSR_CONTEXT_COUNT);
+	if (errorCode != FfxErrorCodes::FFX_OK)
+	{
+		std::cerr << "Failed to Create AMD::FFX::SSSR Scratch Space. Error Code  " << errorCode << std::endl;
+		return false;
+	}
+
+	// We can check for FFX_SDK_MAKE_VERSION for specific feature support but we will skip that for now
+
+	// Next populate the constant buffer allocator; for now we will skip this. 
+	// I wonder if I can fully rely on Ffx sdk for constant allocation as well
+	// Commenting out for now
+	// ffxInterface->fpRegisterConstantBufferAllocator(ffxInterface, );
+
+	return true;
+
+}
+
+bool CFidelityFXSSSRPass::InitSSSRContext(RenderData* p_renderData)
+{
+	CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::RenderTargetId::rt_Normal);
+
+	FfxSssrContext sssrContext;
+	FfxSssrContextDescription sssrDescription{};
+	sssrDescription.flags = 0; // not inverting the depth
+	sssrDescription.renderSize = FfxDimensions2D{ m_rhi->GetRenderWidth(), m_rhi->GetRenderHeight() };
+	sssrDescription.backendInterface = *m_ffxInterface;
+	sssrDescription.normalsHistoryBufferFormat = FFX_SURFACE_FORMAT_R32G32B32A32_FLOAT; // hardcoding this for now because Ffx has its own format type
+	FfxErrorCode errorCode = ffxSssrContextCreate(&sssrContext, &sssrDescription);
+	if (errorCode != FfxErrorCodes::FFX_OK)
+	{
+		std::cerr << "Failed to Create AMD::FFX::SSSR Context. Error Code  " << errorCode << std::endl;
+		return false;
+	}
+
+	return true;
+}
