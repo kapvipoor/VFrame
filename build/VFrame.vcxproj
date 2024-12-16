@@ -126,7 +126,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(VULKAN_SDK)\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;D:/Projects/MyPersonalProjects/VFrame/external/FidelityFX/lib/deb/ffx_backend_vk_x64d.lib;D:/Projects/MyPersonalProjects/VFrame/external/FidelityFX/lib/deb/ffx_denoiser_x64d.lib;D:/Projects/MyPersonalProjects/VFrame/external/FidelityFX/lib/deb/ffx_sssr_x64d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -146,7 +146,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(VULKAN_SDK)\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;D:/Projects/MyPersonalProjects/VFrame/external/fidelityFX/lib/drel/ffx_backend_vk_x64drel.lib;D:/Projects/MyPersonalProjects/VFrame/external/fidelityFX/lib/drel/ffx_denoiser_x64drel.lib;D:/Projects/MyPersonalProjects/VFrame/external/fidelityFX/lib/drel/ffx_sssr_x64drel.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
