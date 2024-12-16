@@ -414,6 +414,7 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	enabledFeatures.shaderStorageImageReadWithoutFormat					= VK_TRUE;
 	enabledFeatures.shaderStorageImageWriteWithoutFormat				= VK_TRUE;
 	enabledFeatures.vertexPipelineStoresAndAtomics						= VK_TRUE;
+	//enabledFeatures.separateDepthStencilLayouts
 
 	if (enabledFeatures.geometryShader != supportedFeatures.geometryShader &&
 		enabledFeatures.fragmentStoresAndAtomics != supportedFeatures.fragmentStoresAndAtomics)
@@ -422,10 +423,18 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 		return false;
 	}
 
+	// Enable support for separate depth and stencil buffers
+	VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures separateDepthStencilFeatures{};
+	separateDepthStencilFeatures.sType									= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES_KHR;
+	separateDepthStencilFeatures.separateDepthStencilLayouts			= true;
+	separateDepthStencilFeatures.pNext									= nullptr;
+
+
 	// Enable support for dynamic rendering
 	VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
 	dynamicRenderingFeatures.sType										= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
 	dynamicRenderingFeatures.dynamicRendering							= VK_TRUE;
+	dynamicRenderingFeatures.pNext										= &separateDepthStencilFeatures;
 
 	// Enable support for bindless
 	VkPhysicalDeviceDescriptorIndexingFeaturesEXT bindlessDescFeatures{};
@@ -1325,7 +1334,7 @@ void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkComm
 	if (p_new == p_image.curLayout[0])
 		return;
 
-	IssueImageLayoutBarrier(p_image.curLayout[0], p_new, p_image.layerCount, 1, p_image.image, p_image.usage, p_cmdBfr);
+	IssueImageLayoutBarrier(p_image.curLayout[0], p_new, p_image.layerCount, 1, p_image.image, p_image.usage, p_cmdBfr, HasStencilComponent(p_image.format));
 	p_image.curLayout[0] = p_new;
 }
 
@@ -1335,14 +1344,15 @@ void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkComm
 	if (p_new == p_image.curLayout[p_baseMipLevel])
 		return;
 
-	IssueImageLayoutBarrier(p_image.curLayout[p_baseMipLevel], p_new, 1, 1, p_image.image, p_image.usage, p_cmdBfr, p_baseMipLevel);
+	IssueImageLayoutBarrier(p_image.curLayout[p_baseMipLevel], p_new, 1, 1, p_image.image, p_image.usage, p_cmdBfr, p_baseMipLevel, HasStencilComponent(p_image.format));
 	p_image.curLayout[p_baseMipLevel] = p_new;
 }
 
 void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_new, 
 											uint32_t p_layerCount, uint32_t p_levelCount, 
 											VkImage& p_image, VkImageUsageFlags p_usage,
-											VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel)
+											VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel,
+											bool p_hasStencil)
 {
 	VkImageMemoryBarrier imgMemBarrier{};
 	imgMemBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1361,7 +1371,10 @@ void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_
 	
 	if (p_usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
 	{
-		imgMemBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		imgMemBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+		if(p_hasStencil)
+			imgMemBarrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
 	}
 	else
 	{
@@ -1404,6 +1417,7 @@ void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_
 
 	case VK_IMAGE_LAYOUT_GENERAL:
 	case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+	case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL:
 	case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
 	case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
 		imgMemBarrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;

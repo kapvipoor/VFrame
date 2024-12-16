@@ -22,7 +22,8 @@ layout (location = 7) in vec4 inPrevPosinClipSpace;
 layout (location = 0) out vec4 outPosition;
 layout (location = 1) out vec4 outNormal;
 layout (location = 2) out vec4 outFragColor;
-layout (location = 3) out vec4 outRoughMetalMotion;
+//layout (location = 3) out vec2 outRoughMetal;
+layout (location = 3) out vec2 outMotion;
 
 void PickMeshID()
 {
@@ -185,7 +186,7 @@ void main()
 		// No need to do this because we have multiplied with non-jittered
 		// viewproj of this and previous frame
 		//velocity								-= g_Info.taaJitterOffset;
-		outRoughMetalMotion.ba					= velocity;
+		outMotion.xy							= velocity;
 	}
 
 	outPosition								= inPosinViewSpace;				// for ssao

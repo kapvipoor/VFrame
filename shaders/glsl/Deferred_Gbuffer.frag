@@ -19,7 +19,8 @@ layout (location = 6) in vec4 inPrevPosinClipSpace;
 layout (location = 0) out vec4 outPosition;
 layout (location = 1) out vec4 outNormal;
 layout (location = 2) out vec4 outAlbedo;
-layout (location = 3) out vec4 outRoughMetalMotion;
+layout (location = 3) out vec2 outRoughMetal;
+layout (location = 4) out vec2 outMotion;
 
 #define DISPLAY_MOUSE_POINTER
 
@@ -44,11 +45,11 @@ void main()
 {
 	Material mat 							= g_materials.data[g_pushConstant.material_id];
 	// if roughness is 0, NDF is 0 and so is the entire cook-Torrence factor without specular or diffuse
-	outRoughMetalMotion.xy					= vec2(mat.roughness, mat.metallic);//vec2(max(mat.roughness, 0.1), mat.metallic);	
-	outRoughMetalMotion.xy					= GetRoughMetalPBR(mat.roughMetal_id, inUV, outRoughMetalMotion.xy).xy;
+	outRoughMetal.xy						= vec2(mat.roughness, mat.metallic);
+	outRoughMetal.xy						= GetRoughMetalPBR(mat.roughMetal_id, inUV, outRoughMetal.xy).xy;
 
 	outPosition 							= inPosition;
-	outAlbedo 								= GetColor(mat.color_id, inUV); // vec4(roughMetal.x, roughMetal.y, 1.0, 1.0); //
+	outAlbedo 								= GetColor(mat.color_id, inUV);
 	mat3 TBN 								= mat3(inTangent, inBiTangent, inNormal);	
 	outNormal 								= vec4(GetNormal(TBN, mat.normal_id, inUV, inNormal), 1.0);
 
@@ -67,7 +68,7 @@ void main()
 		// No need to do this because we have multiplied with non-jittered
 		// viewproj of this and previous frame
 		//velocity								-= g_Info.taaJitterOffset;
-		outRoughMetalMotion.ba					= velocity;
+		outMotion.xy							= velocity;
 	}
 	//PickMeshID();
 }

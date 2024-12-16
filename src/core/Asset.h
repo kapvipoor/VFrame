@@ -261,9 +261,11 @@ public:
 		, rt_SSAO_Blur				= 4
 		, rt_DirectionalShadowDepth	= 5
 		, rt_PrimaryColor			= 6
-		, rt_RoughMetal_Motion		= 7
-		, rt_SSReflection			= 8
-		, rt_Prev_PrimaryColor		= 9
+		, rt_ColorBlur				= 7
+		, rt_RoughMetal				= 8
+		, rt_Motion					= 9
+		, rt_SSReflection			= 10
+		, rt_Prev_PrimaryColor		= 11
 		, rt_max
 	};
 

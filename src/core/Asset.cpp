@@ -1794,14 +1794,16 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	VkImageUsageFlags sample_storage_color_dest = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	VkImageUsageFlags sample_storage_color_src_dest = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryDepth,			VK_FORMAT_D32_SFLOAT_S8_UINT,	fullResWidth, fullResHeight, 1, shaderRead,	"primary_depth",		sample_depth));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryDepth,			VK_FORMAT_D32_SFLOAT,			fullResWidth, fullResHeight, 1, shaderRead,	"primary_depth",		sample_depth));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Position,				VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"position",				sample_storage_color));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Normal,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"normal",				sample_storage_color));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Albedo,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"albedo",				sample_storage_color));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAO_Blur,				VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1, general,	"ssao_and_blur",		sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,	VK_FORMAT_D32_SFLOAT_S8_UINT,	4096, 4096,					 1, shaderRead,	"directional_shadow",	sample_depth));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,  VK_FORMAT_D32_SFLOAT,			4096, 4096,					 1, shaderRead,	"directional_shadow",	sample_depth));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"primary_color",		sample_storage_color_src));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RoughMetal_Motion,		VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"Rough_Metal_Motion",	sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_ColorBlur,				VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"color_blur",			sample_storage_color_src_dest));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RoughMetal,				VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1, general,	"Rough_Metal",			sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Motion,					VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1, general,	"Motion",				sample_storage_color));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,			VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"ss_reflection",		sample_storage_color_dest));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Prev_PrimaryColor,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1, general,	"prev_primary_color",	sample_storage_color_dest));
 
@@ -1864,8 +1866,10 @@ std::string CRenderTargets::GetRenderTargetIDinString(RenderTargetId p_id)
 		return "DirectionalShadowDepth";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_PrimaryColor)
 		return "PrimaryColor";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_RoughMetal_Motion)
-		return "Rough Metal Motion";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_RoughMetal)
+		return "Rough Metal";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_Motion)
+		return "Motion";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_SSReflection)
 		return "Screen Space Reflection (UVs)";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_Prev_PrimaryColor)
@@ -2179,7 +2183,9 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 		storeRenderTargetsDesInfoList[STORE_ALBEDO]					= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Albedo).descInfo;
 		storeRenderTargetsDesInfoList[STORE_SSAO_AND_BLUR]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSAO_Blur).descInfo;
 		storeRenderTargetsDesInfoList[STORE_PRIMARY_COLOR]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_PrimaryColor).descInfo;
-		storeRenderTargetsDesInfoList[STORE_ROUGH_METAL_MOTION]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_RoughMetal_Motion).descInfo;
+		storeRenderTargetsDesInfoList[STORE_COLOR_BLUR]				= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_ColorBlur).descInfo;
+		storeRenderTargetsDesInfoList[STORE_ROUGH_METAL]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_RoughMetal).descInfo;
+		storeRenderTargetsDesInfoList[STORE_MOTION]					= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Motion).descInfo;
 		storeRenderTargetsDesInfoList[STORE_SS_REFLECTION]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSReflection).descInfo;
 		storeRenderTargetsDesInfoList[STORE_PREV_PRIMARY_COLOR]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Prev_PrimaryColor).descInfo;
 	}

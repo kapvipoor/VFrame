@@ -15,7 +15,8 @@ bool CForwardPass::CreateRenderingInfo(RenderData* p_renderData)
 		  Posiiton = 0
 		, Normal
 		, PrimaryColor
-		, RoughMetalMotion
+		, RoughMetal
+		, Motion
 		, max
 	};
 
@@ -40,12 +41,19 @@ bool CForwardPass::CreateRenderingInfo(RenderData* p_renderData)
 		m_colorAttachInfos[AttachId::PrimaryColor].imageView	= colorRT.descInfo.imageView;
 		m_colorAttachInfos[AttachId::PrimaryColor].loadOp		= VK_ATTACHMENT_LOAD_OP_LOAD;
 	}
-	// Rough Metal Motion
+	// Rough Metal
 	{
-		CVulkanRHI::Image rmmRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_RoughMetal_Motion);
-		colorAttachFormats[AttachId::RoughMetalMotion]				= rmmRT.format;
-		m_colorAttachInfos[AttachId::RoughMetalMotion].imageView	= rmmRT.descInfo.imageView;
-		m_colorAttachInfos[AttachId::RoughMetalMotion].clearValue	= VkClearValue{ 0.0, 0.0, 0.0, 0.0 };
+		CVulkanRHI::Image rmRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_RoughMetal);
+		colorAttachFormats[AttachId::RoughMetal]			= rmRT.format;
+		m_colorAttachInfos[AttachId::RoughMetal].imageView	= rmRT.descInfo.imageView;
+		m_colorAttachInfos[AttachId::RoughMetal].clearValue	= VkClearValue{ 0.0, 0.0, 0.0, 0.0 };
+	}
+	// Motion
+	{
+		CVulkanRHI::Image motionRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Motion);
+		colorAttachFormats[AttachId::Motion]				= motionRT.format;
+		m_colorAttachInfos[AttachId::Motion].imageView		= motionRT.descInfo.imageView;
+		m_colorAttachInfos[AttachId::Motion].clearValue		= VkClearValue{ 0.0, 0.0, 0.0, 0.0 };
 	}
 	m_pipeline.colorAttachFormats = colorAttachFormats;
 	// Primary Depth
@@ -55,7 +63,7 @@ bool CForwardPass::CreateRenderingInfo(RenderData* p_renderData)
 
 		m_depthAttachInfo						= CVulkanCore::RenderingAttachinfo();
 		m_depthAttachInfo.imageView				= depthRT.descInfo.imageView;
-		m_depthAttachInfo.imageLayout			= VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		m_depthAttachInfo.imageLayout			= VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 		m_depthAttachInfo.clearValue			= VkClearValue{ 1.0, 0 };
 	}
 	
@@ -164,7 +172,7 @@ bool CSkyboxPass::CreateRenderpass(RenderData* p_renderData)
 	CVulkanRHI::Image primaryDepthRT				= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
 
 	renderPass->AttachColor(primaryColorRT.format, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachDepth(primaryDepthRT.format, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+	renderPass->AttachDepth(primaryDepthRT.format, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
 	if (!m_rhi->CreateRenderpass(*renderPass))
 		return false;
@@ -262,7 +270,8 @@ bool CDeferredPass::CreateRenderingInfo(RenderData* p_renderData)
 		Posiiton = 0
 		, Normal
 		, Albedo
-		, RoughMetalMotion
+		, RoughMetal
+		, Motion
 		, max
 	};
 
@@ -286,11 +295,17 @@ bool CDeferredPass::CreateRenderingInfo(RenderData* p_renderData)
 		colorAttachFormats[AttachId::Albedo]			= colorRT.format;
 		m_colorAttachInfos[AttachId::Albedo].imageView	= colorRT.descInfo.imageView;
 	}
-	// Rough Metal Motion
+	// Rough Metal
 	{
-		CVulkanRHI::Image rmmRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_RoughMetal_Motion);
-		colorAttachFormats[AttachId::RoughMetalMotion]				= rmmRT.format;
-		m_colorAttachInfos[AttachId::RoughMetalMotion].imageView	= rmmRT.descInfo.imageView;
+		CVulkanRHI::Image rmRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_RoughMetal);
+		colorAttachFormats[AttachId::RoughMetal]			= rmRT.format;
+		m_colorAttachInfos[AttachId::RoughMetal].imageView	= rmRT.descInfo.imageView;
+	}
+	// Motion
+	{
+		CVulkanRHI::Image motionRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Motion);
+		colorAttachFormats[AttachId::Motion]				= motionRT.format;
+		m_colorAttachInfos[AttachId::Motion].imageView		= motionRT.descInfo.imageView;
 	}
 	m_pipeline.colorAttachFormats = colorAttachFormats;
 	// Primary Depth
@@ -300,7 +315,7 @@ bool CDeferredPass::CreateRenderingInfo(RenderData* p_renderData)
 
 		m_depthAttachInfo						= CVulkanCore::RenderingAttachinfo();
 		m_depthAttachInfo.imageView				= depthRT.descInfo.imageView;
-		m_depthAttachInfo.imageLayout			= VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		m_depthAttachInfo.imageLayout			= VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 		m_depthAttachInfo.clearValue			= VkClearValue{ 1.0, 0 };
 	}
 	
@@ -463,7 +478,7 @@ bool CSkyboxDeferredPass::CreateRenderpass(RenderData* p_renderData)
 	CVulkanRHI::Image primaryDepthRT				= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
 
 	renderPass->AttachColor(primaryColorRT.format, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachDepth(primaryDepthRT.format, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+	renderPass->AttachDepth(primaryDepthRT.format, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 	
 	if (!m_rhi->CreateRenderpass(*renderPass))
 		return false;

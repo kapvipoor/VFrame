@@ -4,7 +4,7 @@
 
 // 0 disable vulkan debug
 // 1 enable vulkan debug
-#define VULKAN_DEBUG 0
+#define VULKAN_DEBUG 1
 
 #if VULKAN_DEBUG == 1
 // 1 show vulkan validations errors
@@ -274,6 +274,9 @@ public:
 	void InsertMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg);
 	void SetDebugName(uint64_t pObject, VkObjectType pObjectType, const char* pName);
 
+	VkPhysicalDevice GetPhysicalDevice()					{ return m_vkPhysicalDevice;}
+	VkDevice GetDevice()									{ return m_vkDevice;}
+
 	VkQueue GetQueue(uint32_t p_scIdx)						{ return m_vkQueue[p_scIdx]; }
 	VkQueue GetSecondaryQueue()								{ return m_secondaryQueue;}
 	uint32_t GetQueueFamiliyIndex() const					{ return m_QFIndex; }
@@ -376,7 +379,7 @@ public:
 
 	void IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr);
 	void IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel);
-	void IssueImageLayoutBarrier(VkImageLayout p_old, VkImageLayout p_new, uint32_t layerCount, uint32_t lavelCount, VkImage& p_image, VkImageUsageFlags p_usage, VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel = 0);
+	void IssueImageLayoutBarrier(VkImageLayout p_old, VkImageLayout p_new, uint32_t layerCount, uint32_t lavelCount, VkImage& p_image, VkImageUsageFlags p_usage, VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel = 0, bool p_hasStencil = false);
 	void IssueBufferBarrier(VkAccessFlags p_srcAcc, VkAccessFlags p_dstAcc, VkPipelineStageFlags p_srcStg, VkPipelineStageFlags p_dstStg, VkBuffer& p_buffer, VkCommandBuffer p_cmdBfr);
 
 	bool IsFormatSupported(VkFormat p_format, VkFormatFeatureFlags p_featureflag);

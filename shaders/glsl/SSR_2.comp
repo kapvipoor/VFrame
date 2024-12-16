@@ -160,7 +160,7 @@ void main()
     vec3 normal = texture(sampler2D(g_RT_SampledImages[SAMPLE_NORMAL], g_LinearSampler), texCoord).xyz;
 
     // Roughness map 
-    float roughness = texture(sampler2D(g_RT_SampledImages[SAMPLE_ROUGH_METAL_MOTION], g_LinearSampler), texCoord).x;
+    float roughness = texture(sampler2D(g_RT_SampledImages[SAMPLE_ROUGH_METAL], g_LinearSampler), texCoord).x;
 
     // sky color incase nothing is hit, we can sample the skybox here if needed
     vec4 skyColor  = vec4(0.0f);
