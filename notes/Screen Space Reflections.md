@@ -1,10 +1,8 @@
 # Screen Space Reflections
 ## Current State
 * SSR currently works for differed pipeline only
-* The composition of SSR into the color buffer does not go through tone-mapping at the moment
-* There are Moire artifacts currently in the implementation potentially due to high normal map and color buffer resolution. Might also experiment with reducing SSR resolution as well.
-* There are issue with SSR aliasing as well. 
-* There is a lot of spatio-temporal flickering which I am currently assuming is related to Moire artifacts and will have a look at it once i have fixed them
+* The SSR buffer is then bullerd for sampling rough surfaces (experimental). This is not correctly done at the moment and is turning out to be too expensive.
+* The composition of SSR into the color buffer goes through tone-mapping
 * Might incorporate some Fresnel effect
 
 ## Challenges
@@ -13,7 +11,7 @@
 
 ## Performance 
 * The compute implementation is the most expensive shader in the implementation
-* Fixing the Moire artifacts will reduce some texture fetch stress. Will address performance concerns when the visual quality issues are addressed
+* Sampling from position buffer instead of depth. Maybe can use High-Z for faster intersection. 
 
 ## Resources
 * https://lettier.github.io/3d-game-shaders-for-beginners/screen-space-reflection.html
