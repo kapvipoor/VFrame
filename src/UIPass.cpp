@@ -2,7 +2,7 @@
 #include "external/imgui/imgui.h"
 
 CUIPass::CUIPass(CVulkanRHI* p_rhi)
-	: CPass(p_rhi)
+	: CStaticRenderPass(p_rhi)
 {
 	m_frameBuffer.resize(FRAME_BUFFER_COUNT);
 }
@@ -84,7 +84,7 @@ bool CUIPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	m_pipeline.enableDepthWrite					= false;
 	if (!m_rhi->CreateGraphicsPipeline(uiShaderpaths, m_pipeline, "UIGfxPipeline"))
 	{
-		std::cout << "Error Creating UI Pipeline" << std::endl;
+		std::cerr << "CUIPass::CreatePipeline Error: Error Creating UI Pipeline" << std::endl;
 		return false;
 	}
 
@@ -111,94 +111,87 @@ bool CUIPass::Render(RenderData* p_renderData)
 	int fbWidth									= (int)(drawData->DisplaySize.x * drawData->FramebufferScale.x);
 	int fbHeight								= (int)(drawData->DisplaySize.y * drawData->FramebufferScale.y);
 
-	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "UI"));
-
-	// issue a layout barrier on Primary Depth to set as Depth Stencil Target so it can be used in this Fragment Shader
-	//CVulkanRHI::Image primaryDepthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
-	//m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, primaryDepthRT, cmdBfr);
-
-	m_rhi->SetClearColorValue(renderPass, 0, VkClearColorValue{ 0.0f, 0.0f, 0.0f, 1.00f });
-	m_rhi->BeginRenderpass(m_frameBuffer[p_renderData->scIdx], renderPass, cmdBfr);
-
-	m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, (float)renderPass.framebufferHeight);
-
-	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
-
-	// Bind Vertex And Index Buffer:
-	if (drawData->TotalVtxCount > 0)
+	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "UI"));
 	{
-		VkBuffer vrtxBfrs[1]					= { ui->GetVertexBuffer(p_renderData->scIdx)->descInfo.buffer };
-		VkDeviceSize vrtxOffset[1]				= { 0 };
-		vkCmdBindVertexBuffers(cmdBfr, 0, 1, vrtxBfrs, vrtxOffset);
-		vkCmdBindIndexBuffer(cmdBfr, ui->GetIndexBuffer(p_renderData->scIdx)->descInfo.buffer, 0, sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
-	}
+		// issue a layout barrier on Primary Depth to set as Depth Stencil Target so it can be used in this Fragment Shader
+		//CVulkanRHI::Image primaryDepthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
+		//m_rhi->IssueLayoutBarrier(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, primaryDepthRT, cmdBfr);
 
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_UI, 1, ui->GetDescriptorSet(), 0, nullptr);
+		m_rhi->SetClearColorValue(renderPass, 0, VkClearColorValue{ 0.0f, 0.0f, 0.0f, 1.00f });
+		m_rhi->BeginRenderpass(m_frameBuffer[p_renderData->scIdx], renderPass, cmdBfr);
 
-	// Will project scissor/clipping rectangles into frame buffer space
-	ImVec2 clipOff								= drawData->DisplayPos;         // (0,0) unless using multi-view ports
-	ImVec2 clipScale							= drawData->FramebufferScale; // (1,1) unless using retina display which are often (2,2)
+		m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, (float)renderPass.framebufferHeight);
 
-	int globalVtxOffset							= 0;
-	int globalIdxOffset							= 0;
-	for (int n = 0; n < drawData->CmdListsCount; n++)
-	{
-		const ImDrawList* cmdList = drawData->CmdLists[n];
-		for (int cmd_i = 0; cmd_i < cmdList->CmdBuffer.Size; cmd_i++)
+		vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
+
+		// Bind Vertex And Index Buffer:
+		if (drawData->TotalVtxCount > 0)
 		{
-			const ImDrawCmd* pcmd = &cmdList->CmdBuffer[cmd_i];
-			{
-				CRenderableUI::UIPushConstant pc{};
-				pc.scale[0] = (2.0f / drawData->DisplaySize.x);
-				pc.scale[1] = (2.0f / drawData->DisplaySize.y);
-
-				pc.offset[0] = (-1.0f - drawData->DisplayPos.x * pc.scale[0]);
-				pc.offset[1] = (-1.0f - drawData->DisplayPos.y * pc.scale[1]);
-
-				uint32_t texId = *static_cast<uint32_t*>(pcmd->TextureId);
-				pc.binding_textureId = texId;
-
-				VkPipelineStageFlags stgFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-				vkCmdPushConstants(cmdBfr, m_pipeline.pipeLayout, stgFlags, 0, sizeof(CRenderableUI::UIPushConstant), (void*)&pc);
-			}
-
-			{
-				// Project scissor/clipping rectangles into frame buffer space
-				ImVec2 clipMin((pcmd->ClipRect.x - clipOff.x) * clipScale.x, (pcmd->ClipRect.y - clipOff.y) * clipScale.y);
-				ImVec2 clipMax((pcmd->ClipRect.z - clipOff.x) * clipScale.x, (pcmd->ClipRect.w - clipOff.y) * clipScale.y);
-
-				if (clipMin.x < 0.0f) { clipMin.x = 0.0f; }
-				if (clipMin.y < 0.0f) { clipMin.y = 0.0f; }
-				if (clipMax.x > fbWidth) { clipMax.x = (float)fbWidth; }
-				if (clipMax.y > fbHeight) { clipMax.y = (float)fbHeight; }
-				if (clipMax.x <= clipMin.x || clipMax.y <= clipMin.y)
-					continue;
-
-				// Apply scissor/clipping rectangle
-				m_rhi->SetScissors(cmdBfr, (int32_t)(clipMin.x), (int32_t)(clipMin.y), (uint32_t)(clipMax.x - clipMin.x), (uint32_t)(clipMax.y - clipMin.y));
-				vkCmdDrawIndexed(cmdBfr, pcmd->ElemCount, 1, pcmd->IdxOffset + globalIdxOffset, pcmd->VtxOffset + globalVtxOffset, 0);
-			}
+			VkBuffer vrtxBfrs[1] = { ui->GetVertexBuffer(p_renderData->scIdx)->descInfo.buffer };
+			VkDeviceSize vrtxOffset[1] = { 0 };
+			vkCmdBindVertexBuffers(cmdBfr, 0, 1, vrtxBfrs, vrtxOffset);
+			vkCmdBindIndexBuffer(cmdBfr, ui->GetIndexBuffer(p_renderData->scIdx)->descInfo.buffer, 0, sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
 		}
-		globalIdxOffset += cmdList->IdxBuffer.Size;
-		globalVtxOffset += cmdList->VtxBuffer.Size;
+
+		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_UI, 1, ui->GetDescriptorSet(), 0, nullptr);
+
+		// Will project scissor/clipping rectangles into frame buffer space
+		ImVec2 clipOff = drawData->DisplayPos;         // (0,0) unless using multi-view ports
+		ImVec2 clipScale = drawData->FramebufferScale; // (1,1) unless using retina display which are often (2,2)
+
+		int globalVtxOffset = 0;
+		int globalIdxOffset = 0;
+		for (int n = 0; n < drawData->CmdListsCount; n++)
+		{
+			const ImDrawList* cmdList = drawData->CmdLists[n];
+			for (int cmd_i = 0; cmd_i < cmdList->CmdBuffer.Size; cmd_i++)
+			{
+				const ImDrawCmd* pcmd = &cmdList->CmdBuffer[cmd_i];
+				{
+					CRenderableUI::UIPushConstant pc{};
+					pc.scale[0] = (2.0f / drawData->DisplaySize.x);
+					pc.scale[1] = (2.0f / drawData->DisplaySize.y);
+
+					pc.offset[0] = (-1.0f - drawData->DisplayPos.x * pc.scale[0]);
+					pc.offset[1] = (-1.0f - drawData->DisplayPos.y * pc.scale[1]);
+
+					uint32_t texId = *static_cast<uint32_t*>(pcmd->TextureId);
+					pc.binding_textureId = texId;
+
+					VkPipelineStageFlags stgFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+					vkCmdPushConstants(cmdBfr, m_pipeline.pipeLayout, stgFlags, 0, sizeof(CRenderableUI::UIPushConstant), (void*)&pc);
+				}
+
+				{
+					// Project scissor/clipping rectangles into frame buffer space
+					ImVec2 clipMin((pcmd->ClipRect.x - clipOff.x) * clipScale.x, (pcmd->ClipRect.y - clipOff.y) * clipScale.y);
+					ImVec2 clipMax((pcmd->ClipRect.z - clipOff.x) * clipScale.x, (pcmd->ClipRect.w - clipOff.y) * clipScale.y);
+
+					if (clipMin.x < 0.0f) { clipMin.x = 0.0f; }
+					if (clipMin.y < 0.0f) { clipMin.y = 0.0f; }
+					if (clipMax.x > fbWidth) { clipMax.x = (float)fbWidth; }
+					if (clipMax.y > fbHeight) { clipMax.y = (float)fbHeight; }
+					if (clipMax.x <= clipMin.x || clipMax.y <= clipMin.y)
+						continue;
+
+					// Apply scissor/clipping rectangle
+					m_rhi->SetScissors(cmdBfr, (int32_t)(clipMin.x), (int32_t)(clipMin.y), (uint32_t)(clipMax.x - clipMin.x), (uint32_t)(clipMax.y - clipMin.y));
+					vkCmdDrawIndexed(cmdBfr, pcmd->ElemCount, 1, pcmd->IdxOffset + globalIdxOffset, pcmd->VtxOffset + globalVtxOffset, 0);
+				}
+			}
+			globalIdxOffset += cmdList->IdxBuffer.Size;
+			globalVtxOffset += cmdList->VtxBuffer.Size;
+		}
+
+		VkRect2D scissor = { { 0, 0 }, { (uint32_t)fbWidth, (uint32_t)fbHeight } };
+		vkCmdSetScissor(cmdBfr, 0, 1, &scissor);
+
+		m_rhi->EndRenderPass(cmdBfr);
 	}
-
-	VkRect2D scissor = { { 0, 0 }, { (uint32_t)fbWidth, (uint32_t)fbHeight } };
-	vkCmdSetScissor(cmdBfr, 0, 1, &scissor);
-
-	m_rhi->EndRenderPass(cmdBfr);
-	m_rhi->EndCommandBuffer(cmdBfr);
+	//m_rhi->EndCommandBuffer(cmdBfr);
 
 	return true;
-}
-
-void CUIPass::Destroy()
-{
-	m_rhi->DestroyFramebuffer(m_frameBuffer[0]);
-	m_rhi->DestroyFramebuffer(m_frameBuffer[1]);
-	m_rhi->DestroyRenderpass(m_pipeline.renderpassData.renderpass);
-	m_rhi->DestroyPipeline(m_pipeline);
 }
 
 void CUIPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
@@ -208,7 +201,7 @@ void CUIPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
 }
 
 CDebugDrawPass::CDebugDrawPass(CVulkanRHI* p_rhi)
-	: CPass(p_rhi)
+	: CStaticRenderPass(p_rhi)
 {
 	m_frameBuffer.resize(1);
 }
@@ -224,7 +217,7 @@ bool CDebugDrawPass::CreateRenderpass(RenderData* p_renderData)
 	CVulkanRHI::Image primaryDepthRT						= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
 
 	renderPass->AttachColor(primaryColorRT.format,	VK_ATTACHMENT_LOAD_OP_LOAD,VK_ATTACHMENT_STORE_OP_STORE,	VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachDepth(primaryDepthRT.format,	VK_ATTACHMENT_LOAD_OP_LOAD,VK_ATTACHMENT_STORE_OP_STORE,	VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,	VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+	renderPass->AttachDepth(primaryDepthRT.format,	VK_ATTACHMENT_LOAD_OP_LOAD,VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
 	if (!m_rhi->CreateRenderpass(*renderPass))
 		return false;
@@ -279,7 +272,7 @@ bool CDebugDrawPass::CreatePipeline(CVulkanRHI::Pipeline p_Pipeline)
 	m_pipeline.isWireframe									= true;
 	if (!m_rhi->CreateGraphicsPipeline(shadowPassShaderpaths, m_pipeline, "DebugDrawGfxPipeline"))
 	{
-		std::cout << "Error Creating Debug Display Pipeline" << std::endl;
+		std::cerr << "CDebugDrawPass::CreatePipeline Error: Error Creating Debug Display Pipeline" << std::endl;
 		return false;
 	}
 
@@ -302,7 +295,7 @@ bool CDebugDrawPass::Render(RenderData* p_renderData)
 	// instanced indexed draw
 	RETURN_FALSE_IF_FALSE(debugRender->PreDrawInstanced(m_rhi, scId, p_renderData->fixedAssets->GetFixedBuffers(), p_renderData->sceneGraph, cmdBfr));
 	
-	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Debug Draw Instanced"));
+	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Debug Draw Instanced"));
 	{
 		m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
 		{
@@ -336,15 +329,9 @@ bool CDebugDrawPass::Render(RenderData* p_renderData)
 		}
 		m_rhi->EndRenderPass(cmdBfr);
 	}
-	m_rhi->EndCommandBuffer(cmdBfr);
+	//m_rhi->EndCommandBuffer(cmdBfr);
 	
 	return true;
-}
-
-void CDebugDrawPass::Destroy()
-{
-	// No need to destroy render pass and frame buffers because they have been reused from forward pass.
-	m_rhi->DestroyPipeline(m_pipeline);
 }
 
 void CDebugDrawPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)

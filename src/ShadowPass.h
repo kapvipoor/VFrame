@@ -2,7 +2,7 @@
 
 #include "Pass.h"
 
-class CStaticShadowPrepass : public CPass
+class CStaticShadowPrepass : public CStaticRenderPass
 {
 public:
 	CStaticShadowPrepass(CVulkanRHI*);
@@ -13,7 +13,6 @@ public:
 
 	virtual bool Update(UpdateData*) override;
 	virtual bool Render(RenderData*) override;
-	virtual void Destroy() override;
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 

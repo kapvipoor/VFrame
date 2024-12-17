@@ -2,7 +2,7 @@
 
 #include "Pass.h"
 
-class CUIPass : public CPass
+class CUIPass : public CStaticRenderPass
 {
 public:
 	CUIPass(CVulkanRHI*);
@@ -13,12 +13,11 @@ public:
 
 	virtual bool Update(UpdateData*) override;
 	virtual bool Render(RenderData*) override;
-	virtual void Destroy() override;
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 };
 
-class CDebugDrawPass : public CPass
+class CDebugDrawPass : public CStaticRenderPass
 {
 public:
 	CDebugDrawPass(CVulkanRHI*);
@@ -29,7 +28,6 @@ public:
 
 	virtual bool Update(UpdateData*) override;
 	virtual bool Render(RenderData*) override;
-	virtual void Destroy() override;
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 };

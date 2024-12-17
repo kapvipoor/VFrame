@@ -55,7 +55,9 @@ void main()
     vec3 V = normalize(camerPosition - fragPos.xyz);                                                                                 
     vec3 N = normalize(imageLoad(g_RT_StorageImages[STORE_NORMAL], xy).xyz);                                                         
     vec3 color = imageLoad(g_RT_StorageImages[STORE_ALBEDO], xy).xyz;
-    vec2 roughMetal = imageLoad(g_RT_StorageImages[STORE_ROUGH_METAL_MOTION], xy).xy;
+    
+	vec2 roughMetal = imageLoad(g_RT_StorageImages[STORE_ROUGH_METAL], xy).xy;
+
     vec3 Lo = vec3(0.0);
 
 	// setting the default color to be the skybox if

@@ -3,7 +3,7 @@
 #include "Pass.h"
 #include "core/UI.h"
 
-class CToneMapPass : public CPass, CUIParticipant
+class CToneMapPass : public CStaticRenderPass, CUIParticipant
 {
 public:
 	enum ToneMapper
@@ -21,21 +21,17 @@ public:
 
 	virtual bool Update(UpdateData*) override;
 	virtual bool Render(RenderData*) override;
-	virtual void Destroy() override;
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 
 	virtual void Show(CVulkanRHI* p_rhi) override;
-
-	CToneMapPass::ToneMapper GetActiveToneMapper() { return m_toneMapper; }
-	float GetExposure() { return m_exposure; }
 
 private:
 	ToneMapper m_toneMapper;
 	float m_exposure;
 };
 
-class CTAAComputePass : public CPass, CUIParticipant
+class CTAAComputePass : public CComputePass, CUIParticipant
 {
 public:
 	class CJitterHelper
@@ -88,22 +84,14 @@ public:
 	CTAAComputePass(CVulkanRHI* p_rhi);
 	~CTAAComputePass();
 
-	virtual bool CreateRenderpass(RenderData*) override;
 	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
 
 	virtual bool Update(UpdateData*) override;
-	virtual bool Render(RenderData*) override;
-	virtual void Destroy() override;
-
-	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+	virtual bool Dispatch(RenderData*) override;
 
 	virtual void Show(CVulkanRHI* p_rhi) override;
 
 	CJitterHelper* GetJitterHelper() { return m_jitterHelper; }
-	float GetResolveWeight() { return m_resolveWeight; }
-	bool UseMotionVectors() { return m_useMotionVectors; }
-	FlickerCorrection GetFlickerCorrectionMode() { return m_flickerCorrectionMode; }
-	ReprojectionFilter GetReprojectionFilter() { return m_reprojectionFilter; }
 
 private:
 	CJitterHelper* m_jitterHelper;

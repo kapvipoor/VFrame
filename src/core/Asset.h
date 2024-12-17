@@ -57,6 +57,7 @@ private:
 enum SamplerId
 {
 	  s_Linear						= 0
+	, s_Nearest
 	, s_max
 };
 
@@ -70,24 +71,26 @@ enum BindingDest
 {	  // Set 0 - Primary				  // Set 1 - Scene				  // Set 1 - UI		      // Set 1 - DebugDraw
 	  bd_Gloabl_Uniform				= 0	, bd_Scene_MeshInfo_Uniform	= 0	, bd_UI_TexArray	= 0 , bd_Debug_Transforms_Uniform = 0
 	, bd_Linear_Sampler				= 1	, bd_CubeMap_Texture		= 1	, bd_UI_max
-	, bd_ObjPicker_Storage			= 2	, bd_Material_Storage		= 2
-	, bd_SSAOKernel_Storage			= 3 , bd_Scene_Lights			= 3
-	, bd_PrimaryRead_TexArray		= 4 , bd_SceneRead_TexArray		= 4
-	, bd_RTs_StorageImages			= 5 , bd_Scene_max				= 5
-	, bd_RTs_SampledImages			= 6
-	, bd_Primary_max				= 7
+	, bd_Nearest_Sampler			= 2 , bd_Material_Storage		= 2
+	, bd_ObjPicker_Storage			= 3	, bd_Scene_Lights			= 3
+	, bd_SSAOKernel_Storage			= 4 , bd_SceneRead_TexArray		= 4
+	, bd_PrimaryRead_TexArray		= 5 , bd_Scene_max				= 5
+	, bd_RTs_StorageImages			= 6 
+	, bd_RTs_SampledImages			= 7
+	, bd_Primary_max				= 8
 };
 
 struct LoadedUpdateData
 {
 	uint32_t							swapchainIndex;
 	float								timeElapsed;
-	nm::float4x4						viewMatrix;
 	nm::float2							screenRes;
 	nm::float2							curMousePos;
 	bool								isLeftMouseDown;
 	bool								isRightMouseDown;
 	VkCommandPool						commandPool;
+	nm::float4x4						camProjection;
+	nm::float4x4						camView;
 	CCamera::UpdateData					cameraData;
 
 };
@@ -151,7 +154,7 @@ public:
 	CTextures(int p_maxSize = 0);
 	~CTextures() {};
 
-	bool CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_format,uint32_t p_width, uint32_t p_height, VkImageLayout p_layout, std::string p_debugName, VkImageUsageFlags p_usage);
+	bool CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_format,uint32_t p_width, uint32_t p_height, uint32_t p_mipLevel, VkImageLayout p_layout, std::string p_debugName, VkImageUsageFlags p_usage);
 	bool CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& stg, const ImageRaw*, VkFormat p_format, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id = -1);
 	bool CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const std::vector<ImageRaw>&, const CVulkanRHI::SamplerList& p_samplers, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id = -1);
 
@@ -162,7 +165,7 @@ public:
 
 	void DestroyTextures(CVulkanRHI* p_rhi);
 
-	void IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id);
+	void IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id, int p_mipLevel = -1);
 
 	const CVulkanRHI::Image& GetTexture(uint32_t p_id) { return m_textures[p_id]; }
 	const CVulkanRHI::Image GetTexture(uint32_t p_id) const { return m_textures[p_id]; }
@@ -199,6 +202,7 @@ public:
 		nm::float4x4				cameraProj;
 		nm::float4x4				cameraView;
 		nm::float4x4				cameraInvView;
+		nm::float4x4				cameraInvProj;
 		nm::float4x4				skyboxModelView;
 		nm::float2					mousePos;
 		nm::float2					ssaoNoiseScale;
@@ -230,9 +234,7 @@ public:
 	bool Create(CVulkanRHI*);
 	void Destroy(CVulkanRHI*);
 
-	PrimaryUniformData& GetPrimaryUnifromData() { return m_primaryUniformData; }
-	const PrimaryUniformData& GetPrimaryUnifromData() const { return m_primaryUniformData; }
-	void SetPrimaryUniformData(const PrimaryUniformData& p_primUniData) { m_primaryUniformData = p_primUniData; }
+	PrimaryUniformData* GetPrimaryUnifromData() { return &m_primaryUniformData; }
 
 	bool Update(CVulkanRHI*, uint32_t p_scId);
 
@@ -244,9 +246,7 @@ private:
 
 struct FixedUpdateData
 {
-	int									swapchainIndex;
-	CFixedBuffers::PrimaryUniformData*	primaryUniData;
-	CSceneGraph*						sceneGraph;
+	int	swapchainIndex;
 };
 
 class CRenderTargets : public CTextures, public CUIParticipant
@@ -261,9 +261,11 @@ public:
 		, rt_SSAO_Blur				= 4
 		, rt_DirectionalShadowDepth	= 5
 		, rt_PrimaryColor			= 6
-		, rt_RoughMetal_Motion		= 7
-		, rt_SSReflection			= 8
-		, rt_Prev_PrimaryColor		= 9
+		, rt_RoughMetal				= 7
+		, rt_Motion					= 8
+		, rt_SSReflection			= 9
+		, rt_SSRBlur				= 10
+		, rt_Prev_PrimaryColor		= 11
 		, rt_max
 	};
 
@@ -351,7 +353,7 @@ public:
 	bool Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool);
 	void Destroy(CVulkanRHI* p_rhi);
 
-	bool Update(CVulkanRHI* p_rhi, const LoadedUpdateData& , CFixedBuffers::PrimaryUniformData& );
+	bool Update(CVulkanRHI* p_rhi, const LoadedUpdateData&);
 	bool PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx);
 
 private:
@@ -359,12 +361,11 @@ private:
 	bool								m_showImguiDemo;
 	CCircularList						m_latestFPS;
 	CUIParticipantManager*				m_participantManager;
-	CFixedBuffers::PrimaryUniformData	m_primUniforms;
-	
+		
 	bool LoadFonts(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 	bool CreateUIDescriptors(CVulkanRHI* p_rhi);
 	bool ShowUI(CVulkanRHI* p_rhi);
-	bool ShowGuizmo(CVulkanRHI* p_rhi);
+	bool ShowGuizmo(CVulkanRHI* p_rhi, nm::float4x4 p_camView, nm::float4x4 p_camProjection);
 };
 
 class CRenderableMesh : public CRenderable, public CEntity
@@ -549,7 +550,7 @@ public:
 	void Destroy(CVulkanRHI*);
 
 private:
-	bool CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData&, CVulkanRHI::CommandBuffer& p_cmdBfr);
+	bool CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData*, CVulkanRHI::CommandBuffer& p_cmdBfr);
 };
 
 class CReadOnlyBuffers : public CBuffers
@@ -568,7 +569,7 @@ public:
 	void Destroy(CVulkanRHI*);
 
 private:
-	bool CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData&, CVulkanRHI::CommandBuffer& p_cmdBfr);
+	bool CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData*, CVulkanRHI::CommandBuffer& p_cmdBfr);
 };
 
 class CLoadableAssets;
@@ -595,7 +596,7 @@ public:
 	bool Create(CVulkanRHI*, const CFixedAssets&, const CVulkanRHI::CommandPool& );
 	void Destroy(CVulkanRHI*);
 
-	bool Update(CVulkanRHI*, const LoadedUpdateData&, CFixedBuffers::PrimaryUniformData&);
+	bool Update(CVulkanRHI*, const LoadedUpdateData&);
 
 	CScene* GetScene() { return &m_scene;}
 	const CRenderableUI* GetUI() const { return &m_ui; }

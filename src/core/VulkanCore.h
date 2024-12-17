@@ -132,7 +132,11 @@ public:
 		VkCullModeFlags										cullMode;
 		VkCompareOp											depthCmpOp;
 		bool												enableBlending;
+
 		Renderpass											renderpassData;
+		std::vector<VkFormat>								colorAttachFormats;
+		VkFormat											depthAttachFormat;
+
 		bool												isWireframe;
 		VkPipelineLayout									pipeLayout;
 		VkPipeline											pipeline;
@@ -160,8 +164,12 @@ public:
 
 	struct Image
 	{
+	private:
+		uint32_t											levelCount;
+	public:
+
 		VkImageUsageFlags									usage;
-		VkImageLayout										curLayout;
+		std::vector<VkImageLayout>							curLayout;
 
 		VkDescriptorImageInfo								descInfo;
 		VkImage												image;
@@ -176,9 +184,15 @@ public:
 		uint32_t											layerCount;
 		uint32_t											bufOffset;			// assuming the buffer offset for each layer is going to be same
 
+		uint32_t GetLevelCount() { return levelCount; }
+		void SetLevelCount(uint32_t p_levelCount) { levelCount = p_levelCount; curLayout.resize(levelCount); }
+
 		Image() :
 			layerCount(1)
-			, bufOffset(0) {}
+			, levelCount(1)
+			, bufOffset(0) {
+			curLayout.resize(1);
+		}
 	};
 
 	struct Sampler
@@ -187,6 +201,33 @@ public:
 		VkFilter											filter;
 		float												maxAnisotropy;
 	};
+
+	// Dynamic Rendering
+	static VkRenderingAttachmentInfo RenderingAttachinfo()
+	{
+		VkRenderingAttachmentInfo attachment{};
+		attachment.sType									= VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+		attachment.pNext									= nullptr;
+		attachment.imageLayout								= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		attachment.resolveMode								= VK_RESOLVE_MODE_NONE;
+		attachment.resolveImageView							= VK_NULL_HANDLE;
+		attachment.loadOp									= VK_ATTACHMENT_LOAD_OP_CLEAR;
+		attachment.storeOp									= VK_ATTACHMENT_STORE_OP_STORE;
+		return attachment;
+	}
+
+	static VkRenderingInfo RenderingInfo()
+	{
+		VkRenderingInfo renderingInfo{};
+		renderingInfo.sType									= VK_STRUCTURE_TYPE_RENDERING_INFO;
+		renderingInfo.pNext									= nullptr;
+		renderingInfo.flags									= 0;
+		renderingInfo.renderArea.offset.x					= 0;
+		renderingInfo.renderArea.offset.y					= 0;
+		renderingInfo.layerCount							= 1;
+		renderingInfo.viewMask								= 0;
+		return renderingInfo;
+	}
 
 	static VkImageCreateInfo ImageCreateInfo()
 	{
@@ -232,6 +273,9 @@ public:
 	void EndDebugMarker(VkCommandBuffer p_vkCmdBuff);
 	void InsertMarker(VkCommandBuffer p_vkCmdBuff, const char* pMsg);
 	void SetDebugName(uint64_t pObject, VkObjectType pObjectType, const char* pName);
+
+	VkPhysicalDevice GetPhysicalDevice()					{ return m_vkPhysicalDevice;}
+	VkDevice GetDevice()									{ return m_vkDevice;}
 
 	VkQueue GetQueue(uint32_t p_scIdx)						{ return m_vkQueue[p_scIdx]; }
 	VkQueue GetSecondaryQueue()								{ return m_secondaryQueue;}
@@ -307,7 +351,8 @@ public:
 	void BeginRenderpass(VkFramebuffer p_frameBfr, const Renderpass& p_renderpass, VkCommandBuffer& p_cmdBfr);
 	void EndRenderPass(VkCommandBuffer& p_cmdBfr);
 	void DestroyRenderpass(VkRenderPass p_renderpass);
-	
+
+	bool HasStencilComponent(VkFormat p_format);
 	bool CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipeline& pData, std::string p_debugName);
 	bool CreateComputePipeline(const ShaderPaths& p_shaderPaths, Pipeline& pData, std::string p_debugName);
 	void DestroyPipeline(Pipeline& p_pipeline);
@@ -332,8 +377,8 @@ public:
 	bool ResetFence(VkFence& p_fence);
 	void DestroyFence(VkFence p_fence);
 
-	void IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr);
-	void IssueImageLayoutBarrier(VkImageLayout p_old, VkImageLayout p_new, uint32_t layerCount, VkImage& p_image, VkImageUsageFlags p_usage, VkCommandBuffer p_cmdBfr);
+	void IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr, int p_baseMipLevel = -1);
+	void IssueImageLayoutBarrier(VkImageLayout p_old, VkImageLayout p_new, uint32_t layerCount, uint32_t lavelCount, VkImage& p_image, VkImageUsageFlags p_usage, VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel = 0, bool p_hasStencil = false);
 	void IssueBufferBarrier(VkAccessFlags p_srcAcc, VkAccessFlags p_dstAcc, VkPipelineStageFlags p_srcStg, VkPipelineStageFlags p_dstStg, VkBuffer& p_buffer, VkCommandBuffer p_cmdBfr);
 
 	bool IsFormatSupported(VkFormat p_format, VkFormatFeatureFlags p_featureflag);
@@ -343,11 +388,12 @@ public:
 	bool CreateImage(VkImageCreateInfo p_imageCreateInfo, VkImage& p_image);
 	bool AllocateImageMemory(VkImage p_image, VkMemoryPropertyFlags p_memFlags, VkDeviceMemory& p_devMem);
 	bool BindImageMemory(VkImage& p_image, VkDeviceMemory& p_devMem);
-	bool CreateImagView(VkImageUsageFlags p_usage, VkImage p_image, VkFormat p_format, VkImageViewType p_viewType, VkImageView& p_imgView);
+	bool CreateImagView(VkImageUsageFlags p_usage, VkImage p_image, VkFormat p_format, VkImageViewType p_viewType, uint32_t p_levelCount, VkImageView& p_imgView);
 	void DestroyImageView(VkImageView p_imageView);
 	void DestroyImage(VkImage p_image);
 	void ClearImage(VkCommandBuffer p_cmdBfr, VkImage p_src, VkImageLayout p_srclayout, VkClearValue p_clearValue);
 	void CopyImage(VkCommandBuffer p_cmdBfr, VkImage p_src, VkImageLayout p_srclayout, VkImage p_dest, VkImageLayout p_destLayout, uint32_t p_width, uint32_t p_height);
+	void BlitImage(VkCommandBuffer p_cmdBfr, VkImageBlit p_imgBlit, VkImage p_srcImage, VkImageLayout p_srcImageLayout, VkImage p_dstImage, VkImageLayout p_dstImageLayout, VkFormat p_imgForamt);
 
 	bool CreateSampler(Sampler& p_sampler);
 	void DestroySampler(VkSampler p_sampler);

@@ -32,6 +32,7 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_forwardPass			= new CForwardPass(m_rhi);
 	m_deferredPass			= new CDeferredPass(m_rhi);
 	m_deferredLightPass		= new CDeferredLightingPass(m_rhi);
+	m_ssrBlurPass			= new CSSRBlurPass(m_rhi);
 	m_ssaoComputePass		= new CSSAOComputePass(m_rhi);
 	m_ssaoBlurPass			= new CSSAOBlurPass(m_rhi);
 	m_ssrComputePass		= new CSSRComputePass(m_rhi);
@@ -41,12 +42,10 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_taaComputePass		= new CTAAComputePass(m_rhi);
 	m_copyComputePass		= new CCopyComputePass(m_rhi);
 
-	m_cmdBufferNames[0][cb_CopyCompute]			= "CopyCompute_0";
 	m_cmdBufferNames[0][cb_TAA]					= "TAA_0";
 	m_cmdBufferNames[0][cb_SSR]					= "SSR_0";
 	m_cmdBufferNames[0][cb_ShadowMap]			= "ShadowMap_0";
 	m_cmdBufferNames[0][cb_SSAO]				= "SSAO_0";
-	m_cmdBufferNames[0][cb_SSAO_Blur]			= "SSAOBlur_0";
 	m_cmdBufferNames[0][cb_Forward]				= "Forward_0";
 	m_cmdBufferNames[0][cb_Deferred_GBuf]		= "Deferred_GBuf_0";
 	m_cmdBufferNames[0][cb_Deferred_Lighting]	= "Deferred_Lighting_0";
@@ -56,12 +55,10 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_cmdBufferNames[0][cb_ToneMapping]			= "ToneMapping_0";
 	m_cmdBufferNames[0][cb_Skybox]				= "Skybox_0";
 
-	m_cmdBufferNames[1][cb_CopyCompute]			= "CopyCompute_1";
 	m_cmdBufferNames[1][cb_TAA]					= "TAA_1";
 	m_cmdBufferNames[1][cb_SSR]					= "SSR_1";
 	m_cmdBufferNames[1][cb_ShadowMap]			= "ShadowMap_1";
 	m_cmdBufferNames[1][cb_SSAO]				= "SSAO_1";
-	m_cmdBufferNames[1][cb_SSAO_Blur]			= "SSAOBlur_1";
 	m_cmdBufferNames[1][cb_Forward]				= "Forward_1";
 	m_cmdBufferNames[1][cb_Deferred_GBuf]		= "Deferred_GBuf_1";
 	m_cmdBufferNames[1][cb_Deferred_Lighting]	= "Deferred_Lighting_1";
@@ -85,6 +82,7 @@ CRasterRender::~CRasterRender()
 	delete m_uiPass;
 	delete m_toneMapPass;
 	delete m_debugDrawPass;
+	delete m_ssrBlurPass;
 	delete m_ssrComputePass;
 	delete m_ssaoBlurPass;
 	delete m_ssaoComputePass;
@@ -109,6 +107,7 @@ void CRasterRender::on_destroy()
 	m_taaComputePass->Destroy();
 	m_toneMapPass->Destroy();
 	m_debugDrawPass->Destroy();
+	m_ssrBlurPass->Destroy();
 	m_ssrComputePass->Destroy();
 	m_ssaoBlurPass->Destroy();
 	m_ssaoComputePass->Destroy();
@@ -153,7 +152,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 	RETURN_FALSE_IF_FALSE(m_fixedAssets->Create(m_rhi, m_vkCmdPool));
 
 	RETURN_FALSE_IF_FALSE(m_loadableAssets->Create(m_rhi, *m_fixedAssets, m_vkCmdPool));
-	
+
 	RETURN_FALSE_IF_FALSE(m_primaryDescriptors->Create(m_rhi, *m_fixedAssets, *m_loadableAssets));
 
 	RETURN_FALSE_IF_FALSE(CreatePasses());
@@ -161,16 +160,18 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 	{
 		RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(m_vkCmdBfr[0][0], "Preparing Render Targets"));
 
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PrimaryDepth);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PrimaryDepth);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Position);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Normal);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Albedo);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSAO_Blur);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_vkCmdBfr[0][0], CRenderTargets::rt_DirectionalShadowDepth);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PrimaryColor);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_RoughMetal_Motion);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_RoughMetal);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Motion);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSReflection);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Prev_PrimaryColor);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSRBlur);
 		
 		RETURN_FALSE_IF_FALSE(m_rhi->EndCommandBuffer(m_vkCmdBfr[0][0]));
 
@@ -183,7 +184,8 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 
 	RETURN_FALSE_IF_FALSE(InitCamera());
 
-	m_ssrComputePass->Enable(false);
+	m_rhi->SetRenderType(CVulkanRHI::RendererType::Deferred);
+	m_ssrComputePass->Enable(true);
 	m_taaComputePass->Enable(false);
 
 	return true;
@@ -207,37 +209,6 @@ bool CRasterRender::on_update(float delta)
 	GetCurrentMousePosition(mousepos_x, mousepos_y);
 	
 	{
-		CFixedBuffers::PrimaryUniformData uniformData = m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
-		uniformData.cameraInvView					= nm::inverse(m_primaryCamera->GetView());
-		uniformData.cameraLookFrom					= m_primaryCamera->GetLookFrom();
-		uniformData.cameraProj						= m_primaryCamera->GetProjection();
-		uniformData.cameraView						= m_primaryCamera->GetView();
-		uniformData.cameraViewProj					= m_primaryCamera->GetViewProj();
-		uniformData.cameraJitteredViewProj			= m_primaryCamera->GetJitteredViewProj();
-		uniformData.cameraInvViewProj				= m_primaryCamera->GetInvViewProj();
-		uniformData.cameraPreViewProj				= m_primaryCamera->GetPreViewProj();
-		uniformData.mousePos						= nm::float2((float)mousepos_x, (float)mousepos_y);
-		uniformData.skyboxModelView					= m_primaryCamera->GetView();
-		uniformData.ssrEnable						= m_ssrComputePass->IsEnabled();
-		uniformData.ssrMaxDistance					= m_ssrComputePass->GetMaxDistance();
-		uniformData.ssrResolution					= m_ssrComputePass->GetResolution();
-		uniformData.ssrThickness					= m_ssrComputePass->GetThickness();
-		uniformData.ssrSteps						= m_ssrComputePass->GetSteps();
-		uniformData.taaResolveWeight				= m_taaComputePass->GetResolveWeight();
-		uniformData.taaUseMotionVectors				= m_taaComputePass->UseMotionVectors();
-		uniformData.taaFlickerCorectionMode			= (float)m_taaComputePass->GetFlickerCorrectionMode();
-		uniformData.taaReprojectionFilter			= (float)m_taaComputePass->GetReprojectionFilter();
-		uniformData.toneMappingSelection			= (float)m_toneMapPass->GetActiveToneMapper();
-		uniformData.toneMappingExposure				= m_toneMapPass->GetExposure();
-
-		FixedUpdateData fixedUpdate{};
-		fixedUpdate.primaryUniData					= &uniformData;
-		fixedUpdate.swapchainIndex					= m_swapchainIndex;
-		fixedUpdate.sceneGraph						= m_sceneGraph;
-		RETURN_FALSE_IF_FALSE(m_fixedAssets->Update(m_rhi, fixedUpdate));
-	}
-	
-	{
 		LoadedUpdateData loadedUpdate{};
 		loadedUpdate.curMousePos					= nm::float2((float)mousepos_x, (float)mousepos_y);
 		loadedUpdate.isLeftMouseDown				= m_keys[LEFT_MOUSE_BUTTON].down;
@@ -245,16 +216,31 @@ bool CRasterRender::on_update(float delta)
 		loadedUpdate.screenRes						= nm::float2((float)s_Window.screenWidth, (float)s_Window.screenHeight);
 		loadedUpdate.swapchainIndex					= m_swapchainIndex;
 		loadedUpdate.timeElapsed					= delta;
-		loadedUpdate.viewMatrix						= m_primaryCamera->GetView();
 		loadedUpdate.commandPool					= m_vkCmdPool;
 		loadedUpdate.cameraData						= camUpdateData;
+		loadedUpdate.camView						= m_primaryCamera->GetView();
+		loadedUpdate.camProjection					= m_primaryCamera->GetProjection();
 
-		RETURN_FALSE_IF_FALSE(m_loadableAssets->Update(m_rhi, loadedUpdate, m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData()));
+		RETURN_FALSE_IF_FALSE(m_loadableAssets->Update(m_rhi, loadedUpdate));
 	}
 
 	{
+		CFixedBuffers::PrimaryUniformData* uniformData = m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
+		uniformData->cameraInvView					= nm::inverse(m_primaryCamera->GetView());
+		uniformData->cameraInvProj					= nm::inverse(m_primaryCamera->GetProjection());
+		uniformData->cameraLookFrom					= m_primaryCamera->GetLookFrom();
+		uniformData->cameraProj						= m_primaryCamera->GetProjection();
+		uniformData->cameraView						= m_primaryCamera->GetView();
+		uniformData->cameraViewProj					= m_primaryCamera->GetViewProj();
+		uniformData->cameraJitteredViewProj			= m_primaryCamera->GetJitteredViewProj();
+		uniformData->cameraInvViewProj				= m_primaryCamera->GetInvViewProj();
+		uniformData->cameraPreViewProj				= m_primaryCamera->GetPreViewProj();
+		uniformData->mousePos						= nm::float2((float)mousepos_x, (float)mousepos_y);
+		uniformData->skyboxModelView				= m_primaryCamera->GetView();
+
 		CPass::UpdateData updateData{};
 		updateData.sceneGraph						= m_sceneGraph;
+		updateData.uniformData						= uniformData;
 
 		m_staticShadowPass->Update(&updateData);
 		m_skyboxForwardPass->Update(&updateData);
@@ -262,6 +248,7 @@ bool CRasterRender::on_update(float delta)
 		m_ssaoComputePass->Update(&updateData);
 		m_ssaoBlurPass->Update(&updateData);
 		m_ssrComputePass->Update(&updateData);
+		m_ssrBlurPass->Update(&updateData);
 		m_forwardPass->Update(&updateData);
 		m_deferredPass->Update(&updateData);
 		m_deferredLightPass->Update(&updateData);
@@ -269,9 +256,13 @@ bool CRasterRender::on_update(float delta)
 		m_toneMapPass->Update(&updateData);
 		m_taaComputePass->Update(&updateData);
 		m_uiPass->Update(&updateData);
+
+		FixedUpdateData fixedUpdate{};
+		fixedUpdate.swapchainIndex					= m_swapchainIndex;
+		RETURN_FALSE_IF_FALSE(m_fixedAssets->Update(m_rhi, fixedUpdate));
 	}
 	
-	RenderFrame(m_rhi->GetRendererType());
+	RETURN_FALSE_IF_FALSE(RenderFrame(m_rhi->GetRendererType()));
 
 	if (m_pickObject)
 	{
@@ -296,7 +287,7 @@ bool CRasterRender::on_update(float delta)
 		int meshID = -1;
 		RETURN_FALSE_IF_FALSE(m_rhi->ReadFromBuffer((uint8_t*)&meshID, m_fixedAssets->GetFixedBuffers()->GetBuffer(CFixedBuffers::fb_ObjectPickerRead)));
 		m_loadableAssets->GetScene()->SetSelectedRenderableMesh(meshID);
-		std::cout << "Picked Mesh: " << (meshID - 1) << std::endl;
+		std::clog << "Picked Mesh: " << (meshID - 1) << std::endl;
 	}
 
 	return true;
@@ -319,7 +310,7 @@ void CRasterRender::on_present()
 	VkResult res = vkQueuePresentKHR(queue, &presentInfo);
 	if (res != VK_SUCCESS)
 	{
-		std::cerr << "vkQueueSubmit failed " << res << std::endl;
+		std::cerr << "CRasterRender::on_present Error: vkQueueSubmit failed " << res << std::endl;
 	}
 
 	m_rhi->WaitToFinish(queue);
@@ -467,11 +458,9 @@ bool CRasterRender::CreatePasses()
 	RETURN_FALSE_IF_FALSE(m_forwardPass->Initalize(&renderData, pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
-	pipeline.renderpassData					= m_forwardPass->GetRenderpass();			// reusing render-pass from forward pass
 	pipeline.pipeLayout						= primaryAndSceneLayout;
 	pipeline.vertexInBinding				= vertexBindinginUse.bindingDescription;
 	pipeline.vertexAttributeDesc			= vertexBindinginUse.attributeDescription;
-	m_skyboxForwardPass->SetFrameBuffer(m_forwardPass->GetFrameBuffer());
 	RETURN_FALSE_IF_FALSE(m_skyboxForwardPass->Initalize(&renderData, pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
@@ -488,13 +477,14 @@ bool CRasterRender::CreatePasses()
 
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= primaryLayout;
-	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Initalize(nullptr, pipeline));
-	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Initalize(nullptr, pipeline));
+	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Initalize(pipeline));
+	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Initalize(pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= primaryAndSceneLayout;
-	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Initalize(nullptr, pipeline));
-	RETURN_FALSE_IF_FALSE(m_ssrComputePass->Initalize(&renderData, pipeline));
+	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Initalize(pipeline));
+	RETURN_FALSE_IF_FALSE(m_ssrComputePass->Initalize(pipeline));
+	RETURN_FALSE_IF_FALSE(m_ssrBlurPass->Initalize(pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= debugLayout;
@@ -506,7 +496,7 @@ bool CRasterRender::CreatePasses()
 
 	pipeline = CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout = primaryLayout;
-	RETURN_FALSE_IF_FALSE(m_taaComputePass->Initalize(&renderData, pipeline));
+	RETURN_FALSE_IF_FALSE(m_taaComputePass->Initalize(pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= uiLayout;
@@ -591,8 +581,26 @@ bool CRasterRender::DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkan
 	return true;
 }
 
+bool CRasterRender::BeginAllCommandBuffers(uint32_t p_swapchainIndex)
+{
+	for (uint32_t i = 0; i < CommandBufferId::cb_max; i++)
+		RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(m_vkCmdBfr[p_swapchainIndex][i], m_cmdBufferNames[p_swapchainIndex][i].c_str()));
+
+	return true;
+}
+
+bool CRasterRender::EndAllCommandBuffers(uint32_t p_swapchainIndex)
+{
+	for (uint32_t i = 0; i < CommandBufferId::cb_max; i++)
+		RETURN_FALSE_IF_FALSE(m_rhi->EndCommandBuffer(m_vkCmdBfr[p_swapchainIndex][i]));
+
+	return true;
+}
+
 bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 {
+	RETURN_FALSE_IF_FALSE(BeginAllCommandBuffers(m_swapchainIndex));
+
 	CPass::RenderData renderData{};
 	renderData.fixedAssets = m_fixedAssets;
 	renderData.loadedAssets = m_loadableAssets;
@@ -629,23 +637,25 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 	}
 
 	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO];
-	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Render(&renderData));
-	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO_Blur];
-	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Render(&renderData));
+	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Dispatch(&renderData));
+	
+	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO];
+	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Dispatch(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
 	if (p_renderType == CVulkanRHI::RendererType::Deferred)
 	{
 		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Deferred_Lighting];
-		RETURN_FALSE_IF_FALSE(m_deferredLightPass->Render(&renderData));
+		RETURN_FALSE_IF_FALSE(m_deferredLightPass->Dispatch(&renderData));
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
 		if (m_ssrComputePass->IsEnabled())
 		{
 			renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSR];
-			RETURN_FALSE_IF_FALSE(m_ssrComputePass->Render(&renderData));
+			RETURN_FALSE_IF_FALSE(m_ssrComputePass->Dispatch(&renderData));
+
+			renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSR];
+			RETURN_FALSE_IF_FALSE(m_ssrBlurPass->Dispatch(&renderData));
 			m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 		}
 	}
@@ -661,7 +671,7 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 	if (m_taaComputePass->IsEnabled())
 	{
 		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_TAA];
-		RETURN_FALSE_IF_FALSE(m_taaComputePass->Render(&renderData));
+		RETURN_FALSE_IF_FALSE(m_taaComputePass->Dispatch(&renderData));
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 	}
 
@@ -673,7 +683,9 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 	RETURN_FALSE_IF_FALSE(m_uiPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-	return false;
+	RETURN_FALSE_IF_FALSE(EndAllCommandBuffers(m_swapchainIndex));
+
+	return true;
 }
 
 // Placing the notes here until I can find the best way to place them in my read me

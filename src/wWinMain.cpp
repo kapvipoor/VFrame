@@ -1,4 +1,4 @@
-//#define _CRT_SECURE_NO_WARNINGS
+#include <sstream>
 
 #include "RasterRender.h"
 
@@ -10,6 +10,10 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
     FILE* stdout_console = freopen("CONOUT$", "w", stdout);
     FILE* stderr_console = freopen("CONOUT$", "w", stderr);
     
+    // refer https://stackoverflow.com/questions/5419356/is-there-a-way-to-redirect-stdout-stderr-to-a-string
+    std::stringstream cerrBuff;
+    std::streambuf* cerrStream = std::cerr.rdbuf(cerrBuff.rdbuf());
+
     unsigned int val = 1;
     bool exitState = true;
     switch (val)
@@ -30,7 +34,12 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
     }
     
     if (!exitState)
-        MessageBox(NULL, L"Error(s) found!", L"Error(s) found!", 0);
+        MessageBoxA(NULL, cerrBuff.str().c_str(), "Error(s) found!", 0);
+
+    // resetting to original stream - not needed but just following clean code.
+    // Ideally this stream redirection should be managed and reset
+    // in a utility class but will leave it bare-bones for now
+    std::cout.rdbuf(cerrStream);
     
     return EXIT_SUCCESS;
 }

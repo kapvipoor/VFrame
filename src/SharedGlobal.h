@@ -26,20 +26,24 @@
 #define SAMPLE_SSAO_AND_BLUR			        4
 #define SAMPLE_DIRECTIONAL_SHADOW_DEPTH	        5
 #define SAMPLE_PRIMARY_COLOR				    6
-#define SAMPLE_ROUGH_METAL_MOTION		        7
-#define SAMPLE_SS_REFLECTION    		        8
-#define SAMPLE_PREV_PRIMARY_COLOR    		    9
-#define SAMPLE_MAX_RENDER_TARGETS			    10
+#define SAMPLE_ROUGH_METAL				        7
+#define SAMPLE_MOTION					        8
+#define SAMPLE_SS_REFLECTION    		        9
+#define SAMPLE_SSR_BLUR						    10
+#define SAMPLE_PREV_PRIMARY_COLOR    		    11
+#define SAMPLE_MAX_RENDER_TARGETS			    12
 
 #define STORE_POSITION					        0
 #define STORE_NORMAL						    1
 #define STORE_ALBEDO						    2
 #define STORE_SSAO_AND_BLUR				        3
 #define STORE_PRIMARY_COLOR				        4
-#define STORE_ROUGH_METAL_MOTION		        5
-#define STORE_SS_REFLECTION     		        6
-#define STORE_PREV_PRIMARY_COLOR   		        7
-#define STORE_MAX_RENDER_TARGETS			    8
+#define STORE_ROUGH_METAL				        5
+#define STORE_MOTION					        6
+#define STORE_SS_REFLECTION     		        7
+#define STORE_SSR_BLUR					        8
+#define STORE_PREV_PRIMARY_COLOR   		        9
+#define STORE_MAX_RENDER_TARGETS			    10
 
 #define SHADOW_BIAS                             0.005
 

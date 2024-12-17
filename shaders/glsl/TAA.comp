@@ -42,7 +42,7 @@ vec2 ComputeReprojectedUV(ivec2 in_xy)
 //#ifdef USE_VELOCITY
     if(g_Info.taaUseMotionVectors == 1.0f)
     {
-        vec2 velocityUV = texture(sampler2D(g_RT_SampledImages[SAMPLE_ROUGH_METAL_MOTION], g_LinearSampler), uv).zw;
+        vec2 velocityUV = texture(sampler2D(g_RT_SampledImages[SAMPLE_MOTION], g_LinearSampler), uv).xy;
         reprojUV = uv + velocityUV;
     }
 //#else

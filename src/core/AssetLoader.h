@@ -17,6 +17,7 @@ struct ImageRaw
 	int							width;
 	int							height;
 	int							channels;
+	uint32_t					mipLevels;
 
 	ImageRaw()
 		: name("")
@@ -24,7 +25,8 @@ struct ImageRaw
 		, raw(nullptr)
 		, width(-1)
 		, height(-1)
-		, channels(-1){}
+		, channels(-1)
+		, mipLevels(1){}
 };
 
 struct Material

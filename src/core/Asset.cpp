@@ -128,7 +128,7 @@ void CRenderable::DestroyRenderable(CVulkanRHI* p_rhi)
 bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, 
 	const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t p_id)
 {
-	std::cout << "Creating Vertex and Index Buffer for " << p_debugStr << std::endl;
+	std::clog << "Creating Vertex and Index Buffer for " << p_debugStr << std::endl;
 
 	{
 		CVulkanRHI::Buffer vertexStg;
@@ -242,10 +242,11 @@ CTextures::CTextures(int p_maxSize)
 		m_textures.resize(p_maxSize);
 }
 
-bool CTextures::CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_format, uint32_t p_width, uint32_t p_height, VkImageLayout p_layout, std::string p_debugName, VkImageUsageFlags p_usage)
+bool CTextures::CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_format, uint32_t p_width, uint32_t p_height, 
+	uint32_t p_mipLevel, VkImageLayout p_layout, std::string p_debugName, VkImageUsageFlags p_usage)
 {
 	CVulkanRHI::Image renderTarget;
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateRenderTarget(p_format, p_width, p_height, p_layout, p_usage, renderTarget, p_debugName));
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateRenderTarget(p_format, p_width, p_height, p_mipLevel, p_layout, p_usage, renderTarget, p_debugName));
 
 	m_textures[p_id] = renderTarget;
 
@@ -255,29 +256,37 @@ bool CTextures::CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_
 bool CTextures::CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const ImageRaw* p_rawImg, VkFormat p_format, 
 							  CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id)
 {
-	std::cout << "Creating GPU Texture Buffer for " << p_debugName << std::endl;
+	std::clog << "Creating GPU Texture Buffer for " << p_debugName << std::endl;
 
 	if (p_rawImg->raw != nullptr)
 	{
 		CVulkanRHI::Image img;
 
-		size_t texSize							= p_rawImg->width * p_rawImg->height * p_rawImg->channels;
+		size_t texSize = p_rawImg->width * p_rawImg->height * p_rawImg->channels;
 
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(texSize, p_stg, 
 			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, p_debugName + "_transfer"));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)p_rawImg->raw, p_stg));
 
-		img.format								= p_format;//VK_FORMAT_R8G8B8A8_UNORM;
-		img.width								= p_rawImg->width;
-		img.height								= p_rawImg->height;
-		img.viewType							= VK_IMAGE_VIEW_TYPE_2D;
+		img.format = p_format;//VK_FORMAT_R8G8B8A8_UNORM;
+		img.width = p_rawImg->width;
+		img.height = p_rawImg->height;
+		img.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		img.SetLevelCount(p_rawImg->mipLevels);
 
-		VkImageCreateInfo imgCrtInfo			= CVulkanCore::ImageCreateInfo();
-		imgCrtInfo.extent.width					= p_rawImg->width;
-		imgCrtInfo.extent.height				= p_rawImg->height;
-		imgCrtInfo.format						= img.format;
-		imgCrtInfo.usage						= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		VkImageCreateInfo imgCrtInfo = CVulkanCore::ImageCreateInfo();
+		imgCrtInfo.extent.width = p_rawImg->width;
+		imgCrtInfo.extent.height = p_rawImg->height;
+		imgCrtInfo.format = img.format;
+		imgCrtInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		imgCrtInfo.mipLevels = p_rawImg->mipLevels;
+
+		// If the mip count is more than 1, we will use the texture
+		// to read from and write to when generating the mip chain
+		// Hence the usage needs to be both Source and Destination
+		if (imgCrtInfo.mipLevels > 1)
+			imgCrtInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateTexture(p_stg, img, imgCrtInfo, p_cmdBfr, p_debugName))
 
@@ -302,7 +311,7 @@ bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 {
 	if (p_rawList.size() != 6)
 	{
-		std::cout << "Error: Cannot create cube map because raw data has slices less/more than 6" << std::endl;
+		std::cerr << "CTextures::CreateCubemap Error: Cannot create cube map because raw data has slices less/more than 6: " << p_debugName << std::endl;
 		return false;
 	}
 
@@ -356,9 +365,9 @@ bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 	return true;
 }
 
-void CTextures::IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id)
+void CTextures::IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id, int p_mipLevel)
 {
-	p_rhi->IssueLayoutBarrier(p_imageLayout, m_textures[p_id], p_cmdBfr);
+	p_rhi->IssueLayoutBarrier(p_imageLayout, m_textures[p_id], p_cmdBfr, p_mipLevel);
 }
 
 uint8_t CTextures::GetBytesPerChannel(VkFormat p_format)
@@ -477,7 +486,7 @@ bool CRenderableUI::Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_c
 
 	if (!LoadFonts(p_rhi, stgList, cmdBfr))
 	{
-		std::cout << "Error: Failed to UI Fonts" << std::endl;
+		std::cerr << "CRenderableUI::Create Error: Failed to Load UI Fonts" << std::endl;
 		return false;
 	}
 
@@ -493,7 +502,7 @@ bool CRenderableUI::Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_c
 
 	if (!CreateUIDescriptors(p_rhi))
 	{
-		std::cout << "Error: Failed to create UI Descriptors" << std::endl;
+		std::cerr << "CRenderableUI::Create Error: Failed to create UI Descriptors" << std::endl;
 		return false;
 	}
 
@@ -510,11 +519,10 @@ void CRenderableUI::Destroy(CVulkanRHI* p_rhi)
 	DestroyTextures(p_rhi);
 }
 
-bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate, CFixedBuffers::PrimaryUniformData& p_primUniData)
+bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 {
 	m_latestFPS.Add(p_loadedUpdate.timeElapsed);
 
-	m_primUniforms							= p_primUniData;
 	ImGuiIO& imguiIO						= ImGui::GetIO();
 	imguiIO.DisplaySize						= ImVec2(p_loadedUpdate.screenRes[0], p_loadedUpdate.screenRes[1]);
 	imguiIO.DeltaTime						= p_loadedUpdate.timeElapsed;
@@ -526,14 +534,14 @@ bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUp
 	ImGuizmo::BeginFrame();
 
 	ShowUI(p_rhi);
-	ShowGuizmo(p_rhi);
+	ShowGuizmo(p_rhi, p_loadedUpdate.camView, p_loadedUpdate.camProjection);
 
 	return true;
 }
 
 bool CRenderableUI::LoadFonts(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	std::cout << "Loading UI Resources" << std::endl;
+	std::clog << "Loading UI Resources" << std::endl;
 
 	ImGuiIO& imguiIO						= ImGui::GetIO();
 	ImageRaw tex;
@@ -566,7 +574,7 @@ bool CRenderableUI::CreateUIDescriptors(CVulkanRHI* p_rhi)
 	return true;
 }
 
-bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
+bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi, nm::float4x4 p_camView, nm::float4x4 p_camProjection)
 {
 	// ImGuizmo Type Selection
 	{
@@ -601,14 +609,12 @@ bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
 		ImGuizmo::SetOrthographic(false);
 		ImGuizmo::SetRect(0.0f, 0.0f, (float)p_rhi->GetScreenWidth(), (float)p_rhi->GetScreenHeight());
 
-		nm::float4x4 camView		= m_primUniforms.cameraView;
-		nm::float4x4 camProj		= m_primUniforms.cameraProj;
 		nm::Transform transform		= m_selectedEntity->GetTransform();
 
 		if (m_guizmo.type == Guizmo::Translation)
 		{
 			nm::float4x4 translation = transform.GetTranslate();
-			if (ImGuizmo::Manipulate(&camView.column[0][0], &camProj.column[0][0], ImGuizmo::OPERATION::TRANSLATE, ImGuizmo::LOCAL, &translation.column[0][0]))
+			if (ImGuizmo::Manipulate(&p_camView.column[0][0], &p_camProjection.column[0][0], ImGuizmo::OPERATION::TRANSLATE, ImGuizmo::LOCAL, &translation.column[0][0]))
 			{
 				if (!(transform.GetTranslate() == translation))
 				{
@@ -620,7 +626,7 @@ bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
 		else if (m_guizmo.type == Guizmo::Rotation)
 		{
 			nm::float4x4 guizmoTransform = transform.GetTranslate() * transform.GetRotate();
-			if (ImGuizmo::Manipulate(&camView.column[0][0], &camProj.column[0][0], ImGuizmo::OPERATION::ROTATE, ImGuizmo::LOCAL, &guizmoTransform.column[0][0]))
+			if (ImGuizmo::Manipulate(&p_camView.column[0][0], &p_camProjection.column[0][0], ImGuizmo::OPERATION::ROTATE, ImGuizmo::LOCAL, &guizmoTransform.column[0][0]))
 			{
 				nm::float4x4 rotate = nm::float4x4::identity();
 				rotate.column[0][0] = guizmoTransform.column[0][0];
@@ -642,7 +648,7 @@ bool CRenderableUI::ShowGuizmo(CVulkanRHI* p_rhi)
 		else if (m_guizmo.type == Guizmo::Scale)
 		{
 			nm::float4x4 guizmoTransform = transform.GetTranslate() * transform.GetScale();
-			if (ImGuizmo::Manipulate(&camView.column[0][0], &camProj.column[0][0], ImGuizmo::OPERATION::SCALE, ImGuizmo::LOCAL, &guizmoTransform.column[0][0]))
+			if (ImGuizmo::Manipulate(&p_camView.column[0][0], &p_camProjection.column[0][0], ImGuizmo::OPERATION::SCALE, ImGuizmo::LOCAL, &guizmoTransform.column[0][0]))
 			{
 				nm::float4x4 scaling = nm::float4x4::identity();
 				scaling.column[0][0] = guizmoTransform.column[0][0];
@@ -824,25 +830,25 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 
 	if (!LoadDefaultTexture(p_rhi, stgList, cmdBfr))
 	{
-		std::cout << "Error: Failed to Create Default Texture" << std::endl;
+		std::cerr << "CScene::Create Error: Failed to Load Default Texture" << std::endl;
 		return false;
 	}
 
 	if (!LoadSkybox(p_rhi, p_samplerList, stgList, cmdBfr))
 	{
-		std::cout << "Error: Failed to Load Sky box" << std::endl;
+		std::cerr << "CScene::Create Error: Failed to Load Sky box" << std::endl;
 		return false;
 	}
 
 	if (!LoadDefaultScene(p_rhi, stgList, cmdBfr))
 	{
-		std::cout << "Error: Failed to Load Scene" << std::endl;
+		std::cerr << "CScene::Create Error: Failed to Load Scene" << std::endl;
 		return false;
 	}
 
 	if (!LoadLights(p_rhi, stgList, cmdBfr))
 	{
-		std::cout << "Error: Failed to Load Lights" << std::endl;
+		std::cerr << "CScene::Create Error: Failed to Load Lights" << std::endl;
 		return false;
 	}
 
@@ -977,7 +983,7 @@ bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 		// the raw data is updated and the entire GPU resource is reloaded
 		if (!LoadLights(p_rhi, stgList, cmdBfr))
 		{
-			std::cout << "Error: Failed to Load Lights" << std::endl;
+			std::cerr << "CScene::Update Error: Failed to Update Lights" << std::endl;
 			return false;
 		}		
 
@@ -1000,7 +1006,7 @@ bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 	for (auto& mesh : m_meshes)
 	{
 		mesh->SetDirty(false);
-		mesh->m_viewNormalTransform					= (p_loadedUpdate.viewMatrix * mesh->GetTransform().GetTransform());	// nm::inverse(nm::transpose(p_loadedUpdate.viewMatrix * mesh->GetTransform().GetTransform()));
+		mesh->m_viewNormalTransform					= (p_loadedUpdate.camView * mesh->GetTransform().GetTransform());	// nm::inverse(nm::transpose(p_loadedUpdate.viewMatrix * mesh->GetTransform().GetTransform()));
 
 		const float* modelMat						= &(mesh->GetTransform().GetTransform()).column[0][0];
 
@@ -1018,7 +1024,7 @@ bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 
 bool CScene::LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	std::cout << "Loading Default resources" << std::endl;
+	std::clog << "Loading Default resources" << std::endl;
 
 	// load default texture to compensate for bad textures
 	{
@@ -1037,7 +1043,7 @@ bool CScene::LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg
 
 bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	std::cout << "Loading Skybox Resources" << std::endl;
+	std::clog << "Loading Skybox Resources" << std::endl;
 
 	// Load sky box cube map
 	{
@@ -1093,10 +1099,10 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	//m_scenePaths.push_back(g_AssetPath/"shadow_test_3.gltf");																		//1
 	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");						//2
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
-	//defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
+	defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
 	//defaultScenePaths.push_back(g_AssetPath / "glTFSampleModels/2.0/Sponza/glTF/Sponza.gltf");
-	//defaultScenePaths.push_back(g_AssetPath/"glTF-Sample-Models/2.0/Suzanne/glTF/Suzanne.gltf");											//4													//5
-	defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf");
+	defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");											//4													//5
+	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf");
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");				//6
 	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/cube/cube.obj");																			//7
 	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/icosphere.gltf");																			//8
@@ -1117,7 +1123,7 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	
 	for (unsigned int i = 0; i < defaultScenePaths.size(); i++)
 	{
-		std::cout << "Loading Scene Resources - " << defaultScenePaths[i] << std::endl;
+		std::clog << "Loading Scene Resources - " << defaultScenePaths[i] << std::endl;
 
 		ObjLoadData loadData{};
 		loadData.flipUV = flipYList[i];
@@ -1213,7 +1219,7 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 
 bool CScene::LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer& p_cmdBfr, bool p_dumpBinaryToDisk)
 {
-	std::cout << "Loading Light resources" << std::endl;
+	std::clog << "Loading Light resources" << std::endl;
 
 	// storage buffer for Lights
 	{
@@ -1346,13 +1352,13 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 
 		if (!GetFileExtention(p_path, fileExtn))
 		{
-			std::cout << "Failed to Get Extn - " << p_path << std::endl;
+			std::cerr << "CScene::AddEntity Error: Failed to Get Extn - " << p_path << std::endl;
 			return false;
 		}
 				
 		if (!GetFileName(p_path, assetName, "\\"))
 		{
-			std::cout << "Failed to Get Filename - " << p_path << std::endl;
+			std::cerr << "CScene::AddEntity Error: Failed to Get Filename - " << p_path << std::endl;
 			return false;
 		}
 
@@ -1438,7 +1444,7 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 							CRenderableMesh* mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform);
 							mesh->m_submeshes = meshraw.submeshes;
 
-							std::cout << "Setting Bounding Volume" << std::endl;
+							std::clog << "Setting Bounding Volume" << std::endl;
 							BVolume* bVol = new BBox(meshraw.bbox);
 							mesh->SetBoundingVolume(bVol);
 
@@ -1484,7 +1490,7 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 								return false;
 							}
 
-							std::cout << "Creating GPU Material buffer" << std::endl;
+							std::clog << "Creating GPU Material buffer" << std::endl;
 
 							CVulkanRHI::Buffer matStg;
 							RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(Material) * m_materialsList.size(), matStg,
@@ -1503,19 +1509,19 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 							RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(matStg, m_material_storage, cmdBfr));
 						}
 
-						std::cout << "Cleaning Raw Vertex and Index resource from RAM" << std::endl;
+						std::clog << "Cleaning Raw Vertex and Index resource from RAM" << std::endl;
 						sceneraw.meshList.clear();
 
 						for (auto& tex : sceneraw.textureList)
 						{
-							std::cout << "Cleaning Raw Texture resource from RAM - " << tex.name << std::endl;
+							std::clog << "Cleaning Raw Texture resource from RAM - " << tex.name << std::endl;
 							FreeRawImage(tex);
 						}
 
 						sceneraw.textureList.clear();
 					}
 
-					std::cout << "Preparing to transfer resources to Device visible memory locations" << std::endl;
+					std::clog << "Preparing to transfer resources to Device visible memory locations" << std::endl;
 					if (!p_rhi->EndCommandBuffer(cmdBfr))
 						return false;
 
@@ -1524,23 +1530,23 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 
 					// Submit command buffer and wait for completion
 					bool waitForFinish = true;
-					std::cout << "Submitting command buffer" << std::endl;
+					std::clog << "Submitting command buffer" << std::endl;
 					RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish,
 						VK_NULL_HANDLE, false, nullptr, nullptr, CVulkanRHI::QueueType::qt_Secondary));
 					m_assetLoadingTracker.progress = 0.8f;
 
 					// Destroy local staging resources
-					std::cout << "Cleaning all Staging buffers" << std::endl;
+					std::clog << "Cleaning all Staging buffers" << std::endl;
 					for (auto& stg : stgList)
 						p_rhi->FreeMemoryDestroyBuffer(stg);
 
 					// Reset the command pool
-					std::cout << "Resetting Command Pool" << std::endl;
+					std::clog << "Resetting Command Pool" << std::endl;
 					p_rhi->ResetCommandPool(m_assetLoaderCommandPool);
 					m_assetLoadingTracker.progress = 1.0f;
 					
 					// Update the bindless descriptors
-					std::cout << "Updating Scene's Bindless Texture Descriptors" << std::endl;
+					std::clog << "Updating Scene's Bindless Texture Descriptors" << std::endl;
 					if(!imageInfoList.empty())
 					{
 						for (uint32_t i = 0; i < FRAME_BUFFER_COUNT; i++)
@@ -1554,7 +1560,7 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 						}
 					}					
 
-					std::cout << "Asset Loading Successful." << std::endl;
+					std::clog << "Asset Loading Successful." << std::endl;
 					m_assetLoadingTracker.state = AssetLoadingState::als_RequestComplete;
 
 					return true;
@@ -1604,10 +1610,9 @@ bool CReadOnlyTextures::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers,
 	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_commandPool, &cmdBfr, 1, &debugMarker));
 	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
 
-	CFixedBuffers::PrimaryUniformData& priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
+	CFixedBuffers::PrimaryUniformData* priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
 	RETURN_FALSE_IF_FALSE(CreateSSAOKernelTexture(p_rhi, stgList, priUnidata, cmdBfr));
-	p_fixedBuffers.SetPrimaryUniformData(priUnidata);
-
+	
 	if (!p_rhi->EndCommandBuffer(cmdBfr))
 		return false;
 
@@ -1627,11 +1632,10 @@ void CReadOnlyTextures::Destroy(CVulkanRHI* p_rhi)
 	DestroyTextures(p_rhi);
 }
 
-bool CReadOnlyTextures::CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData& p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
+bool CReadOnlyTextures::CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData* p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	uint32_t ssaoNoiseDim						= 4;
-	p_primaryUniformData.ssaoNoiseScale			= nm::float2((float)p_rhi->GetRenderWidth() / (float)ssaoNoiseDim, (float)p_rhi->GetRenderHeight() / (float)ssaoNoiseDim);
-
+	uint32_t ssaoNoiseDim = p_rhi->GetRenderWidth() / (uint32_t)p_primaryUniformData->ssaoNoiseScale[0];
+	
 	std::vector<unsigned char> ssaoNoise;
 	// introducing good random rotation can reduce number of samples required
 	for (uint32_t i = 0; i < (ssaoNoiseDim * ssaoNoiseDim); i++)
@@ -1671,9 +1675,8 @@ bool CReadOnlyBuffers::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers, 
 	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_commandPool, &cmdBfr, 1, &debugMarker));
 	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
 
-	CFixedBuffers::PrimaryUniformData& priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
+	CFixedBuffers::PrimaryUniformData* priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
 	RETURN_FALSE_IF_FALSE(CreateSSAONoiseBuffer(p_rhi, stgList, priUnidata, cmdBfr));
-	p_fixedBuffers.SetPrimaryUniformData(priUnidata);
 
 	if (!p_rhi->EndCommandBuffer(cmdBfr))
 		return false;
@@ -1694,13 +1697,13 @@ void CReadOnlyBuffers::Destroy(CVulkanRHI* p_rhi)
 	DestroyBuffers(p_rhi);
 }
 
-bool CReadOnlyBuffers::CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData& p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
+bool CReadOnlyBuffers::CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData* p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	p_primaryUniformData.ssaoKernelSize			= 64.f;
-	p_primaryUniformData.ssaoRadius				= 0.5f;
+	p_primaryUniformData->ssaoKernelSize			= 64.f;
+	p_primaryUniformData->ssaoRadius				= 0.5f;
 
 	std::vector<nm::float4> ssaoKernel;
-	for (uint32_t i = 0; i < p_primaryUniformData.ssaoKernelSize; i++)
+	for (uint32_t i = 0; i < p_primaryUniformData->ssaoKernelSize; i++)
 	{
 		// creating random values along a semi-sphere oriented along surface normal (Z axis) in tangent space
 		nm::float4 sample = {
@@ -1758,10 +1761,10 @@ void CLoadableAssets::Destroy(CVulkanRHI* p_rhi)
 	m_readOnlyTextures.Destroy(p_rhi);
 }
 
-bool CLoadableAssets::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_updateData, CFixedBuffers::PrimaryUniformData& p_primUniData)
+bool CLoadableAssets::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_updateData)
 {
 	RETURN_FALSE_IF_FALSE(m_scene.Update(p_rhi, p_updateData));
-	RETURN_FALSE_IF_FALSE(m_ui.Update(p_rhi, p_updateData, p_primUniData));
+	RETURN_FALSE_IF_FALSE(m_ui.Update(p_rhi, p_updateData));
 	return true;
 }
 
@@ -1781,22 +1784,30 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	uint32_t fullResWidth = p_rhi->GetRenderWidth();
 	uint32_t fullResHeight = p_rhi->GetRenderHeight();
 
+	VkImageLayout general = VK_IMAGE_LAYOUT_GENERAL;
+	VkImageLayout shaderRead = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
 	VkImageUsageFlags sample_depth = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 	VkImageUsageFlags sample_storage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 	VkImageUsageFlags sample_storage_color = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	VkImageUsageFlags sample_storage_color_src = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	VkImageUsageFlags sample_storage_color_dest = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	VkImageUsageFlags sample_storage_color_src_dest = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryDepth,			VK_FORMAT_D32_SFLOAT_S8_UINT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	"primary_depth",		sample_depth));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Position,				VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"position",				sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Normal,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"normal",				sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Albedo,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"albedo",				sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAO_Blur,				VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"ssao_and_blur",		sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,	VK_FORMAT_D32_SFLOAT_S8_UINT,	4096, 4096,					 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	"directional_shadow",	sample_depth));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"primary_color",		sample_storage_color_src));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RoughMetal_Motion,		VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"Rough_Metal_Motion",	sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"ss_reflection",		sample_storage_color_dest));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Prev_PrimaryColor,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, VK_IMAGE_LAYOUT_GENERAL,					"prev_primary_color",	sample_storage_color_dest));
+	//uint32_t maxMip = static_cast<uint32_t>(std::floor(std::log2(max(fullResWidth, fullResHeight)) + 1));
+
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryDepth,			VK_FORMAT_D32_SFLOAT,			fullResWidth, fullResHeight, 1,			shaderRead,	"primary_depth",		sample_depth));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Position,				VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"position",				sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Normal,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"normal",				sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Albedo,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"albedo",				sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAO_Blur,				VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1,			general,	"ssao_and_blur",		sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,  VK_FORMAT_D32_SFLOAT,			4096, 4096,					 1,			shaderRead,	"directional_shadow",	sample_depth));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"primary_color",		sample_storage_color_src));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RoughMetal,				VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1,			general,	"Rough_Metal",			sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Motion,					VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1,			general,	"Motion",				sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"ss_reflection",		sample_storage_color_dest));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSRBlur,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"ssr_blur",				sample_storage_color_src_dest));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Prev_PrimaryColor,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"prev_primary_color",	sample_storage_color_dest));
 
 	return true;
 }
@@ -1857,12 +1868,16 @@ std::string CRenderTargets::GetRenderTargetIDinString(RenderTargetId p_id)
 		return "DirectionalShadowDepth";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_PrimaryColor)
 		return "PrimaryColor";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_RoughMetal_Motion)
-		return "Rough Metal Motion";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_RoughMetal)
+		return "Rough Metal";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_Motion)
+		return "Motion";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_SSReflection)
 		return "Screen Space Reflection (UVs)";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_Prev_PrimaryColor)
 		return "Previous Color (Temporal)";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_SSRBlur)
+		return "SSR Blur";
 	else
 		return "Error Render Target";
 }
@@ -1872,9 +1887,10 @@ CFixedBuffers::CFixedBuffers()
 	, CBuffers(CFixedBuffers::FixedBufferId::fb_max)
 {
 	m_primaryUniformData.ssaoKernelSize			= 64.0f;
+	m_primaryUniformData.ssaoNoiseScale         = nm::float2((float)RENDER_RESOLUTION_X / 4.0f, (float)RENDER_RESOLUTION_Y / 4.0f);
 	m_primaryUniformData.ssaoRadius				= 0.5f;
 	m_primaryUniformData.enableShadowPCF		= 0;
-	m_primaryUniformData.pbrAmbientFactor		= 0.1f;
+	m_primaryUniformData.pbrAmbientFactor		= 0.05f;
 	m_primaryUniformData.enableSSAO				= 1;
 	m_primaryUniformData.biasSSAO				= 0.015f;
 	m_primaryUniformData.ssrEnable				= false;
@@ -1909,6 +1925,7 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(float) * 16)				// camera projection
 		+ (sizeof(float) * 16)				// camera view
 		+ (sizeof(float) * 16)				// inverse camera view
+		+ (sizeof(float) * 16)				// inverse camera projection
 		+ (sizeof(float) * 16)				// skybox model view
 		+ (sizeof(float) * 2)				// mouse position (x,y)
 		+ (sizeof(float) * 2)				// SSAO Noise Scale
@@ -1976,21 +1993,6 @@ void CFixedBuffers::Show(CVulkanRHI* p_rhi)
 		{
 			ImGui::TreePop();
 		}
-		if (ImGui::TreeNode("SSAO"))
-		{
-			bool enableSSAO = (bool)m_primaryUniformData.enableSSAO;
-			ImGui::Checkbox("Enable SSAO ", &enableSSAO);
-			m_primaryUniformData.enableSSAO = (int)enableSSAO;
-
-			float ssaoBias = m_primaryUniformData.biasSSAO;
-			ImGui::SliderFloat("SSAO Bias", &ssaoBias, 0.00f, 0.1f);
-			m_primaryUniformData.biasSSAO = ssaoBias;
-
-			ImGui::InputFloat2("Noise Scale", &m_primaryUniformData.ssaoNoiseScale[0]);
-			ImGui::InputFloat("Kernel Size", &m_primaryUniformData.ssaoKernelSize);
-			ImGui::InputFloat("Kernel Radius", &m_primaryUniformData.ssaoRadius);
-			ImGui::TreePop();
-		}
 		if (ImGui::TreeNode("Shadow"))
 		{
 			bool enablePCF = (bool)m_primaryUniformData.enableShadowPCF;
@@ -2030,6 +2032,7 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	float* cameraProj						= const_cast<float*>(&m_primaryUniformData.cameraProj.column[0][0]);
 	float* cameraView						= const_cast<float*>(&m_primaryUniformData.cameraView.column[0][0]);
 	float* cameraInvView					= const_cast<float*>(&m_primaryUniformData.cameraInvView.column[0][0]);
+	float* cameraInvProj					= const_cast<float*>(&m_primaryUniformData.cameraInvProj.column[0][0]);
 	float* skyboxModelView					= const_cast<float*>(&m_primaryUniformData.skyboxModelView.column[0][0]);
 	
 	// canceling out translation for skybox rendering
@@ -2048,6 +2051,7 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	std::copy(&cameraProj[0], &cameraProj[16], std::back_inserter(uniformValues));																			// camera projection matrix
 	std::copy(&cameraView[0], &cameraView[16], std::back_inserter(uniformValues));																			// camera view matrix
 	std::copy(&cameraInvView[0], &cameraInvView[16], std::back_inserter(uniformValues));																	// inverse camera view matrix
+	std::copy(&cameraInvProj[0], &cameraInvProj[16], std::back_inserter(uniformValues));																	// inverse camera projection matrix
 	std::copy(&skyboxModelView[0], &skyboxModelView[16], std::back_inserter(uniformValues));																// skybox model view
 	uniformValues.push_back((float)m_primaryUniformData.mousePos[0]);	uniformValues.push_back((float)m_primaryUniformData.mousePos[1]);					// mouse pos
 	uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[0]); uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[1]);			// SSAO noise scale
@@ -2108,7 +2112,6 @@ void CFixedAssets::Destroy(CVulkanRHI* p_rhi)
 
 bool CFixedAssets::Update(CVulkanRHI* p_rhi, const FixedUpdateData& p_updateData)
 {
-	m_fixedBuffers.SetPrimaryUniformData(*p_updateData.primaryUniData);
 	RETURN_FALSE_IF_FALSE(m_fixedBuffers.Update(p_rhi, p_updateData.swapchainIndex));
 	return true;
 }
@@ -2136,7 +2139,8 @@ bool CFixedAssets::CreateSamplers(CVulkanRHI* p_rhi)
 	struct SamplerData { uint32_t id; VkFilter filter; VkImageLayout layout; };
 	std::vector<SamplerData> samplerDataList
 	{
-		{s_Linear, VK_FILTER_LINEAR, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}
+			{s_Linear, VK_FILTER_LINEAR, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}
+		,   {s_Nearest, VK_FILTER_NEAREST, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}
 	};
 
 	for (const auto& samp : samplerDataList)
@@ -2183,8 +2187,10 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 		storeRenderTargetsDesInfoList[STORE_ALBEDO]					= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Albedo).descInfo;
 		storeRenderTargetsDesInfoList[STORE_SSAO_AND_BLUR]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSAO_Blur).descInfo;
 		storeRenderTargetsDesInfoList[STORE_PRIMARY_COLOR]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_PrimaryColor).descInfo;
-		storeRenderTargetsDesInfoList[STORE_ROUGH_METAL_MOTION]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_RoughMetal_Motion).descInfo;
+		storeRenderTargetsDesInfoList[STORE_ROUGH_METAL]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_RoughMetal).descInfo;
+		storeRenderTargetsDesInfoList[STORE_MOTION]					= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Motion).descInfo;
 		storeRenderTargetsDesInfoList[STORE_SS_REFLECTION]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSReflection).descInfo;
+		storeRenderTargetsDesInfoList[STORE_SSR_BLUR]				= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSRBlur).descInfo;
 		storeRenderTargetsDesInfoList[STORE_PREV_PRIMARY_COLOR]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Prev_PrimaryColor).descInfo;
 	}
 
@@ -2208,6 +2214,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 	{
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Gloabl_Uniform,			1,								uniform,		all},			0);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Linear_Sampler,			1,								sampler,		all},			0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Nearest_Sampler,			1,								sampler,		all},			0);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_ObjPicker_Storage,			1,								storage_buf,	fragment},		0);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SSAOKernel_Storage,		1,								storage_buf,	compute,},		0);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_PrimaryRead_TexArray,		CReadOnlyTextures::tr_max,		sampled_img,	compute},		0);
@@ -2219,6 +2226,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 	{
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Gloabl_Uniform,			1,								uniform,		all},			1);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Linear_Sampler,			1,								sampler,		all},			1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Nearest_Sampler,			1,								sampler,		all},			1);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_ObjPicker_Storage,			1,								storage_buf,	fragment},		1);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SSAOKernel_Storage,		1,								storage_buf,	compute},		1);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_PrimaryRead_TexArray,		CReadOnlyTextures::tr_max,		sampled_img,	compute},		1);
@@ -2232,6 +2240,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 	{
 		BindlessWrite(i, BindingDest::bd_Gloabl_Uniform, &fixedBuf->GetBuffer(CFixedBuffers::fb_PrimaryUniform_0 + i).descInfo);
 		BindlessWrite(i, BindingDest::bd_Linear_Sampler, &(*samplers)[s_Linear].descInfo);
+		BindlessWrite(i, BindingDest::bd_Linear_Sampler, &(*samplers)[s_Nearest].descInfo);
 		BindlessWrite(i, BindingDest::bd_ObjPicker_Storage, &fixedBuf->GetBuffer(CFixedBuffers::fb_ObjectPickerWrite).descInfo);
 		BindlessWrite(i, BindingDest::bd_SSAOKernel_Storage, &readonlyBuf->GetBuffer(CReadOnlyBuffers::br_SSAOKernel).descInfo);
 		BindlessWrite(i, BindingDest::bd_PrimaryRead_TexArray, readTexDesInfoList.data(), (uint32_t)readTexDesInfoList.size());
@@ -2437,7 +2446,7 @@ bool CRenderableDebug::CreateDebugDescriptors(CVulkanRHI* p_rhi, const CFixedBuf
 
 bool CRenderableDebug::CreateBoxSphereBuffers(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	std::cout << "Loading Debug Resources" << std::endl;
+	std::clog << "Loading Debug Resources" << std::endl;
 	MeshRaw	debugMeshes;
 	// we are going to instance the bounding boxes
 	// so loading the mesh only once as a template

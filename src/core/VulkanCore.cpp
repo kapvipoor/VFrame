@@ -15,21 +15,21 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsMessengerCallback(VkDebugUtilsMessageSe
 
 	if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
 	{
-		std::cerr << "Vulkan Info: "
+		std::cout << "Vulkan Info: "
 			<< "{" << callback_data->messageIdNumber << "} - "
 			<< "{" << callback_data->pMessageIdName << "}: "
 			<< "{" << callback_data->pMessage << std::endl;
 	}
 	else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
 	{
-		std::cerr << "Vulkan Warning: "
+		std::cout << "Vulkan Warning: "
 			<< "{" << callback_data->messageIdNumber << "} - "
 			<< "{" << callback_data->pMessageIdName << "}: "
 			<< "{" << callback_data->pMessage << std::endl;
 	}
 	else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
 	{
-		std::cerr << "Vulkan Error: "
+		std::cout << "Vulkan Error: "
 			<< "{" << callback_data->messageIdNumber << "} - "
 			<< "{" << callback_data->pMessageIdName << "}: "
 			<< "{" << callback_data->pMessage << std::endl;
@@ -174,7 +174,7 @@ void CVulkanCore::cleanUp()
 	vkDestroySurfaceKHR(m_vkInstance, m_vkSurface, nullptr);
 	vkDestroyDevice(m_vkDevice, nullptr);
 
-#ifdef VULKAN_DEBUG
+#if VULKAN_DEBUG == 1
 	if (m_debugUtilsMessenger != VK_NULL_HANDLE)
 	{
 		PFN_vkDestroyDebugUtilsMessengerEXT pfnvkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_vkInstance, "vkDestroyDebugUtilsMessengerEXT");
@@ -274,7 +274,7 @@ bool CVulkanCore::CreateInstance(const char* p_applicaitonName)
 
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	appInfo.apiVersion = VK_API_VERSION_1_2;
+	appInfo.apiVersion = VK_API_VERSION_1_3;
 	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.pApplicationName = p_applicaitonName;
 
@@ -370,6 +370,7 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 		deviceExtensionList.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 		deviceExtensionList.push_back(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
 		deviceExtensionList.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+		deviceExtensionList.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 		//deviceExtensionList.push_back(VK_NV_RAY_TRACING_EXTENSION_NAME);
 #if VULKAN_DEBUG_MARKERS == 1
 		deviceExtensionList.push_back(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
@@ -413,17 +414,32 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	enabledFeatures.shaderStorageImageReadWithoutFormat					= VK_TRUE;
 	enabledFeatures.shaderStorageImageWriteWithoutFormat				= VK_TRUE;
 	enabledFeatures.vertexPipelineStoresAndAtomics						= VK_TRUE;
+	//enabledFeatures.separateDepthStencilLayouts
 
 	if (enabledFeatures.geometryShader != supportedFeatures.geometryShader &&
 		enabledFeatures.fragmentStoresAndAtomics != supportedFeatures.fragmentStoresAndAtomics)
 	{
-		std::cout << "vkGetPhysicalDeviceFeatures: Requested features not supported by device. " << std::endl;
+		std::cerr << "CVulkanCore::CreateDevice Error: vkGetPhysicalDeviceFeatures: Requested features not supported by device. " << std::endl;
 		return false;
 	}
 
+	// Enable support for separate depth and stencil buffers
+	VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures separateDepthStencilFeatures{};
+	separateDepthStencilFeatures.sType									= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES_KHR;
+	separateDepthStencilFeatures.separateDepthStencilLayouts			= true;
+	separateDepthStencilFeatures.pNext									= nullptr;
+
+
+	// Enable support for dynamic rendering
+	VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
+	dynamicRenderingFeatures.sType										= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+	dynamicRenderingFeatures.dynamicRendering							= VK_TRUE;
+	dynamicRenderingFeatures.pNext										= &separateDepthStencilFeatures;
+
 	// Enable support for bindless
 	VkPhysicalDeviceDescriptorIndexingFeaturesEXT bindlessDescFeatures{};
-	bindlessDescFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+	bindlessDescFeatures.sType											= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+	bindlessDescFeatures.pNext											= &dynamicRenderingFeatures;
 	bindlessDescFeatures.shaderSampledImageArrayNonUniformIndexing		= VK_TRUE;
 	bindlessDescFeatures.runtimeDescriptorArray							= VK_TRUE;
 	bindlessDescFeatures.descriptorBindingVariableDescriptorCount		= VK_TRUE;
@@ -921,6 +937,21 @@ void CVulkanCore::SetScissors(VkCommandBuffer p_cmdBfr, uint32_t p_offX, uint32_
 	vkCmdSetScissor(p_cmdBfr, 0, 1, &l_vkScissor);
 }
 
+bool CVulkanCore::HasStencilComponent(VkFormat p_format)
+{
+	switch (p_format)
+	{
+	case VK_FORMAT_S8_UINT:
+	case VK_FORMAT_D16_UNORM_S8_UINT:
+	case VK_FORMAT_D24_UNORM_S8_UINT:
+	case VK_FORMAT_D32_SFLOAT_S8_UINT:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
 bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipeline& pData, std::string p_debugName)
 {
 	pData.vertexShader = VK_NULL_HANDLE;
@@ -1016,24 +1047,45 @@ bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipel
 	multisampleCreateInfo.alphaToCoverageEnable = VK_FALSE;
 	multisampleCreateInfo.alphaToOneEnable		= VK_FALSE;
 
-	Renderpass rpData = pData.renderpassData;
+	Renderpass rpData									= pData.renderpassData;
+	uint32_t colorAttachCount							= (uint32_t)rpData.colorAttachmentRefList.size();
+
+	bool useDynamicRendering							= false;
+	VkPipelineRenderingCreateInfoKHR pipelineRenderingInfo = VkPipelineRenderingCreateInfoKHR{};
+	if (!pData.colorAttachFormats.empty())
+	{
+		useDynamicRendering								= true;
+		pData.renderpassData.renderpass					= VK_NULL_HANDLE;
+		colorAttachCount								= (uint32_t)pData.colorAttachFormats.size();
+
+		pipelineRenderingInfo.sType						= VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+		pipelineRenderingInfo.pNext						= nullptr;
+		pipelineRenderingInfo.viewMask					= 0;
+		pipelineRenderingInfo.colorAttachmentCount		= (uint32_t)pData.colorAttachFormats.size();
+		pipelineRenderingInfo.pColorAttachmentFormats	= pipelineRenderingInfo.colorAttachmentCount > 0 ? pData.colorAttachFormats.data() : nullptr;
+		pipelineRenderingInfo.depthAttachmentFormat		= pData.depthAttachFormat;
+		pipelineRenderingInfo.stencilAttachmentFormat	= HasStencilComponent(pipelineRenderingInfo.depthAttachmentFormat) ? pipelineRenderingInfo.depthAttachmentFormat : VK_FORMAT_UNDEFINED;
+	}
+	
+	bool isDepthAttached = (!useDynamicRendering && rpData.isDepthAttached()) ||
+		(useDynamicRendering && pData.depthAttachFormat != VK_FORMAT_UNDEFINED);
+
 	VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
 	depthStencilInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	if (rpData.isDepthAttached() == true)
+	if (isDepthAttached)
 	{
-		depthStencilInfo.flags					= 0;
-		depthStencilInfo.depthTestEnable		= pData.enableDepthTest; //VK_TRUE;
-		depthStencilInfo.depthWriteEnable		= pData.enableDepthWrite; //VK_TRUE;
-		depthStencilInfo.depthCompareOp			= pData.depthCmpOp;
-		depthStencilInfo.depthBoundsTestEnable	= VK_FALSE;
-		depthStencilInfo.stencilTestEnable		= VK_FALSE;
-		depthStencilInfo.back.failOp			= VK_STENCIL_OP_KEEP;
-		depthStencilInfo.back.passOp			= VK_STENCIL_OP_KEEP;
-		depthStencilInfo.back.compareOp			= VK_COMPARE_OP_ALWAYS;
-		depthStencilInfo.front					= depthStencilInfo.back;
+		depthStencilInfo.flags							= 0;
+		depthStencilInfo.depthTestEnable				= pData.enableDepthTest; //VK_TRUE;
+		depthStencilInfo.depthWriteEnable				= pData.enableDepthWrite; //VK_TRUE;
+		depthStencilInfo.depthCompareOp					= pData.depthCmpOp;
+		depthStencilInfo.depthBoundsTestEnable			= VK_FALSE;
+		depthStencilInfo.stencilTestEnable				= VK_FALSE;
+		depthStencilInfo.back.failOp					= VK_STENCIL_OP_KEEP;
+		depthStencilInfo.back.passOp					= VK_STENCIL_OP_KEEP;
+		depthStencilInfo.back.compareOp					= VK_COMPARE_OP_ALWAYS;
+		depthStencilInfo.front							= depthStencilInfo.back;
 	}
-
-	uint32_t colorAttachCount = (uint32_t)rpData.colorAttachmentRefList.size();
+	
 	std::vector<VkPipelineColorBlendAttachmentState> colorBlendState(colorAttachCount, VkPipelineColorBlendAttachmentState{});
 	VkPipelineColorBlendStateCreateInfo colorBlendCreateInfo{};
 	if (colorAttachCount > 0) // color attachment are in use
@@ -1071,6 +1123,7 @@ bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipel
 	dynamicCreateInfo.pDynamicStates			= dynamicState;
 
 	VkGraphicsPipelineCreateInfo gfxPipelineCreateInfo{};
+	gfxPipelineCreateInfo.pNext					= useDynamicRendering ? &pipelineRenderingInfo : nullptr;
 	gfxPipelineCreateInfo.sType					= VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	gfxPipelineCreateInfo.stageCount			= (uint32_t)shaderStageCreateInfo.size();
 	gfxPipelineCreateInfo.pStages				= shaderStageCreateInfo.data();
@@ -1218,7 +1271,7 @@ bool CVulkanCore::BeginCommandBuffer(VkCommandBuffer& p_cmdBfr, const char* p_de
 	VkResult res = vkBeginCommandBuffer(p_cmdBfr, &l_cmdBufferBeginInfo);
 	if (res != VK_SUCCESS)
 	{
-		std::cerr << "vkBeginCommandBuffer failed: " << res << std::endl;
+		std::cerr << "vkBeginCommandBuffer failed: " << p_debugMarker <<" : " << res << std::endl;
 		return false;
 	}
 	BeginDebugMarker(p_cmdBfr, p_debugMarker);
@@ -1275,19 +1328,36 @@ bool CVulkanCore::WaitToFinish(VkQueue p_queue)
 	return true;
 }
 
-void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr)
+void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr, int p_baseMipLevel)
 {
-	p_image.descInfo.imageLayout = p_new;
-	if (p_new == p_image.curLayout)
-		return;
+	if (p_baseMipLevel < 0)
+	{
+		for (uint32_t i = 0; i < p_image.GetLevelCount(); i++)
+		{
+			p_image.descInfo.imageLayout = p_new;
+			if (p_new == p_image.curLayout[i])
+				return;
 
-	IssueImageLayoutBarrier(p_image.curLayout, p_new, p_image.layerCount, p_image.image, p_image.usage, p_cmdBfr);
-	p_image.curLayout = p_new;
+			IssueImageLayoutBarrier(p_image.curLayout[i], p_new, 1, 1, p_image.image, p_image.usage, p_cmdBfr, i, HasStencilComponent(p_image.format));
+			p_image.curLayout[i] = p_new;
+		}
+	}
+	else
+	{
+		p_image.descInfo.imageLayout = p_new;
+		if (p_new == p_image.curLayout[p_baseMipLevel])
+			return;
+
+		IssueImageLayoutBarrier(p_image.curLayout[p_baseMipLevel], p_new, 1, 1, p_image.image, p_image.usage, p_cmdBfr, (uint32_t)p_baseMipLevel, HasStencilComponent(p_image.format));
+		p_image.curLayout[p_baseMipLevel] = p_new;
+	}	
 }
 
 void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_new, 
-											uint32_t layerCount, VkImage& p_image, VkImageUsageFlags p_usage,
-											VkCommandBuffer p_cmdBfr)
+											uint32_t p_layerCount, uint32_t p_levelCount, 
+											VkImage& p_image, VkImageUsageFlags p_usage,
+											VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel,
+											bool p_hasStencil)
 {
 	VkImageMemoryBarrier imgMemBarrier{};
 	imgMemBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1300,13 +1370,16 @@ void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_
 	// setting affected image and specified part
 	imgMemBarrier.image = p_image;
 	imgMemBarrier.subresourceRange.baseArrayLayer = 0;
-	imgMemBarrier.subresourceRange.levelCount = 1;
-	imgMemBarrier.subresourceRange.layerCount = layerCount;
-	imgMemBarrier.subresourceRange.baseMipLevel = 0;
+	imgMemBarrier.subresourceRange.levelCount = p_levelCount;
+	imgMemBarrier.subresourceRange.layerCount = p_layerCount;
+	imgMemBarrier.subresourceRange.baseMipLevel = p_baseMipLevel;
 	
 	if (p_usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
 	{
-		imgMemBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		imgMemBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+		if(p_hasStencil)
+			imgMemBarrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
 	}
 	else
 	{
@@ -1349,6 +1422,7 @@ void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_
 
 	case VK_IMAGE_LAYOUT_GENERAL:
 	case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+	case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL:
 	case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
 	case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
 		imgMemBarrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
@@ -1358,6 +1432,11 @@ void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_
 	case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
 		imgMemBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 		dst = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		break;
+
+	case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+		imgMemBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+		dst = VK_PIPELINE_STAGE_TRANSFER_BIT;
 		break;
 
 	default:
@@ -1482,7 +1561,8 @@ bool CVulkanCore::BindImageMemory(VkImage& p_image, VkDeviceMemory& p_devMem)
 
 }
 
-bool CVulkanCore::CreateImagView(VkImageUsageFlags p_usage, VkImage p_image, VkFormat p_format, VkImageViewType p_viewType, VkImageView& p_imgView)
+bool CVulkanCore::CreateImagView(VkImageUsageFlags p_usage, VkImage p_image, VkFormat p_format, 
+	VkImageViewType p_viewType, uint32_t p_levelCount, VkImageView& p_imgView)
 {
 	VkImageAspectFlags aspectFlag = VK_IMAGE_ASPECT_COLOR_BIT;
 	if (p_usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
@@ -1499,7 +1579,7 @@ bool CVulkanCore::CreateImagView(VkImageUsageFlags p_usage, VkImage p_image, VkF
 	imgviewCreateInfo.subresourceRange.baseMipLevel = 0;
 	imgviewCreateInfo.subresourceRange.layerCount = (p_viewType == VK_IMAGE_VIEW_TYPE_CUBE) ? 6 : 1;
 	imgviewCreateInfo.subresourceRange.baseArrayLayer = 0;
-	imgviewCreateInfo.subresourceRange.levelCount = 1;
+	imgviewCreateInfo.subresourceRange.levelCount = p_levelCount;
 	VkResult res = vkCreateImageView(m_vkDevice, &imgviewCreateInfo, nullptr, &p_imgView);
 	if (res != VK_SUCCESS)
 	{
@@ -1547,6 +1627,21 @@ void CVulkanCore::CopyImage(VkCommandBuffer p_cmdBfr, VkImage p_src, VkImageLayo
 	vkCmdCopyImage(p_cmdBfr, p_src, p_srclayout, p_dest, p_destLayout, 1, &imageCopyRegion);
 }
 
+void CVulkanCore::BlitImage(VkCommandBuffer p_cmdBfr, VkImageBlit p_imgBlit, VkImage p_srcImage, 
+	VkImageLayout p_srcImageLayout, VkImage p_dstImage, VkImageLayout p_dstImageLayout, VkFormat p_imgForamt)
+{
+	// Check for device support for Linear Blitting
+	VkFormatProperties props{};
+	vkGetPhysicalDeviceFormatProperties(m_vkPhysicalDevice, p_imgForamt,&props);
+	if (!(props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
+	{
+		std::cerr << "CVulkanCore::BlitImage Filed since physical device does not support Linear Filtering on Blit operation" << std::endl; 
+		return;
+	}
+
+	vkCmdBlitImage(p_cmdBfr, p_srcImage, p_srcImageLayout, p_dstImage, p_dstImageLayout, 1, &p_imgBlit, VK_FILTER_LINEAR);
+}
+
 bool CVulkanCore::CreateSampler(Sampler& p_sampler)
 {
 	VkSamplerCreateInfo samplerInfo{};
@@ -1575,12 +1670,12 @@ bool CVulkanCore::CreateSampler(Sampler& p_sampler)
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	samplerInfo.mipLodBias = 0.0f;
 	samplerInfo.minLod = 0.0f;
-	samplerInfo.maxLod = 1.0f;
+	samplerInfo.maxLod = 100.0f;
 
 	VkResult res = vkCreateSampler(m_vkDevice, &samplerInfo, nullptr, &p_sampler.descInfo.sampler);
 	if (res != VK_SUCCESS)
 	{
-		std::cout << "vkCreateSampler failed: " << res << std::endl;
+		std::cerr << "CVulkanCore::CreateSampler: vkCreateSampler failed: " << res << std::endl;
 		return false;
 	}
 
@@ -1676,7 +1771,7 @@ bool CVulkanCore::FlushMemoryRanges(std::vector<VkMappedMemoryRange>* p_memRange
 {
 	if (p_memRanges == nullptr)
 	{
-		std::cout << "FlushMemoryRanges failed becasue p_memRanges is nullptr " << std::endl;
+		std::cerr << "CVulkanCore::FlushMemoryRanges Error: FlushMemoryRanges failed becasue p_memRanges is nullptr " << std::endl;
 		return false;
 	}
 
@@ -1686,7 +1781,7 @@ bool CVulkanCore::FlushMemoryRanges(std::vector<VkMappedMemoryRange>* p_memRange
 		VkResult res = vkFlushMappedMemoryRanges(m_vkDevice, 1, &mapped);
 		if (res != VK_SUCCESS)
 		{
-			std::cout << "CVulkanCore::FlushMemoryRanges " << mapped.size << std::endl;
+			std::cerr << "CVulkanCore::FlushMemoryRanges Error: CVulkanCore::FlushMemoryRanges " << mapped.size << std::endl;
 			return false;
 		}
 	}
@@ -1808,20 +1903,20 @@ bool CVulkanCore::ListAvailableInstanceLayers(std::vector<const char*> reqList)
 		return false;
 	}
 
-	std::cerr << "listing supported instance layers" << std::endl;
+	std::cout << "listing supported instance layers" << std::endl;
 	for (auto& layer : supportedLayerPropList)
 	{
-		std::cerr << "	" << layer.layerName;
+		std::cout << "	" << layer.layerName;
 
 		for (auto& reqExtn : reqList)
 		{
 			if (std::strcmp(reqExtn, layer.layerName) == 0)
 			{
-				std::cerr << "----------------------------LOADED";
+				std::cout << "----------------------------LOADED";
 			}
 		}
 
-		std::cerr << std::endl;
+		std::cout << std::endl;
 	}
 
 	return true;
@@ -1846,20 +1941,20 @@ bool CVulkanCore::ListAvailableInstanceExtensions(std::vector<const char*> reqLi
 		return false;
 	}
 
-	std::cerr << "listing supported instance extensions" << std::endl;
+	std::cout << "listing supported instance extensions" << std::endl;
 	for (auto& exten : supportedInstanceExtensionList)
 	{
-		std::cerr << "	" << exten.extensionName;
+		std::cout << "	" << exten.extensionName;
 
 		for (auto& reqExtn : reqList)
 		{
 			if (std::strcmp(reqExtn, exten.extensionName) == 0)
 			{
-				std::cerr << "----------------------------LOADED";
+				std::cout << "----------------------------LOADED";
 			}
 		}
 
-		std::cerr << std::endl;
+		std::cout << std::endl;
 	}
 
 	return true;

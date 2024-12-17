@@ -3,7 +3,7 @@
 #include "PostProcessingPasses.h"
 
 CToneMapPass::CToneMapPass(CVulkanRHI* p_rhi)
-    : CPass(p_rhi)
+    : CStaticRenderPass(p_rhi)
     , CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
     , m_toneMapper(ToneMapper::AMD)
     , m_exposure(1.0f)
@@ -50,7 +50,7 @@ bool CToneMapPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
     m_pipeline.enableDepthWrite = false;
     if (!m_rhi->CreateGraphicsPipeline(uiShaderpaths, m_pipeline, "TonemapGfxPipeline"))
     {
-        std::cout << "Error Creating Tone Mapping Pipeline" << std::endl;
+        std::cerr << "CToneMapPass::CreatePipeline Error: Error Creating Tone Mapping Pipeline" << std::endl;
         return false;
     }
 
@@ -59,6 +59,9 @@ bool CToneMapPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 
 bool CToneMapPass::Update(UpdateData* p_updateData)
 {
+    p_updateData->uniformData->toneMappingSelection = (float)m_toneMapper;
+    p_updateData->uniformData->toneMappingExposure = m_exposure;
+
     return true;
 }
 
@@ -70,41 +73,34 @@ bool CToneMapPass::Render(RenderData* p_renderData)
     const CRenderableUI* ui = p_renderData->loadedAssets->GetUI();
     const CPrimaryDescriptors* primaryDesc = p_renderData->primaryDescriptors;
 
-    RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Tone Mapping"));
+    //RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Tone Mapping"));
+    {
 
-    m_rhi->SetClearColorValue(renderPass, 0, VkClearColorValue{ 0.0f, 0.0f, 0.0f, 1.00f });
-    m_rhi->BeginRenderpass(m_frameBuffer[p_renderData->scIdx], renderPass, cmdBfr);
+        m_rhi->SetClearColorValue(renderPass, 0, VkClearColorValue{ 0.0f, 0.0f, 0.0f, 1.00f });
+        m_rhi->BeginRenderpass(m_frameBuffer[p_renderData->scIdx], renderPass, cmdBfr);
 
-    m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, (float)renderPass.framebufferHeight);
-    m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
+        m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, (float)renderPass.framebufferHeight);
+        m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
 
-    vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
-    vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-    vkCmdDraw(cmdBfr, 3, 1, 0, 0);
-    m_rhi->EndRenderPass(cmdBfr);
+        vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
+        vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+        vkCmdDraw(cmdBfr, 3, 1, 0, 0);
+        m_rhi->EndRenderPass(cmdBfr);
 
-    m_rhi->InsertMarker(cmdBfr, "Resources Copy/Clear");
+        m_rhi->InsertMarker(cmdBfr, "Resources Copy/Clear");
 
-    CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
-    CVulkanRHI::Image prevColorlRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Prev_PrimaryColor);
-    m_rhi->CopyImage(cmdBfr, colorRT, prevColorlRT);
+        CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
+        CVulkanRHI::Image prevColorlRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Prev_PrimaryColor);
+        m_rhi->CopyImage(cmdBfr, colorRT, prevColorlRT);
 
-    VkClearValue clear{};
-    clear.color = { 0.0, 0.0, 0.0, 1.0 };
-    CVulkanRHI::Image ssrRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_SSReflection);
-    m_rhi->ClearImage(cmdBfr, ssrRT, clear);
-
-    m_rhi->EndCommandBuffer(cmdBfr);
+        VkClearValue clear{};
+        clear.color = { 0.0, 0.0, 0.0, 1.0 };
+        CVulkanRHI::Image ssrRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_SSReflection);
+        m_rhi->ClearImage(cmdBfr, ssrRT, clear);
+    }
+    //m_rhi->EndCommandBuffer(cmdBfr);
 
     return true;
-}
-
-void CToneMapPass::Destroy()
-{
-    m_rhi->DestroyFramebuffer(m_frameBuffer[0]);
-    m_rhi->DestroyFramebuffer(m_frameBuffer[1]);
-    m_rhi->DestroyRenderpass(m_pipeline.renderpassData.renderpass);
-    m_rhi->DestroyPipeline(m_pipeline);
 }
 
 void CToneMapPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
@@ -134,7 +130,7 @@ void CToneMapPass::Show(CVulkanRHI* p_rhi)
 }
 
 CTAAComputePass::CTAAComputePass(CVulkanRHI* p_rhi)
-    : CPass(p_rhi)
+    : CComputePass(p_rhi)
     , CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
     , m_activeJitterMode(CJitterHelper::JitterMode::Hammersley16x)
     , m_resolveWeight(0.93f)
@@ -142,20 +138,12 @@ CTAAComputePass::CTAAComputePass(CVulkanRHI* p_rhi)
     , m_flickerCorrectionMode(FlickerCorrection::None)
     , m_reprojectionFilter(ReprojectionFilter::Standard)
 {
-    m_frameBuffer.resize(1);
-    //m_isEnabled = false; // for now disabling it by default
-	m_jitterHelper = new CJitterHelper(m_activeJitterMode);
+    m_jitterHelper = new CJitterHelper(m_activeJitterMode);
 }
 
 CTAAComputePass::~CTAAComputePass()
 {
 	delete m_jitterHelper;
-}
-
-bool CTAAComputePass::CreateRenderpass(RenderData*)
-{
-    // compute pass, no render pass to create
-    return true;
 }
 
 bool CTAAComputePass::CreatePipeline(CVulkanRHI::Pipeline p_Pipeline)
@@ -169,12 +157,17 @@ bool CTAAComputePass::CreatePipeline(CVulkanRHI::Pipeline p_Pipeline)
     return true;
 }
 
-bool CTAAComputePass::Update(UpdateData*)
+bool CTAAComputePass::Update(UpdateData* p_updateData)
 {
+    p_updateData->uniformData->taaResolveWeight         = m_resolveWeight;
+    p_updateData->uniformData->taaUseMotionVectors      = m_useMotionVectors;
+    p_updateData->uniformData->taaFlickerCorectionMode  = (float)m_flickerCorrectionMode;
+    p_updateData->uniformData->taaReprojectionFilter    = (float)m_reprojectionFilter;
+
     return true;
 }
 
-bool CTAAComputePass::Render(RenderData* p_renderData)
+bool CTAAComputePass::Dispatch(RenderData* p_renderData)
 {
     uint32_t scId = p_renderData->scIdx;
     CVulkanRHI::CommandBuffer cmdBfr = p_renderData->cmdBfr;
@@ -182,27 +175,15 @@ bool CTAAComputePass::Render(RenderData* p_renderData)
     uint32_t dispatchDim_x = m_rhi->GetRenderWidth() / THREAD_GROUP_SIZE_X;
     uint32_t dispatchDim_y = m_rhi->GetRenderHeight() / THREAD_GROUP_SIZE_Y;
     
-    if (!m_rhi->BeginCommandBuffer(cmdBfr, "Compute TAA"))
-        return false;
-    
-    vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeline);
-    vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-    vkCmdDispatch(cmdBfr, dispatchDim_x, dispatchDim_y, 1);
-    
-    m_rhi->EndCommandBuffer(cmdBfr);
+    //if (!m_rhi->BeginCommandBuffer(cmdBfr, "Compute TAA"))
+    {
+        vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeline);
+        vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+        vkCmdDispatch(cmdBfr, dispatchDim_x, dispatchDim_y, 1);
+    }    
+    //m_rhi->EndCommandBuffer(cmdBfr);
 
     return true;
-}
-
-void CTAAComputePass::Destroy()
-{
-    m_rhi->DestroyPipeline(m_pipeline);
-}
-
-void CTAAComputePass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
-{
-    p_vertexBinding.attributeDescription = m_pipeline.vertexAttributeDesc;
-    p_vertexBinding.bindingDescription = m_pipeline.vertexInBinding;
 }
 
 void CTAAComputePass::Show(CVulkanRHI* p_rhi)
