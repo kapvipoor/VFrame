@@ -110,44 +110,46 @@ bool CStaticShadowPrepass::Render(RenderData* p_renderData)
 	const CScene* scene										= p_renderData->loadedAssets->GetScene();
 	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
 
-	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(p_renderData->cmdBfr, "Shadow Map Generation"));
-	m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, p_renderData->cmdBfr);
-
-	uint32_t fbWidth										= renderPass.framebufferWidth;
-	uint32_t fbHeight										= renderPass.framebufferHeight;
-	m_rhi->SetViewport(p_renderData->cmdBfr, 0.0f, 1.0f, (float)fbWidth, (float)fbHeight);
-	m_rhi->SetScissors(p_renderData->cmdBfr, 0, 0, fbWidth, fbHeight);
-
-	vkCmdBindPipeline(p_renderData->cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
-	vkCmdBindDescriptorSets(p_renderData->cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-	vkCmdBindDescriptorSets(p_renderData->cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
-
-	// Bind Index and Vertices buffers
-	VkDeviceSize offsets[1] = { 0 };
-	for (unsigned int i = CScene::MeshType::mt_Scene; i < scene->GetRenderableMeshCount(); i++)
+	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(p_renderData->cmdBfr, "Shadow Map Generation"));
 	{
-		const CRenderableMesh* mesh							= scene->GetRenderableMesh(i);
-		const CVulkanRHI::Buffer* vertex					= mesh->GetVertexBuffer();
-		const CVulkanRHI::Buffer* index						= mesh->GetIndexBuffer();
+		m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, p_renderData->cmdBfr);
 
-		vkCmdBindVertexBuffers(p_renderData->cmdBfr, 0, 1, &vertex->descInfo.buffer, offsets);
-		vkCmdBindIndexBuffer(p_renderData->cmdBfr, index->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+		uint32_t fbWidth = renderPass.framebufferWidth;
+		uint32_t fbHeight = renderPass.framebufferHeight;
+		m_rhi->SetViewport(p_renderData->cmdBfr, 0.0f, 1.0f, (float)fbWidth, (float)fbHeight);
+		m_rhi->SetScissors(p_renderData->cmdBfr, 0, 0, fbWidth, fbHeight);
 
-		for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
+		vkCmdBindPipeline(p_renderData->cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
+		vkCmdBindDescriptorSets(p_renderData->cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+		vkCmdBindDescriptorSets(p_renderData->cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
+
+		// Bind Index and Vertices buffers
+		VkDeviceSize offsets[1] = { 0 };
+		for (unsigned int i = CScene::MeshType::mt_Scene; i < scene->GetRenderableMeshCount(); i++)
 		{
-			const SubMesh* submesh			= mesh->GetSubmesh(j);
-			VkPipelineStageFlags vertex_frag				= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-			CScene::MeshPushConst pc{ mesh->GetMeshId(), submesh->materialId};
-			
-			vkCmdPushConstants(p_renderData->cmdBfr, m_pipeline.pipeLayout, vertex_frag, 0, sizeof(CScene::MeshPushConst), (void*)&pc);
+			const CRenderableMesh* mesh = scene->GetRenderableMesh(i);
+			const CVulkanRHI::Buffer* vertex = mesh->GetVertexBuffer();
+			const CVulkanRHI::Buffer* index = mesh->GetIndexBuffer();
 
-			//uint32_t count = (uint32_t)mesh.indexBuffer.descInfo.range / sizeof(uint32_t);
-			vkCmdDrawIndexed(p_renderData->cmdBfr, submesh->indexCount, 1, submesh->firstIndex, 0, 1);
+			vkCmdBindVertexBuffers(p_renderData->cmdBfr, 0, 1, &vertex->descInfo.buffer, offsets);
+			vkCmdBindIndexBuffer(p_renderData->cmdBfr, index->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+			for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
+			{
+				const SubMesh* submesh = mesh->GetSubmesh(j);
+				VkPipelineStageFlags vertex_frag = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+				CScene::MeshPushConst pc{ mesh->GetMeshId(), submesh->materialId };
+
+				vkCmdPushConstants(p_renderData->cmdBfr, m_pipeline.pipeLayout, vertex_frag, 0, sizeof(CScene::MeshPushConst), (void*)&pc);
+
+				//uint32_t count = (uint32_t)mesh.indexBuffer.descInfo.range / sizeof(uint32_t);
+				vkCmdDrawIndexed(p_renderData->cmdBfr, submesh->indexCount, 1, submesh->firstIndex, 0, 1);
+			}
 		}
-	}
 
-	m_rhi->EndRenderPass(p_renderData->cmdBfr);
-	m_rhi->EndCommandBuffer(p_renderData->cmdBfr);
+		m_rhi->EndRenderPass(p_renderData->cmdBfr);
+	}
+	//m_rhi->EndCommandBuffer(p_renderData->cmdBfr);
 
 	return true;
 }

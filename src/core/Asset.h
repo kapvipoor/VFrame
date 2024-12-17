@@ -165,7 +165,7 @@ public:
 
 	void DestroyTextures(CVulkanRHI* p_rhi);
 
-	void IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id);
+	void IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id, int p_mipLevel = -1);
 
 	const CVulkanRHI::Image& GetTexture(uint32_t p_id) { return m_textures[p_id]; }
 	const CVulkanRHI::Image GetTexture(uint32_t p_id) const { return m_textures[p_id]; }
@@ -261,10 +261,10 @@ public:
 		, rt_SSAO_Blur				= 4
 		, rt_DirectionalShadowDepth	= 5
 		, rt_PrimaryColor			= 6
-		, rt_ColorBlur				= 7
-		, rt_RoughMetal				= 8
-		, rt_Motion					= 9
-		, rt_SSReflection			= 10
+		, rt_RoughMetal				= 7
+		, rt_Motion					= 8
+		, rt_SSReflection			= 9
+		, rt_SSRBlur				= 10
 		, rt_Prev_PrimaryColor		= 11
 		, rt_max
 	};

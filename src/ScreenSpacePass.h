@@ -2,6 +2,18 @@
 
 #include "Pass.h"
 
+class CSSRBlurPass : public CComputePass
+{
+public:
+	CSSRBlurPass(CVulkanRHI*);
+	~CSSRBlurPass();
+
+	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
+
+	virtual bool Update(UpdateData*) override;
+	virtual bool Dispatch(RenderData*) override;
+};
+
 class CSSAOComputePass : public CComputePass, CUIParticipant
 {
 public:

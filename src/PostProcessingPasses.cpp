@@ -73,31 +73,32 @@ bool CToneMapPass::Render(RenderData* p_renderData)
     const CRenderableUI* ui = p_renderData->loadedAssets->GetUI();
     const CPrimaryDescriptors* primaryDesc = p_renderData->primaryDescriptors;
 
-    RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Tone Mapping"));
+    //RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Tone Mapping"));
+    {
 
-    m_rhi->SetClearColorValue(renderPass, 0, VkClearColorValue{ 0.0f, 0.0f, 0.0f, 1.00f });
-    m_rhi->BeginRenderpass(m_frameBuffer[p_renderData->scIdx], renderPass, cmdBfr);
+        m_rhi->SetClearColorValue(renderPass, 0, VkClearColorValue{ 0.0f, 0.0f, 0.0f, 1.00f });
+        m_rhi->BeginRenderpass(m_frameBuffer[p_renderData->scIdx], renderPass, cmdBfr);
 
-    m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, (float)renderPass.framebufferHeight);
-    m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
+        m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, (float)renderPass.framebufferHeight);
+        m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
 
-    vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
-    vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-    vkCmdDraw(cmdBfr, 3, 1, 0, 0);
-    m_rhi->EndRenderPass(cmdBfr);
+        vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
+        vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+        vkCmdDraw(cmdBfr, 3, 1, 0, 0);
+        m_rhi->EndRenderPass(cmdBfr);
 
-    m_rhi->InsertMarker(cmdBfr, "Resources Copy/Clear");
+        m_rhi->InsertMarker(cmdBfr, "Resources Copy/Clear");
 
-    CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
-    CVulkanRHI::Image prevColorlRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Prev_PrimaryColor);
-    m_rhi->CopyImage(cmdBfr, colorRT, prevColorlRT);
+        CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
+        CVulkanRHI::Image prevColorlRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Prev_PrimaryColor);
+        m_rhi->CopyImage(cmdBfr, colorRT, prevColorlRT);
 
-    VkClearValue clear{};
-    clear.color = { 0.0, 0.0, 0.0, 1.0 };
-    CVulkanRHI::Image ssrRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_SSReflection);
-    m_rhi->ClearImage(cmdBfr, ssrRT, clear);
-
-    m_rhi->EndCommandBuffer(cmdBfr);
+        VkClearValue clear{};
+        clear.color = { 0.0, 0.0, 0.0, 1.0 };
+        CVulkanRHI::Image ssrRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_SSReflection);
+        m_rhi->ClearImage(cmdBfr, ssrRT, clear);
+    }
+    //m_rhi->EndCommandBuffer(cmdBfr);
 
     return true;
 }
@@ -174,14 +175,13 @@ bool CTAAComputePass::Dispatch(RenderData* p_renderData)
     uint32_t dispatchDim_x = m_rhi->GetRenderWidth() / THREAD_GROUP_SIZE_X;
     uint32_t dispatchDim_y = m_rhi->GetRenderHeight() / THREAD_GROUP_SIZE_Y;
     
-    if (!m_rhi->BeginCommandBuffer(cmdBfr, "Compute TAA"))
-        return false;
-    
-    vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeline);
-    vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-    vkCmdDispatch(cmdBfr, dispatchDim_x, dispatchDim_y, 1);
-    
-    m_rhi->EndCommandBuffer(cmdBfr);
+    //if (!m_rhi->BeginCommandBuffer(cmdBfr, "Compute TAA"))
+    {
+        vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeline);
+        vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+        vkCmdDispatch(cmdBfr, dispatchDim_x, dispatchDim_y, 1);
+    }    
+    //m_rhi->EndCommandBuffer(cmdBfr);
 
     return true;
 }

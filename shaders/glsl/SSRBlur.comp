@@ -3,13 +3,24 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 #extension GL_GOOGLE_include_directive : enable
-#extension GL_EXT_nonuniform_qualifier : require
 
 #include "Common.h"
 
-layout (location = 0) in vec2 inUV;
+bool CheckBounds(ivec2 offset)
+{
+    if(offset.x < 0 || offset.x >= RENDER_RESOLUTION_X || 
+        offset.y < 0 || offset.y >= RENDER_RESOLUTION_Y)
+    {
+        return false;
+    }
 
-layout (location = 0) out vec4 outFragColor;
+    return true;
+}
+
+vec3 Reinhard(vec3 color)
+{
+    return color / (color + vec3(1.0));
+}
 
 //--------------------------------------------------------------------------------------
 // Timothy Lottes tone mapper
@@ -74,43 +85,26 @@ vec3 TimothyTonemapper(vec3 color)
     return color;
 }
 
-vec3 Reinhard(vec3 color)
-{
-    return color / (color + vec3(1.0));
-}
-
+layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) in;
 void main()
-{    
-    vec3 color = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_COLOR], g_LinearSampler), inUV).xyz;
+{
+    ivec2 xy                   = ivec2(gl_GlobalInvocationID.xy);
+    vec3 result                = vec3(0.0);
 
-    if(g_Info.enabelSSAO == 1)
-	{
-		float ssaoFactor = imageLoad(g_RT_StorageImages[STORE_SSAO_AND_BLUR], ivec2(gl_FragCoord.xy)).y;
-        color *=  ssaoFactor;
-	}
-
-    if(g_Info.ssrEnabled == 1)
+    int sampleCount = 0;
+    for(int i = -2; i <= 2; i++)
     {
-        vec4 reflectedColor = texture(sampler2D(g_RT_SampledImages[SAMPLE_SS_REFLECTION], g_LinearSampler), inUV).xyzw;
-        if(reflectedColor.w < 0.8)
+        for(int j = -2; j <= 2; j++)
         {
-            reflectedColor.xyz = texture(sampler2D(g_RT_SampledImages[SAMPLE_SSR_BLUR], g_LinearSampler), inUV).xyz;
+            ivec2 offset       = xy + ivec2(i, j);
+
+            if(!CheckBounds(offset))
+                continue;
+
+            result    += TimothyTonemapper(imageLoad(g_RT_StorageImages[STORE_SS_REFLECTION], offset).xyz);
+            sampleCount++;
         }
-        
-        color += mix(vec3(0.0), reflectedColor.xyz, reflectedColor.w);
     }
-
-    // Applying Exposure
-    color *= g_Info.toneMappingExposure;
-
-    // Tonemapping (moving from HDR to LDR)
-	if(g_Info.toneMapperSelect == 1)
-        color = Reinhard(color);
-    else if(g_Info.toneMapperSelect == 2)
-        color = TimothyTonemapper(color);
-    	
-    // Gamma Correction because all light calculation is in sRGB and not linear
-	color = pow(color, vec3(1.0/2.2));
-
-    outFragColor = vec4(color, 1.0);
+    result                      = result / sampleCount;
+    imageStore(g_RT_StorageImages[STORE_SSR_BLUR], xy, vec4(result, 1.0));
 }

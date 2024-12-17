@@ -32,6 +32,7 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_forwardPass			= new CForwardPass(m_rhi);
 	m_deferredPass			= new CDeferredPass(m_rhi);
 	m_deferredLightPass		= new CDeferredLightingPass(m_rhi);
+	m_ssrBlurPass			= new CSSRBlurPass(m_rhi);
 	m_ssaoComputePass		= new CSSAOComputePass(m_rhi);
 	m_ssaoBlurPass			= new CSSAOBlurPass(m_rhi);
 	m_ssrComputePass		= new CSSRComputePass(m_rhi);
@@ -41,12 +42,10 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_taaComputePass		= new CTAAComputePass(m_rhi);
 	m_copyComputePass		= new CCopyComputePass(m_rhi);
 
-	m_cmdBufferNames[0][cb_CopyCompute]			= "CopyCompute_0";
 	m_cmdBufferNames[0][cb_TAA]					= "TAA_0";
 	m_cmdBufferNames[0][cb_SSR]					= "SSR_0";
 	m_cmdBufferNames[0][cb_ShadowMap]			= "ShadowMap_0";
 	m_cmdBufferNames[0][cb_SSAO]				= "SSAO_0";
-	m_cmdBufferNames[0][cb_SSAO_Blur]			= "SSAOBlur_0";
 	m_cmdBufferNames[0][cb_Forward]				= "Forward_0";
 	m_cmdBufferNames[0][cb_Deferred_GBuf]		= "Deferred_GBuf_0";
 	m_cmdBufferNames[0][cb_Deferred_Lighting]	= "Deferred_Lighting_0";
@@ -56,12 +55,10 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_cmdBufferNames[0][cb_ToneMapping]			= "ToneMapping_0";
 	m_cmdBufferNames[0][cb_Skybox]				= "Skybox_0";
 
-	m_cmdBufferNames[1][cb_CopyCompute]			= "CopyCompute_1";
 	m_cmdBufferNames[1][cb_TAA]					= "TAA_1";
 	m_cmdBufferNames[1][cb_SSR]					= "SSR_1";
 	m_cmdBufferNames[1][cb_ShadowMap]			= "ShadowMap_1";
 	m_cmdBufferNames[1][cb_SSAO]				= "SSAO_1";
-	m_cmdBufferNames[1][cb_SSAO_Blur]			= "SSAOBlur_1";
 	m_cmdBufferNames[1][cb_Forward]				= "Forward_1";
 	m_cmdBufferNames[1][cb_Deferred_GBuf]		= "Deferred_GBuf_1";
 	m_cmdBufferNames[1][cb_Deferred_Lighting]	= "Deferred_Lighting_1";
@@ -85,6 +82,7 @@ CRasterRender::~CRasterRender()
 	delete m_uiPass;
 	delete m_toneMapPass;
 	delete m_debugDrawPass;
+	delete m_ssrBlurPass;
 	delete m_ssrComputePass;
 	delete m_ssaoBlurPass;
 	delete m_ssaoComputePass;
@@ -109,6 +107,7 @@ void CRasterRender::on_destroy()
 	m_taaComputePass->Destroy();
 	m_toneMapPass->Destroy();
 	m_debugDrawPass->Destroy();
+	m_ssrBlurPass->Destroy();
 	m_ssrComputePass->Destroy();
 	m_ssaoBlurPass->Destroy();
 	m_ssaoComputePass->Destroy();
@@ -172,6 +171,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Motion);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSReflection);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Prev_PrimaryColor);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSRBlur);
 		
 		RETURN_FALSE_IF_FALSE(m_rhi->EndCommandBuffer(m_vkCmdBfr[0][0]));
 
@@ -248,6 +248,7 @@ bool CRasterRender::on_update(float delta)
 		m_ssaoComputePass->Update(&updateData);
 		m_ssaoBlurPass->Update(&updateData);
 		m_ssrComputePass->Update(&updateData);
+		m_ssrBlurPass->Update(&updateData);
 		m_forwardPass->Update(&updateData);
 		m_deferredPass->Update(&updateData);
 		m_deferredLightPass->Update(&updateData);
@@ -261,7 +262,7 @@ bool CRasterRender::on_update(float delta)
 		RETURN_FALSE_IF_FALSE(m_fixedAssets->Update(m_rhi, fixedUpdate));
 	}
 	
-	RenderFrame(m_rhi->GetRendererType());
+	RETURN_FALSE_IF_FALSE(RenderFrame(m_rhi->GetRendererType()));
 
 	if (m_pickObject)
 	{
@@ -483,6 +484,7 @@ bool CRasterRender::CreatePasses()
 	pipeline.pipeLayout						= primaryAndSceneLayout;
 	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Initalize(pipeline));
 	RETURN_FALSE_IF_FALSE(m_ssrComputePass->Initalize(pipeline));
+	RETURN_FALSE_IF_FALSE(m_ssrBlurPass->Initalize(pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= debugLayout;
@@ -579,8 +581,26 @@ bool CRasterRender::DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkan
 	return true;
 }
 
+bool CRasterRender::BeginAllCommandBuffers(uint32_t p_swapchainIndex)
+{
+	for (uint32_t i = 0; i < CommandBufferId::cb_max; i++)
+		RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(m_vkCmdBfr[p_swapchainIndex][i], m_cmdBufferNames[p_swapchainIndex][i].c_str()));
+
+	return true;
+}
+
+bool CRasterRender::EndAllCommandBuffers(uint32_t p_swapchainIndex)
+{
+	for (uint32_t i = 0; i < CommandBufferId::cb_max; i++)
+		RETURN_FALSE_IF_FALSE(m_rhi->EndCommandBuffer(m_vkCmdBfr[p_swapchainIndex][i]));
+
+	return true;
+}
+
 bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 {
+	RETURN_FALSE_IF_FALSE(BeginAllCommandBuffers(m_swapchainIndex));
+
 	CPass::RenderData renderData{};
 	renderData.fixedAssets = m_fixedAssets;
 	renderData.loadedAssets = m_loadableAssets;
@@ -618,9 +638,8 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 
 	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO];
 	RETURN_FALSE_IF_FALSE(m_ssaoComputePass->Dispatch(&renderData));
-	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
-
-	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO_Blur];
+	
+	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSAO];
 	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Dispatch(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
@@ -634,6 +653,9 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 		{
 			renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSR];
 			RETURN_FALSE_IF_FALSE(m_ssrComputePass->Dispatch(&renderData));
+
+			renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_SSR];
+			RETURN_FALSE_IF_FALSE(m_ssrBlurPass->Dispatch(&renderData));
 			m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 		}
 	}
@@ -661,7 +683,9 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 	RETURN_FALSE_IF_FALSE(m_uiPass->Render(&renderData));
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
-	return false;
+	RETURN_FALSE_IF_FALSE(EndAllCommandBuffers(m_swapchainIndex));
+
+	return true;
 }
 
 // Placing the notes here until I can find the best way to place them in my read me

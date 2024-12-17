@@ -31,18 +31,16 @@ private:
 	{
 		  cb_ShadowMap				= 0
 		, cb_SSAO					= 1
-		, cb_SSAO_Blur				= 2
-		, cb_Forward				= 3
-		, cb_Deferred_GBuf			= 4
-		, cb_Deferred_Lighting		= 5
-		, cb_DebugDraw				= 6
-		, cb_UI						= 7
-		, cb_PickerCopy2CPU			= 8
-		, cb_ToneMapping			= 9
-		, cb_Skybox					= 10
-		, cb_SSR					= 11
-		, cb_TAA					= 12
-		, cb_CopyCompute			= 13
+		, cb_Forward				= 2
+		, cb_Deferred_GBuf			= 3
+		, cb_Deferred_Lighting		= 4
+		, cb_DebugDraw				= 5
+		, cb_UI						= 6
+		, cb_PickerCopy2CPU			= 7
+		, cb_ToneMapping			= 8
+		, cb_Skybox					= 9
+		, cb_SSR					= 10
+		, cb_TAA					= 11
 		, cb_max
 	};
 
@@ -86,6 +84,7 @@ private:
 	CSSAOComputePass*					m_ssaoComputePass;
 	CSSAOBlurPass*						m_ssaoBlurPass;
 	CSSRComputePass*					m_ssrComputePass;
+	CSSRBlurPass*						m_ssrBlurPass;
 	CTAAComputePass*					m_taaComputePass;
 	CDeferredLightingPass*				m_deferredLightPass;
 	CDebugDrawPass*						m_debugDrawPass;
@@ -105,6 +104,9 @@ private:
 	void UpdateSceneGraphDependencies(float p_delta);
 
 	bool DoReadBackObjPickerBuffer(uint32_t p_swapchainIndex, CVulkanRHI::CommandBuffer& p_cmdBfr);
+
+	bool BeginAllCommandBuffers(uint32_t p_swapchainIndex);
+	bool EndAllCommandBuffers(uint32_t p_swapchainIndex);
 
 	bool RenderFrame(CVulkanRHI::RendererType p_renderType);
 };

@@ -1271,7 +1271,7 @@ bool CVulkanCore::BeginCommandBuffer(VkCommandBuffer& p_cmdBfr, const char* p_de
 	VkResult res = vkBeginCommandBuffer(p_cmdBfr, &l_cmdBufferBeginInfo);
 	if (res != VK_SUCCESS)
 	{
-		std::cerr << "vkBeginCommandBuffer failed: " << res << std::endl;
+		std::cerr << "vkBeginCommandBuffer failed: " << p_debugMarker <<" : " << res << std::endl;
 		return false;
 	}
 	BeginDebugMarker(p_cmdBfr, p_debugMarker);
@@ -1328,24 +1328,29 @@ bool CVulkanCore::WaitToFinish(VkQueue p_queue)
 	return true;
 }
 
-void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr)
+void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr, int p_baseMipLevel)
 {
-	p_image.descInfo.imageLayout = p_new;
-	if (p_new == p_image.curLayout[0])
-		return;
+	if (p_baseMipLevel < 0)
+	{
+		for (uint32_t i = 0; i < p_image.GetLevelCount(); i++)
+		{
+			p_image.descInfo.imageLayout = p_new;
+			if (p_new == p_image.curLayout[i])
+				return;
 
-	IssueImageLayoutBarrier(p_image.curLayout[0], p_new, p_image.layerCount, 1, p_image.image, p_image.usage, p_cmdBfr, HasStencilComponent(p_image.format));
-	p_image.curLayout[0] = p_new;
-}
+			IssueImageLayoutBarrier(p_image.curLayout[i], p_new, 1, 1, p_image.image, p_image.usage, p_cmdBfr, i, HasStencilComponent(p_image.format));
+			p_image.curLayout[i] = p_new;
+		}
+	}
+	else
+	{
+		p_image.descInfo.imageLayout = p_new;
+		if (p_new == p_image.curLayout[p_baseMipLevel])
+			return;
 
-void CVulkanCore::IssueLayoutBarrier(VkImageLayout p_new, Image& p_image, VkCommandBuffer p_cmdBfr, uint32_t p_baseMipLevel)
-{
-	p_image.descInfo.imageLayout = p_new;
-	if (p_new == p_image.curLayout[p_baseMipLevel])
-		return;
-
-	IssueImageLayoutBarrier(p_image.curLayout[p_baseMipLevel], p_new, 1, 1, p_image.image, p_image.usage, p_cmdBfr, p_baseMipLevel, HasStencilComponent(p_image.format));
-	p_image.curLayout[p_baseMipLevel] = p_new;
+		IssueImageLayoutBarrier(p_image.curLayout[p_baseMipLevel], p_new, 1, 1, p_image.image, p_image.usage, p_cmdBfr, (uint32_t)p_baseMipLevel, HasStencilComponent(p_image.format));
+		p_image.curLayout[p_baseMipLevel] = p_new;
+	}	
 }
 
 void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_new, 

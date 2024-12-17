@@ -110,7 +110,7 @@ bool CForwardPass::Render(RenderData* p_renderData)
 	const CScene* scene										= p_renderData->loadedAssets->GetScene();
 	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
 
-	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Forward"));
+	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Forward"));
 	{
 		vkCmdBeginRendering(cmdBfr, &m_renderingInfo);
 		{
@@ -144,7 +144,7 @@ bool CForwardPass::Render(RenderData* p_renderData)
 		}
 		vkCmdEndRendering(cmdBfr);
 	}
-	m_rhi->EndCommandBuffer(cmdBfr);
+	//m_rhi->EndCommandBuffer(cmdBfr);
 	
 	return true;
 }
@@ -221,30 +221,31 @@ bool CSkyboxPass::Render(RenderData* p_renderData)
 	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
 	CVulkanRHI::Renderpass renderPass						= m_pipeline.renderpassData;
 
-	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Skybox for Forward"));
+	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Skybox for Forward"));
+	{
+		m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
 
-	m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
+		//InsertMarker(m_vkCmdBfr[p_swapchainIndex], "Skybox");
 
-	//InsertMarker(m_vkCmdBfr[p_swapchainIndex], "Skybox");
+		m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
+		m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
 
-	m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
-	m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
+		vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
 
-	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
+		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
 
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
+		VkDeviceSize offsets[1] = { 0 };
+		const CRenderableMesh* mesh = scene->GetRenderableMesh(CScene::MeshType::mt_Skybox);
+		vkCmdBindVertexBuffers(cmdBfr, 0, 1, &mesh->GetVertexBuffer()->descInfo.buffer, offsets);
+		vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer()->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-	VkDeviceSize offsets[1]									= { 0 };
-	const CRenderableMesh* mesh								= scene->GetRenderableMesh(CScene::MeshType::mt_Skybox);
-	vkCmdBindVertexBuffers(cmdBfr, 0, 1, &mesh->GetVertexBuffer()->descInfo.buffer, offsets);
-	vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer()->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+		uint32_t count = (uint32_t)mesh->GetIndexBuffer()->descInfo.range / sizeof(uint32_t);
+		vkCmdDrawIndexed(cmdBfr, count, 1, 0, 0, 1);
 
-	uint32_t count											= (uint32_t)mesh->GetIndexBuffer()->descInfo.range / sizeof(uint32_t);
-	vkCmdDrawIndexed(cmdBfr, count, 1, 0, 0, 1);
-
-	m_rhi->EndRenderPass(cmdBfr);
-	m_rhi->EndCommandBuffer(cmdBfr);
+		m_rhi->EndRenderPass(cmdBfr);
+	}
+	//m_rhi->EndCommandBuffer(cmdBfr);
 
 	return true;
 }
@@ -363,42 +364,43 @@ bool CDeferredPass::Render(RenderData* p_renderData)
 	const CScene* scene											= p_renderData->loadedAssets->GetScene();
 	const CPrimaryDescriptors* primaryDesc						= p_renderData->primaryDescriptors;
 
-	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Deferred GBuffer"));
-	
-	vkCmdBeginRendering(cmdBfr, &m_renderingInfo);
+	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Deferred GBuffer"));
 	{
-		m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)m_rhi->GetRenderWidth(), -(float)m_rhi->GetRenderHeight());
-		m_rhi->SetScissors(cmdBfr, 0, 0, m_rhi->GetRenderWidth(), m_rhi->GetRenderHeight());
-
-		vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
-
-		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
-
-		// Bind Index and Vertices buffers
-		VkDeviceSize offsets[1] = { 0 };
-		for (unsigned int i = CScene::MeshType::mt_Scene; i < scene->GetRenderableMeshCount(); i++)
+		vkCmdBeginRendering(cmdBfr, &m_renderingInfo);
 		{
-			const CRenderableMesh* mesh = scene->GetRenderableMesh(i);
+			m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)m_rhi->GetRenderWidth(), -(float)m_rhi->GetRenderHeight());
+			m_rhi->SetScissors(cmdBfr, 0, 0, m_rhi->GetRenderWidth(), m_rhi->GetRenderHeight());
 
-			vkCmdBindVertexBuffers(cmdBfr, 0, 1, &mesh->GetVertexBuffer()->descInfo.buffer, offsets);
-			vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer()->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
 
-			for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
+			vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+			vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
+
+			// Bind Index and Vertices buffers
+			VkDeviceSize offsets[1] = { 0 };
+			for (unsigned int i = CScene::MeshType::mt_Scene; i < scene->GetRenderableMeshCount(); i++)
 			{
-				const SubMesh* submesh = mesh->GetSubmesh(j);
+				const CRenderableMesh* mesh = scene->GetRenderableMesh(i);
 
-				CScene::MeshPushConst pc{ mesh->GetMeshId(), submesh->materialId };
+				vkCmdBindVertexBuffers(cmdBfr, 0, 1, &mesh->GetVertexBuffer()->descInfo.buffer, offsets);
+				vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer()->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-				VkPipelineStageFlags vertex_frag = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-				vkCmdPushConstants(cmdBfr, m_pipeline.pipeLayout, vertex_frag, 0, sizeof(CScene::MeshPushConst), (void*)&pc);
+				for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
+				{
+					const SubMesh* submesh = mesh->GetSubmesh(j);
 
-				vkCmdDrawIndexed(cmdBfr, submesh->indexCount, 1, submesh->firstIndex, 0, 1);
+					CScene::MeshPushConst pc{ mesh->GetMeshId(), submesh->materialId };
+
+					VkPipelineStageFlags vertex_frag = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+					vkCmdPushConstants(cmdBfr, m_pipeline.pipeLayout, vertex_frag, 0, sizeof(CScene::MeshPushConst), (void*)&pc);
+
+					vkCmdDrawIndexed(cmdBfr, submesh->indexCount, 1, submesh->firstIndex, 0, 1);
+				}
 			}
 		}
+		vkCmdEndRendering(cmdBfr);
 	}
-	vkCmdEndRendering(cmdBfr);
-	m_rhi->EndCommandBuffer(cmdBfr);
+	//m_rhi->EndCommandBuffer(cmdBfr);
 
 	return true;
 }
@@ -443,7 +445,7 @@ bool CDeferredLightingPass::Dispatch(RenderData* p_renderData)
 	uint32_t dispatchDim_x										= m_rhi->GetRenderWidth() / THREAD_GROUP_SIZE_X;
 	uint32_t dispatchDim_y										= m_rhi->GetRenderHeight() / THREAD_GROUP_SIZE_Y;
 
-	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Compute Deferred Lighting"));
+	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Compute Deferred Lighting"));
 	{
 		// issue a layout barrier on Primary Depth to set as Shader Read so it can be used in this compute shader
 		//CVulkanRHI::Image primaryDepthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
@@ -456,7 +458,7 @@ bool CDeferredLightingPass::Dispatch(RenderData* p_renderData)
 
 		vkCmdDispatch(cmdBfr, dispatchDim_x, dispatchDim_y, 1);
 	}
-	m_rhi->EndCommandBuffer(cmdBfr);
+	//m_rhi->EndCommandBuffer(cmdBfr);
 
 	return true;
 }
@@ -527,30 +529,31 @@ bool CSkyboxDeferredPass::Render(RenderData* p_renderData)
 	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
 	CVulkanRHI::Renderpass renderPass						= m_pipeline.renderpassData;
 
-	RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Deferred Skybox"));
+	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Deferred Skybox"));
+	{
+		m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
 
-	m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
+		//InsertMarker(m_vkCmdBfr[p_swapchainIndex], "Skybox");
 
-	//InsertMarker(m_vkCmdBfr[p_swapchainIndex], "Skybox");
+		m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
+		m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
 
-	m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
-	m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
+		vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
 
-	vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
+		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
 
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-	vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
+		VkDeviceSize offsets[1] = { 0 };
+		const CRenderableMesh* mesh = scene->GetRenderableMesh(CScene::MeshType::mt_Skybox);
+		vkCmdBindVertexBuffers(cmdBfr, 0, 1, &mesh->GetVertexBuffer()->descInfo.buffer, offsets);
+		vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer()->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-	VkDeviceSize offsets[1]									= { 0 };
-	const CRenderableMesh* mesh								= scene->GetRenderableMesh(CScene::MeshType::mt_Skybox);
-	vkCmdBindVertexBuffers(cmdBfr, 0, 1, &mesh->GetVertexBuffer()->descInfo.buffer, offsets);
-	vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer()->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+		uint32_t count = (uint32_t)mesh->GetIndexBuffer()->descInfo.range / sizeof(uint32_t);
+		vkCmdDrawIndexed(cmdBfr, count, 1, 0, 0, 1);
 
-	uint32_t count											= (uint32_t)mesh->GetIndexBuffer()->descInfo.range / sizeof(uint32_t);
-	vkCmdDrawIndexed(cmdBfr, count, 1, 0, 0, 1);
-
-	m_rhi->EndRenderPass(cmdBfr);
-	m_rhi->EndCommandBuffer(cmdBfr);
+		m_rhi->EndRenderPass(cmdBfr);
+	}
+	//m_rhi->EndCommandBuffer(cmdBfr);
 
 	return true;
 }
