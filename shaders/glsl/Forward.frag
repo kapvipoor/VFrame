@@ -134,11 +134,7 @@ void main()
 
 		if(any(greaterThan(lightColor, vec3(0.0f))))
 		{
-			// as we do not want to calculate light attenuation on directional light
-			// commenting this part of code
-			//float distance = length(lightDir);
-			//float attenuation = 1.0/(distance * distance);
-			vec3 radiance 					= lightColor;	// * attenuation;
+			vec3 radiance 					= lightColor;
 
 			// calculating fresnel value to get the reflection to refraction ratio
 			vec3 F0 						= vec3(0.04);
@@ -167,8 +163,7 @@ void main()
 		}
 	}
 
-	float ssaoFactor 						= 1.0f;
-	vec3 ambient 							= vec3(g_Info.pbrAmbientFactor) * color.xyz * ssaoFactor;
+	vec3 ambient 							= vec3(g_Info.pbrAmbientFactor) * color.xyz;
 	vec3 finalColor							= ambient + Lo;
 
 	// Calculate motion vectors

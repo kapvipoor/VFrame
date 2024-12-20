@@ -70,12 +70,12 @@ enum BindingSet
 enum BindingDest
 {	  // Set 0 - Primary				  // Set 1 - Scene				  // Set 1 - UI		      // Set 1 - DebugDraw
 	  bd_Gloabl_Uniform				= 0	, bd_Scene_MeshInfo_Uniform	= 0	, bd_UI_TexArray	= 0 , bd_Debug_Transforms_Uniform = 0
-	, bd_Linear_Sampler				= 1	, bd_CubeMap_Texture		= 1	, bd_UI_max
-	, bd_Nearest_Sampler			= 2 , bd_Material_Storage		= 2
-	, bd_ObjPicker_Storage			= 3	, bd_Scene_Lights			= 3
-	, bd_SSAOKernel_Storage			= 4 , bd_SceneRead_TexArray		= 4
-	, bd_PrimaryRead_TexArray		= 5 , bd_Scene_max				= 5
-	, bd_RTs_StorageImages			= 6 
+	, bd_Linear_Sampler				= 1	, bd_Env_Specular			= 1	, bd_UI_max
+	, bd_Nearest_Sampler			= 2 , bd_Env_Diffuse			= 2
+	, bd_ObjPicker_Storage			= 3	, bd_Material_Storage		= 3
+	, bd_SSAOKernel_Storage			= 4 , bd_Scene_Lights			= 4
+	, bd_PrimaryRead_TexArray		= 5 , bd_SceneRead_TexArray		= 5
+	, bd_RTs_StorageImages			= 6 , bd_Scene_max				= 6
 	, bd_RTs_SampledImages			= 7
 	, bd_Primary_max				= 8
 };
@@ -156,7 +156,7 @@ public:
 
 	bool CreateRenderTarget(CVulkanRHI* p_rhi, uint32_t p_id, VkFormat p_format,uint32_t p_width, uint32_t p_height, uint32_t p_mipLevel, VkImageLayout p_layout, std::string p_debugName, VkImageUsageFlags p_usage);
 	bool CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& stg, const ImageRaw*, VkFormat p_format, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id = -1);
-	bool CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const std::vector<ImageRaw>&, const CVulkanRHI::SamplerList& p_samplers, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id = -1);
+	bool CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, ImageRaw&, const CVulkanRHI::SamplerList& p_samplers, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id = -1);
 
 	// Pushes a specific texture index into list to repeat the usage of the texture
 	// Note: this does not reload the texture, but simply makes the texture handle available 
@@ -173,8 +173,6 @@ public:
 
 protected:
 	CVulkanRHI::ImageList			m_textures;
-
-	uint8_t GetBytesPerChannel(VkFormat);
 };
 
 class CFixedBuffers : public CBuffers, public CUIParticipant
@@ -208,6 +206,7 @@ public:
 		nm::float2					ssaoNoiseScale;
 		float						ssaoKernelSize;
 		float						ssaoRadius;
+		int							enableShadow;
 		int							enableShadowPCF;
 		float						pbrAmbientFactor;
 		int							enableSSAO;
@@ -225,7 +224,6 @@ public:
 		float						UNASSIGNED_float0;
 		float						UNASSIGNED_float1;
 		float						UNASSIGNED_float2;
-		float						UNASSIGNED_float3;
 	};
 
 	CFixedBuffers();
@@ -458,8 +456,9 @@ public:
 	enum TextureType
 	{
 		  tt_default				= 0
-		, tt_skybox					= 1
-		, tt_scene					= 2
+		, tt_env_specular			= 1
+		, tt_env_diffuse			= 2
+		, tt_scene					= 3
 	};
 
 	struct MeshPushConst

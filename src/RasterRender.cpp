@@ -185,6 +185,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 	RETURN_FALSE_IF_FALSE(InitCamera());
 
 	m_rhi->SetRenderType(CVulkanRHI::RendererType::Deferred);
+	m_staticShadowPass->Enable(false);
 	m_ssrComputePass->Enable(true);
 	m_taaComputePass->Enable(false);
 
@@ -608,11 +609,14 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 	renderData.scIdx = m_swapchainIndex;
 	renderData.sceneGraph = m_sceneGraph;
 
-	//if (!m_staticShadowPass->ReuseShadowMap())
+	if (m_staticShadowPass->IsEnabled())
 	{
-		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ShadowMap];
-		RETURN_FALSE_IF_FALSE(m_staticShadowPass->Render(&renderData));
-		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+		//if (!m_staticShadowPass->ReuseShadowMap())
+		{
+			renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ShadowMap];
+			RETURN_FALSE_IF_FALSE(m_staticShadowPass->Render(&renderData));
+			m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+		}
 	}
 
 	if (p_renderType == CVulkanRHI::RendererType::Forward)

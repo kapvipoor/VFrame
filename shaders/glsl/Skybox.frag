@@ -15,7 +15,7 @@ layout (location = 0) in vec3 inUVW;
 layout (location = 0) out vec4 outFragColor;
 void main() 
 {
-	//outPosition						= vec4(0.0f);			// for ssao, nothing to write here technically
-	//outNormal							= vec4(0.0f);			// for ssao, nothing to write here technically
-	outFragColor 						= texture(g_skyboxSampler, inUVW);
+	// Forcing the highest resolution mip level since the other
+	// mip levels are Pre-filtered Specular IBL data
+	outFragColor = textureLod(g_env_specular_Sampler, inUVW, 0);
 }

@@ -1863,23 +1863,69 @@ bool CVulkanCore::UploadFromHostToDevice(Buffer& p_staging, Buffer& p_dest, VkCo
 	return true;
 }
 
-void CVulkanCore::UploadFromHostToDevice(Buffer& p_staging, VkImageLayout p_finLayout, Image& p_dest, VkCommandBuffer& p_cmdBfr)
+/*
+	Uploads layers and levels to texture resource on GPU
+	The staging buffer includes all the data in the format:
+	(Layer_0(mip_0, mip_1, ....mip_x), Layer_1(mip_0, mip_1, ....mip_x), Layer_x())
+*/
+void CVulkanCore::UploadFromHostToDevice(Buffer& p_staging, VkImageLayout p_finLayout, 
+	Image& p_dest, VkCommandBuffer& p_cmdBfr, bool p_uploadMips)
 {
 	std::vector<VkBufferImageCopy> bcInfoList;
 
-	for (unsigned int i = 0; i < p_dest.layerCount; i++)
+	if (p_uploadMips)
 	{
-		VkBufferImageCopy bcInfo{};
-		bcInfo.bufferOffset = i* p_dest.bufOffset;				// point on the buffer at which the pixels start
-		bcInfo.bufferRowLength = 0;											// no padding used between rows
-		bcInfo.bufferImageHeight = 0;										// no padding used between columns
-		bcInfo.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		bcInfo.imageSubresource.mipLevel = 0;
-		bcInfo.imageSubresource.baseArrayLayer = i;
-		bcInfo.imageSubresource.layerCount = 1;
-		bcInfo.imageExtent = { p_dest.width, p_dest.height, 1 };
-		bcInfoList.push_back(bcInfo);
+		std::vector<uint32_t> baseMipOffsets;
+		size_t baseLayerOffset = Image::GetTextureSizePerLayer(p_dest.width, p_dest.height, p_dest.format, p_dest.GetLevelCount(), &baseMipOffsets);
+
+		for (uint32_t layer = 0; layer < p_dest.layerCount; layer++)
+		{
+			uint32_t mipWidth = p_dest.width;
+			uint32_t mipHeight = p_dest.height;
+
+			for (uint32_t mip = 0; mip < p_dest.GetLevelCount(); mip++)
+			{
+				// If there are no mips to upload from the staging buffer
+				// but need to be computed, the offset is just the full
+				// res texture without mips
+				VkDeviceSize offset = (layer * baseLayerOffset) + baseMipOffsets[mip] ;
+
+				VkBufferImageCopy bcInfo{};
+				bcInfo.bufferOffset = offset;				// point on the buffer at which the pixels start
+				bcInfo.bufferRowLength = 0;											// no padding used between rows
+				bcInfo.bufferImageHeight = 0;										// no padding used between columns
+				bcInfo.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				bcInfo.imageSubresource.mipLevel = mip;
+				bcInfo.imageSubresource.baseArrayLayer = layer;
+				bcInfo.imageSubresource.layerCount = 1;
+				bcInfo.imageExtent = { mipWidth, mipHeight, 1 };
+				bcInfoList.push_back(bcInfo);
+
+				mipWidth = (mipWidth > 1) ? mipWidth >> 1 : 1;
+				mipHeight = (mipHeight > 1) ? mipHeight >> 1 : 1;
+			}
+		}
 	}
+	else
+	{
+		size_t baseLayerOffset = Image::GetTextureSizePerLayerNoMips(p_dest.width, p_dest.height, p_dest.format);
+		for (uint32_t layer = 0; layer < p_dest.layerCount; layer++)
+		{
+			VkDeviceSize offset = (layer * baseLayerOffset);
+
+			VkBufferImageCopy bcInfo{};
+			bcInfo.bufferOffset = offset;				// point on the buffer at which the pixels start
+			bcInfo.bufferRowLength = 0;											// no padding used between rows
+			bcInfo.bufferImageHeight = 0;										// no padding used between columns
+			bcInfo.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			bcInfo.imageSubresource.mipLevel = 0;
+			bcInfo.imageSubresource.baseArrayLayer = layer;
+			bcInfo.imageSubresource.layerCount = 1;
+			bcInfo.imageExtent = { p_dest.width, p_dest.height, 1 };
+			bcInfoList.push_back(bcInfo);
+		}
+	}
+		
 	// copy bufffer to image
 	vkCmdCopyBufferToImage(p_cmdBfr, p_staging.descInfo.buffer, p_dest.image, p_finLayout, (uint32_t)bcInfoList.size(), bcInfoList.data());
 }

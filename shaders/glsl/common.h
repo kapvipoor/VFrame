@@ -21,6 +21,7 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 	vec2	ssaoNoiseScale;
 	float	ssaoKernelSize;
 	float	ssaoRadius;
+	float	enableShadow;
 	bool	enableShadowPCF;
 	float 	pbrAmbientFactor;
 	float 	enabelSSAO;
@@ -38,7 +39,6 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 	float	UNASSIGINED_Float0;
 	float	UNASSIGINED_Float1;
 	float	UNASSIGINED_Float2;
-	float	UNASSIGINED_Float3;
 } g_Info;
 
 layout(set = 0, binding = 1) uniform sampler g_LinearSampler;
@@ -97,6 +97,12 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float Roughness)
 	float NdotV = max(dot(N, V), 0.0);
 	float NdotL = max(dot(N, L), 0.0);
 	return GeometrySchlickGGX(NdotL, k) * GeometrySchlickGGX(NdotV, k);
+}
+
+// Fresnel Schlick Approximation for Fresnel Effect with roughness
+vec3 FresnelSchlickRoughness(float cosThetha, vec3 F0, float roughness)
+{
+	return F0 + ((max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosThetha, 0.0, 1.0), 5.0));
 }
 
 // Fresnel Schlick Approximation for Fresnel Effect

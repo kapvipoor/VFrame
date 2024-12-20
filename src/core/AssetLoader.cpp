@@ -8,7 +8,15 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "external/tinygltf/tiny_gltf.h"
+
 #include <fstream>
+#include <filesystem>
+
+// using this for DDS loader
+#include <fcntl.h>
+#include <io.h>
+#define S_ISREG(e) (((e) & _S_IFMT) == _S_IFREG)
+#define S_ISDIR(e) (((e) & _S_IFMT) == _S_IFDIR)
 
 nm::float4 ComputeTangent(Vertex p_a, Vertex p_b, Vertex p_c)
 {
@@ -122,6 +130,260 @@ void GenerateSphere(int p_stackCount, int p_sectorCount, RawSphere& p_sphere, fl
 	}
 }
 
+int64_t GetFileSize(const char* fileName)
+{
+	// Try to open
+	int file = -1;
+	(void)_sopen_s(&file, fileName, _O_RDONLY | _O_NOINHERIT | _O_BINARY | _O_SEQUENTIAL, _SH_DENYNO, _S_IREAD);
+
+	// Can't open file for some reason
+	if (file == -1)
+		return -1;
+
+	// Something went wrong. Permissions or not found
+	struct _stat64 fileStatus;
+	if (_fstat64(file, &fileStatus) != 0)
+	{
+		_close(file);
+		return -1;
+	}
+
+	// Done
+	(void)_close(file);
+
+	return fileStatus.st_size;
+}
+
+int64_t ReadFilePartial(const char* fileName, void* buffer, size_t bufferLen, int64_t readOffset/*= 0*/)
+{
+	// Try to open the file
+	int file = -1;
+	(void)_sopen_s(&file, fileName, _O_RDONLY | _O_NOINHERIT | _O_BINARY | _O_SEQUENTIAL, _SH_DENYNO, _S_IREAD);
+
+	// Unable to open file
+	if (file == -1)
+		return -1;
+
+	// Get the file size
+	struct _stat64 fileStatus;
+	if (_fstat64(file, &fileStatus) != 0)
+	{
+		// Unable to get size
+		(void)_close(file);
+		return -1;
+	}
+
+	// Check if file is valid
+	if (!S_ISREG(fileStatus.st_mode))
+	{
+		// Not a regular file
+		(void)_close(file);
+		return -1;
+	}
+
+	// Check we aren't trying to read a size greater than the file
+	const uint64_t fileLengthBytes = static_cast<uint64_t>(std::max<int64_t>(fileStatus.st_size, 0));
+	if (fileLengthBytes < bufferLen)
+		return -1;
+
+	// If we requested reading from an offset within the file, move the read head now
+	if (readOffset)
+	{
+		int64_t fileOffset = _lseeki64(file, readOffset, 0);
+		if (fileOffset != readOffset)   // The offset from start of file should always match the requested read offset
+			return -1;
+	}
+
+	// Fill in the buffer
+	char* pFileBuffer = (char*)buffer;
+	for (uint64_t bytesLeft = bufferLen; bytesLeft > 0;)
+	{
+		uint32_t bytesRequested = static_cast<uint32_t>(std::min<uint64_t>(bytesLeft, INT32_MAX));
+		auto bytesReceivedOrStatus = _read(file, pFileBuffer, bytesRequested);
+
+		// Break into 4GB chunks
+		if (bytesReceivedOrStatus > 0)
+		{
+			bytesLeft -= bytesReceivedOrStatus;
+			pFileBuffer += bytesReceivedOrStatus;
+		}
+
+		// Going past eof... not good
+		else if (bytesReceivedOrStatus == 0)
+		{
+			(void)_close(file);
+			return -1;
+		}
+
+		// Error reported during read
+		else if (bytesReceivedOrStatus < 0)
+		{
+			(void)_close(file);
+			return -1;
+		}
+	}
+
+	// All done
+	(void)_close(file);
+
+	return bufferLen;
+}
+
+bool GetChannelInfo(uint32_t formatId, uint32_t& bitsPerChannel, int& channelCount)
+{
+	if (formatId == 10)	// DXGI_FORMAT_R16G16B16A16_FLOAT
+	{
+		bitsPerChannel = 16;
+		channelCount = 4;
+		return true;
+	}
+	else
+	{
+		std::cerr << "GetChannelInfo Unsupported DDS format requested: " << formatId << std::endl;
+		return false;
+	}
+}
+
+bool LoadDDS(const char* textureFile, ImageRaw& p_data)
+{
+	typedef enum RESOURCE_DIMENSION
+	{
+		RESOURCE_DIMENSION_UNKNOWN = 0,
+		RESOURCE_DIMENSION_BUFFER = 1,
+		RESOURCE_DIMENSION_TEXTURE1D = 2,
+		RESOURCE_DIMENSION_TEXTURE2D = 3,
+		RESOURCE_DIMENSION_TEXTURE3D = 4
+	} RESOURCE_DIMENSION;
+
+	typedef struct
+	{
+		uint32_t			format;
+		RESOURCE_DIMENSION  resourceDimension;
+		uint32_t              miscFlag;
+		uint32_t              arraySize;
+		uint32_t              reserved;
+	} DDS_HEADER_DXT10;
+
+	struct DDS_PIXELFORMAT
+	{
+		uint32_t size;
+		uint32_t flags;
+		uint32_t fourCC;
+		uint32_t bitCount;
+		uint32_t bitMaskR;
+		uint32_t bitMaskG;
+		uint32_t bitMaskB;
+		uint32_t bitMaskA;
+	};
+
+	struct DDS_HEADER
+	{
+
+		uint32_t          dwSize;
+		uint32_t          dwHeaderFlags;
+		uint32_t          dwHeight;
+		uint32_t          dwWidth;
+		uint32_t          dwPitchOrLinearSize;
+		uint32_t          dwDepth;
+		uint32_t          dwMipMapCount;
+		uint32_t          dwReserved1[11];
+		DDS_PIXELFORMAT ddspf;
+		uint32_t          dwSurfaceFlags;
+		uint32_t          dwCubemapFlags;
+		uint32_t          dwCaps3;
+		uint32_t          dwCaps4;
+		uint32_t          dwReserved2;
+	};
+
+	// Get the file size
+	int64_t fileSize = GetFileSize(textureFile);
+	int64_t rawTextureSize = fileSize;
+	if (fileSize == -1)
+	{
+		std::cerr << "Could not get file size of " << textureFile << std::endl;;
+		return false;
+	}
+
+	// read the header
+	constexpr int32_t c_HEADER_SIZE = 4 + sizeof(DDS_HEADER) + sizeof(DDS_HEADER_DXT10);
+	char headerData[c_HEADER_SIZE];
+	uint32_t bytesRead = 0;
+
+	int64_t sizeRead = ReadFilePartial(textureFile, headerData, c_HEADER_SIZE, 0);
+	if (sizeRead != c_HEADER_SIZE)
+	{
+		std::cerr << "Error reading texture header data for file " << textureFile << std::endl;
+		return false;
+	}
+
+	char* pByteData = headerData;
+	uint32_t magicNumber = *reinterpret_cast<uint32_t*>(pByteData);
+	if (magicNumber != ' SDD')   // "DDS "
+	{
+		std::cerr << "DDSLoader could not find DDS indicator in header info " << textureFile << std::endl;
+		return false;
+	}
+
+	pByteData += 4;
+	rawTextureSize -= 4;
+
+	DDS_HEADER* pHeader = reinterpret_cast<DDS_HEADER*>(pByteData);
+	pByteData += sizeof(DDS_HEADER);
+	rawTextureSize -= sizeof(DDS_HEADER);
+
+	p_data.width = pHeader->dwWidth;
+	p_data.height = pHeader->dwHeight;
+	p_data.depthOrArraySize = pHeader->dwDepth ? pHeader->dwDepth : 1;
+	p_data.mipLevels = pHeader->dwMipMapCount ? pHeader->dwMipMapCount : 1;
+	
+	// Surface info
+	uint32_t bitsPerChannel = 0;
+
+	if (pHeader->ddspf.fourCC == '01XD')
+	{
+		DDS_HEADER_DXT10* pHeader10 = reinterpret_cast<DDS_HEADER_DXT10*>((char*)pHeader + sizeof(DDS_HEADER));
+		rawTextureSize -= sizeof(DDS_HEADER_DXT10);
+
+		RETURN_FALSE_IF_FALSE(GetChannelInfo(pHeader10->format, bitsPerChannel, p_data.channels));
+
+		switch (pHeader10->resourceDimension)
+		{
+		case 3:
+			if (pHeader10->miscFlag == 4) // Is this a cube map
+				p_data.depthOrArraySize = 6;
+
+			break;
+		default:
+			std::cerr << "LoadDDS: Unexpected Resource Dimension Encountered: " << pHeader10->resourceDimension << std::endl;
+			return false;
+		}
+	}
+	else
+	{
+		std::cerr << "DDSLoader::Load: Unsupported DDS Resource fourCC: " << pHeader->ddspf.fourCC << std::endl;
+		return false;
+	}
+
+	// Will load HDR data without tone mapping
+	p_data.raw = new unsigned char[rawTextureSize];
+	sizeRead = ReadFilePartial(textureFile, p_data.raw, rawTextureSize, fileSize - rawTextureSize);
+	
+	// Read in the data representing the texture (remainder of the file after the header)
+	if (sizeRead != rawTextureSize)
+	{
+		if(p_data.raw)
+			delete[](p_data.raw);
+		else if(p_data.raw_hdr)
+			delete[](p_data.raw);
+
+		std::cerr << "DDSLoader::Load Error reading texture data for file: " << textureFile << std::endl;
+		
+		return false;
+	}
+
+	return true;
+}
+
 bool LoadRawImage(const char* p_path, ImageRaw& p_data)
 {
 	GetFileName(p_path, p_data.name);
@@ -133,9 +395,15 @@ bool LoadRawImage(const char* p_path, ImageRaw& p_data)
 		return false;
 	}
 
+	p_data.fileExtn = extn;
+
 	if (extn == "HDR" || extn == "hdr")
 	{
 		p_data.raw_hdr = stbi_loadf(p_path, &p_data.width, &p_data.height, &p_data.channels, STBI_rgb_alpha);
+	}
+	else if (extn == "DDS" || extn == "dds")
+	{
+		RETURN_FALSE_IF_FALSE(LoadDDS(p_path, p_data));
 	}
 	else
 	{
@@ -160,11 +428,20 @@ bool LoadRawImage(const char* p_path, ImageRaw& p_data)
 
 void FreeRawImage(ImageRaw& p_data)
 {
-	if(p_data.raw != nullptr)
-		free(p_data.raw);
+	bool needsDelete = (p_data.fileExtn == "DDS" || p_data.fileExtn == "dds");
+	if (needsDelete)
+	{
+		if (p_data.raw != nullptr)
+			delete[]p_data.raw;
+	}
+	else
+	{
+		if (p_data.raw != nullptr)
+			free(p_data.raw);
 
-	if (p_data.raw_hdr != nullptr)
-		free(p_data.raw_hdr);
+		if (p_data.raw_hdr != nullptr)
+			free(p_data.raw_hdr);
+	}
 
 	p_data = ImageRaw{};
 }

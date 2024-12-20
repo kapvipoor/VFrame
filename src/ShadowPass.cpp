@@ -2,6 +2,8 @@
 
 CStaticShadowPrepass::CStaticShadowPrepass(CVulkanRHI* p_rhi)
 	: CStaticRenderPass(p_rhi)
+	, CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
+	, m_enablePCF(false)
 {
 	m_frameBuffer.resize(1);
 	m_bReuseShadowMap = false;
@@ -96,6 +98,9 @@ bool CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 
 bool CStaticShadowPrepass::Update(UpdateData* p_updateData)
 {
+	p_updateData->uniformData->enableShadow = m_isEnabled;
+	p_updateData->uniformData->enableShadowPCF = m_enablePCF;
+
 	// we are choosing to reuse the shadow map if the scene graph has not gone through any changes 
 	m_bReuseShadowMap = (p_updateData->sceneGraph->GetSceneStatus() == CSceneGraph::SceneStatus::ss_NoChange) ? true : false;
 	
@@ -152,6 +157,19 @@ bool CStaticShadowPrepass::Render(RenderData* p_renderData)
 	//m_rhi->EndCommandBuffer(p_renderData->cmdBfr);
 
 	return true;
+}
+
+void CStaticShadowPrepass::Show(CVulkanRHI* p_rhi)
+{
+	bool shadowNode = ImGui::TreeNode("Shadow");
+	ImGui::SameLine(75);
+	ImGui::Checkbox(" ", &m_isEnabled);
+
+	if (shadowNode)
+	{
+		ImGui::Checkbox("PCF", &m_enablePCF);
+		ImGui::TreePop();
+	}
 }
 
 void CStaticShadowPrepass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)

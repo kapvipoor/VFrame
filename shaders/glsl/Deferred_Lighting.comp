@@ -54,13 +54,20 @@ void main()
 	vec4 fragPos = imageLoad(g_RT_StorageImages[STORE_POSITION], xy).xyzw;                                              
     vec3 V = normalize(camerPosition - fragPos.xyz);                                                                                 
     vec3 N = normalize(imageLoad(g_RT_StorageImages[STORE_NORMAL], xy).xyz);                                                         
-    vec3 color = imageLoad(g_RT_StorageImages[STORE_ALBEDO], xy).xyz;
+    vec3 albedo = imageLoad(g_RT_StorageImages[STORE_ALBEDO], xy).xyz;
     
 	vec2 roughMetal = imageLoad(g_RT_StorageImages[STORE_ROUGH_METAL], xy).xy;
 
+	// For non-metallic surfaces, use a constant
+	// For metals, use albedo as metals have color to their
+	// specular
+	vec3 F0 = vec3(0.04);
+	F0 = mix(F0, albedo.xyz, roughMetal.y);
+				
     vec3 Lo = vec3(0.0);
 
 	// setting the default color to be the skybox if
+	float shadow = 0;//
 	vec4 finalColor = skyboxColor;
 
 	// the the depth value of the fragment in NDC is calculated and checkd if it is within the far plane at 1.0
@@ -72,68 +79,62 @@ void main()
 	{			
 		// for each light source
 		for(int i = 0; i < g_lights.count; i++)
-		{
+		{	
+			vec3 radiance = vec3(0.0f);
+			float attenuation = 1.0;
+
 			Light light = g_lights.lights[i];
 			uint lightType = light.type_castShadow >> 16;
 
 			// As light color is over 1, the result will be over 1, hence will need tone mapping
-			vec3 lightColor	= vec3(light.color[0], light.color[1], light.color[2]) * light.intensity; //vec3(1.0, 1.0, 0.9) * g_Info.sunLightIntensity;
+			vec3 lightColor	= vec3(light.color[0], light.color[1], light.color[2]) * light.intensity;
 			vec3 L = vec3(0.0f, 0.0f, 0.0f);     
-			if(lightType == DIRECTIONAL_LIGHT_TYPE)
-			{
-				// calculating the current position from view space to world space
-				vec4 posInWorldSpace = g_Info.invCamView * fragPos;
-
-				// calculating current position in world space to Light's view space
-				vec4 v0 = vec4(light.viewProj[0], light.viewProj[1], light.viewProj[2], light.viewProj[3]);
-				vec4 v1 = vec4(light.viewProj[4], light.viewProj[5], light.viewProj[6], light.viewProj[7]);
-				vec4 v2 = vec4(light.viewProj[8], light.viewProj[9], light.viewProj[10], light.viewProj[11]);
-				vec4 v3 = vec4(light.viewProj[12], light.viewProj[13], light.viewProj[14], light.viewProj[15]);
-				vec4 posInLightSpace = mat4(v0, v1, v2, v3) * posInWorldSpace;
-
-				// L in View Space
-				// this needs to be inverse transpose so as to negate the scaling in 
-				// the matrix before multipling with Light vector. But this isn't working
-				// and I do not know why!
-				L = normalize(g_Info.camView * vec4(light.vector3[0], light.vector3[1], light.vector3[2], 0.0f)).xyz;
-
-				// Light color is directly impacted by the intensity
-				lightColor = lightColor * light.intensity;
-
-				// before we calculate anything related to light, we want to make sure
-				// the position is not in shadow
-				float shadow = CalculateDirectonalShadow(posInLightSpace, N, g_Info.enableShadowPCF);
-				lightColor = lightColor * (1.0f - shadow);
-			}
-			else if (lightType == POINT_LIGHT_TYPE)
+			 if(lightType == DIRECTIONAL_LIGHT_TYPE)
+			 {
+			 	// calculating the current position from view space to world space
+			 	vec4 posInWorldSpace = g_Info.invCamView * fragPos;
+		 		// calculating current position in world space to Light's view space
+			 	vec4 v0 = vec4(light.viewProj[0], light.viewProj[1], light.viewProj[2], light.viewProj[3]);
+			 	vec4 v1 = vec4(light.viewProj[4], light.viewProj[5], light.viewProj[6], light.viewProj[7]);
+			 	vec4 v2 = vec4(light.viewProj[8], light.viewProj[9], light.viewProj[10], light.viewProj[11]);
+			 	vec4 v3 = vec4(light.viewProj[12], light.viewProj[13], light.viewProj[14], light.viewProj[15]);
+			 	vec4 posInLightSpace = mat4(v0, v1, v2, v3) * posInWorldSpace;
+		 		// L in View Space
+			 	// this needs to be inverse transpose so as to negate the scaling in 
+			 	// the matrix before multipling with Light vector. But this isn't working
+			 	// and I do not know why!
+			 	L = normalize(g_Info.camView * vec4(light.vector3[0], light.vector3[1], light.vector3[2], 0.0f)).xyz;
+		 		// before we calculate anything related to light, we want to make sure
+			 	// the position is not in shadow
+				if(g_Info.enableShadow == 1.0)
+				{
+			 		shadow = CalculateDirectonalShadow(posInLightSpace, N, g_Info.enableShadowPCF);
+				}
+		 		// There is no attenuation for directional light
+			 	//radiance = lightColor * light.intensity * attenuation * (1.0f - shadow);
+			 }
+			 else if (lightType == POINT_LIGHT_TYPE)
 			{
 				// light.vector3 is a position of the point light here.
 				// the light vector is going to be fragPos - (view matrix * light position)
 				// L in View Space
 				L = ((g_Info.camView * vec4(light.vector3[0], light.vector3[1], light.vector3[2], 1.0f)) - fragPos).xyz;
 
-				// checking to make sure the distance between the light source 
-				// and position is proportional supported intensity range of this point light
-				// for now intensity linearly reduces as the distance of light to poition
-				// increases.
-				lightColor	= lightColor * max(0.0f, light.intensity - length(L));
+				float distance = length(L);
+				attenuation = max(0.0f, light.intensity - distance);
+
 				L = normalize(L);
+
+				// There is no attenuation for directional light
+				radiance = lightColor * light.intensity * attenuation;
 			}
 
 			vec3 H	= normalize(V+L);
 
 			if(any(greaterThan(lightColor, vec3(0.0f))))
 			{
-				// as we do not want to calculate light attenuation on directional light
-				// commenting this part of code
-				//float distance = length(lightDir);
-				//float attenuation = 1.0/(distance * distance);
-				vec3 radiance = lightColor;// * attenuation;
-
 				// calculating fresnel value to get the reflection to refraction ratio
-				vec3 F0 = vec3(0.04);
-				F0 = mix(F0, color.xyz, roughMetal.y); // revisit this if necessary as the color here needs to be the metal's color for fresnel effect
-				vec3 F = FresnelSchlick(max(dot(H, V), 0.0) , F0);
+				vec3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
 
 				// calculating Geometry factor and Normal Distribution Function
 				float NDF = DistrubutionGGX(N, H, roughMetal.x);
@@ -146,17 +147,34 @@ void main()
 
 				// Fresnel value directly corresponds to the reflection factor
 				vec3 Ks = F;
+				
+				// Energy conversation: Diffuse and Specular light cannot be over 1 unless the surface
+				// emits light. Until emissive surfaces are supported, we are strictly setting Kd + Ks = 1
 				vec3 Kd = 1.0 - Ks;
 				// As we know metals do not participate in diffuse
 				Kd = Kd * (1.0 - roughMetal.y);
 
 				// calculating Lambertian diffuse
 				float NdotL	= max(dot(N, L), 0.0);
-				Lo = (Lo + ((Kd * color.xyz / PI) + specular) * radiance * NdotL);
+				
+				// Add all outgoing radiance
+				Lo = (Lo + ((Kd * albedo.xyz / PI) + specular) * radiance * NdotL);
 			}
 		}
 
-		finalColor = vec4(vec3(g_Info.pbrAmbientFactor) * color.xyz + Lo, 1.0);	
+		// Ambient lighting to use IBL
+		vec3 Ks = FresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughMetal.x);
+		vec3 Kd = 1.0 - Ks;
+		// We are sampling the irradiance at this given pixel position along the specified normal.
+		// This is computed by sampling all* possible directions of incoming light and averaging
+		// it. It is tonemapped because the flux at this point on the surface cannot be over 1 
+		// unless point is emitting light of its own
+		vec3 irradiance = textureLod(g_env_diffuse_Sampler, N, 0).rgb;
+		vec3 diffuse = irradiance * albedo.xyz;
+		
+		vec3 ambient = (Kd * diffuse) * (1.0 - shadow) /* * ambient occlusion */;
+
+		finalColor = vec4(ambient + Lo, 1.0);	
 	}
 
 	imageStore(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy, finalColor); //vec4(finalColor.xyz, 1.0f));

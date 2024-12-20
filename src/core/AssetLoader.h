@@ -16,9 +16,10 @@ struct ImageRaw
 	unsigned char*				raw;
 	int							width;
 	int							height;
+	int							depthOrArraySize;
 	int							channels;
 	uint32_t					mipLevels;
-
+	std::string					fileExtn;
 	ImageRaw()
 		: name("")
 		, raw_hdr(nullptr)
@@ -26,7 +27,8 @@ struct ImageRaw
 		, width(-1)
 		, height(-1)
 		, channels(-1)
-		, mipLevels(1){}
+		, mipLevels(1)
+		, depthOrArraySize(-1){}
 };
 
 struct Material
@@ -381,11 +383,11 @@ struct RawSphere
 };
 void GenerateSphere(int p_stackCount, int p_sectorCount, RawSphere& p_sphere, float p_radius = 1.0f);
 
+bool LoadDDS(const char* p_path, ImageRaw& p_data);
 bool LoadRawImage(const char* p_path, ImageRaw& p_data);
 void FreeRawImage(ImageRaw& p_data);
 
 bool LoadGltf(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loadData);
-
 bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_loadData);
 
 bool WriteToDisk(const std::filesystem::path& pPath, size_t pDataSize, char* pData);
