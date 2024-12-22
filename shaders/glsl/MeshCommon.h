@@ -20,14 +20,14 @@ layout(set = 1, binding = 3) uniform texture2D g_brdf_lut;
 
 struct Material
 {
-	vec3 color;
+	vec3 emissive;
 	float metallic;
 	vec3 pbr_color;
 	float roughness;
 	uint color_id;
 	uint normal_id;
 	uint roughMetal_id;
-	uint unassigned_0;
+	uint emissive_id;
 };
 layout(set = 1, binding = 4) buffer Material_Storage
 {
@@ -96,4 +96,9 @@ vec2 GetRoughMetalPBR(uint roughMetal_id, vec2 uv, vec2 inRoughMetal)
 	}
 
 	return roughMetal;
+}
+
+vec3 GetEmissive(Material mat, vec2 uv)
+{
+	return mat.emissive * 3.0 *  texture(sampler2D(g_textures[mat.emissive_id], g_LinearSampler), uv).xyz;
 }

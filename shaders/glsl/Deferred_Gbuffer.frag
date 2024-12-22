@@ -46,10 +46,13 @@ void main()
 	Material mat 							= g_materials.data[g_pushConstant.material_id];
 	// if roughness is 0, NDF is 0 and so is the entire cook-Torrence factor without specular or diffuse
 	outRoughMetal.xy						= vec2(mat.roughness, mat.metallic);
-	outRoughMetal.xy						= GetRoughMetalPBR(mat.roughMetal_id, inUV, outRoughMetal.xy).xy;
+	outRoughMetal.xy						*= GetRoughMetalPBR(mat.roughMetal_id, inUV, outRoughMetal.xy).xy;
 
 	outPosition 							= inPosition;
-	outAlbedo 								= GetColor(mat.color_id, inUV);
+	
+	outAlbedo 								= vec4(mat.pbr_color, 1.0) * GetColor(mat.color_id, inUV);
+	outAlbedo								+= vec4(GetEmissive(mat, inUV), 0.0);
+
 	mat3 TBN 								= mat3(inTangent, inBiTangent, inNormal);	
 	outNormal 								= vec4(GetNormal(TBN, mat.normal_id, inUV, inNormal), 1.0);
 

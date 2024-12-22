@@ -525,10 +525,16 @@ bool LoadMaterials(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, uint32_t p
 			mat.normal_id = p_texOffset + gltf_mat.additionalValues["normalTexture"].TextureIndex();
 		}
 
-		mat.pbr_color = nm::float3(1.0f); // nm::float3((float)gltf_mat.pbrMetallicRoughness.baseColorFactor[0], (float)gltf_mat.pbrMetallicRoughness.baseColorFactor[1], (float)gltf_mat.pbrMetallicRoughness.baseColorFactor[2]);
+		if (gltf_mat.additionalValues.find("emissiveTexture") != gltf_mat.additionalValues.end())
+		{
+			mat.emissive_id = p_texOffset + gltf_mat.additionalValues["emissiveTexture"].TextureIndex();
+		}
+				
+		mat.pbr_color = nm::float3((float)gltf_mat.pbrMetallicRoughness.baseColorFactor[0], (float)gltf_mat.pbrMetallicRoughness.baseColorFactor[1], (float)gltf_mat.pbrMetallicRoughness.baseColorFactor[2]);
 		mat.metallic = (float)gltf_mat.pbrMetallicRoughness.metallicFactor;
 		mat.roughness = (float)gltf_mat.pbrMetallicRoughness.roughnessFactor;
 		mat.roughMetal_id = p_texOffset + ((gltf_mat.pbrMetallicRoughness.metallicRoughnessTexture.index < 0) ? MAX_SUPPORTED_TEXTURES : gltf_mat.pbrMetallicRoughness.metallicRoughnessTexture.index);
+		mat.emissive = nm::float3((float)gltf_mat.emissiveFactor[0], (float)gltf_mat.emissiveFactor[1], (float)gltf_mat.emissiveFactor[2]);
 
 		p_objScene.materialsList.push_back(mat);
 		materialCount++;

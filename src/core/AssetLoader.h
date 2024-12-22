@@ -33,22 +33,23 @@ struct ImageRaw
 
 struct Material
 {
-	nm::float3					color;
+	nm::float3					emissive;
 	float						metallic;
 	nm::float3					pbr_color;
 	float						roughness;
 	uint32_t					color_id;
 	uint32_t					normal_id;
 	uint32_t					roughMetal_id;
-	uint32_t					unassigned_0;
+	uint32_t					emissive_id;
 	Material() 
 		: color_id(MAX_SUPPORTED_TEXTURES)
-		, color(0.0f)
 		, normal_id(MAX_SUPPORTED_TEXTURES)
 		, roughMetal_id(MAX_SUPPORTED_TEXTURES)
+		, emissive_id(MAX_SUPPORTED_TEXTURES)
 		, pbr_color(1.0f)
 		, metallic(0.5f)
 		, roughness(0.5f)
+		, emissive(0.0f)
 	{}
 };
 
