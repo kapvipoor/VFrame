@@ -229,6 +229,105 @@ int64_t ReadFilePartial(const char* fileName, void* buffer, size_t bufferLen, in
 	return bufferLen;
 }
 
+typedef enum RESOURCE_DIMENSION
+{
+	RESOURCE_DIMENSION_UNKNOWN = 0,
+	RESOURCE_DIMENSION_BUFFER = 1,
+	RESOURCE_DIMENSION_TEXTURE1D = 2,
+	RESOURCE_DIMENSION_TEXTURE2D = 3,
+	RESOURCE_DIMENSION_TEXTURE3D = 4
+} RESOURCE_DIMENSION;
+
+typedef struct
+{
+	uint32_t			format;
+	RESOURCE_DIMENSION  resourceDimension;
+	uint32_t              miscFlag;
+	uint32_t              arraySize;
+	uint32_t              reserved;
+} DDS_HEADER_DXT10;
+
+struct DDS_PIXELFORMAT
+{
+	uint32_t size;
+	uint32_t flags;
+	uint32_t fourCC;
+	uint32_t bitCount;
+	uint32_t bitMaskR;
+	uint32_t bitMaskG;
+	uint32_t bitMaskB;
+	uint32_t bitMaskA;
+};
+
+struct DDS_HEADER
+{
+
+	uint32_t          dwSize;
+	uint32_t          dwHeaderFlags;
+	uint32_t          dwHeight;
+	uint32_t          dwWidth;
+	uint32_t          dwPitchOrLinearSize;
+	uint32_t          dwDepth;
+	uint32_t          dwMipMapCount;
+	uint32_t          dwReserved1[11];
+	DDS_PIXELFORMAT	  ddspf;
+	uint32_t          dwSurfaceFlags;
+	uint32_t          dwCubemapFlags;
+	uint32_t          dwCaps3;
+	uint32_t          dwCaps4;
+	uint32_t          dwReserved2;
+};
+
+bool GetChannelInfo(DDS_PIXELFORMAT formatId, uint32_t& bitsPerChannel, int& channelCount)
+{
+	//if (formatId.flags & 0x00000004)   //DDPF_FOURCC
+	//{
+	//	// Check for D3DFORMAT enums being set here
+	//	switch (formatId.fourCC)
+	//	{
+	//	case '1TXD':         return ResourceFormat::BC1_UNORM;
+	//	case '3TXD':         return ResourceFormat::BC2_UNORM;
+	//	case '5TXD':         return ResourceFormat::BC3_UNORM;
+	//	case 'U4CB':         return ResourceFormat::BC4_UNORM;
+	//	case 'A4CB':         return ResourceFormat::BC4_SNORM;
+	//	case '2ITA':         return ResourceFormat::BC5_UNORM;
+	//	case 'S5CB':         return ResourceFormat::BC5_SNORM;
+	//	case 36:             return ResourceFormat::RGBA16_UNORM;
+	//	case 110:            return ResourceFormat::RGBA16_SNORM;
+	//	case 111:            return ResourceFormat::R16_FLOAT;
+	//	case 112:            return ResourceFormat::RG16_FLOAT;
+	//	case 113:            return ResourceFormat::RGBA16_FLOAT;
+	//	case 114:            return ResourceFormat::R32_FLOAT;
+	//	case 115:            return ResourceFormat::RG32_FLOAT;
+	//	case 116:            return ResourceFormat::RGBA32_FLOAT;
+	//	default:
+	//		std::cerr << "GetChannelInfo Unsupported DDS format requested: " << (uint32_t)formatId << std::endl;
+	//		return false;
+	//	}
+	//
+	//	return true;
+	//}
+	//else
+	{
+		switch (formatId.bitMaskR)
+		{
+		case 0xff:        // RGBA8_UNORM
+			bitsPerChannel = 8;
+			channelCount = 4;
+			break;
+		default:
+			std::cerr << "GetChannelInfo Unsupported DDS format requested: " << formatId.fourCC << std::endl;
+			return false;
+		};
+
+		return true;
+	}
+	
+	std::cerr << "GetChannelInfo Unsupported DDS format requested: " << formatId.fourCC << std::endl;
+	return false;
+
+}
+
 bool GetChannelInfo(uint32_t formatId, uint32_t& bitsPerChannel, int& channelCount)
 {
 	if (formatId == 10)	// DXGI_FORMAT_R16G16B16A16_FLOAT
@@ -246,61 +345,12 @@ bool GetChannelInfo(uint32_t formatId, uint32_t& bitsPerChannel, int& channelCou
 
 bool LoadDDS(const char* textureFile, ImageRaw& p_data)
 {
-	typedef enum RESOURCE_DIMENSION
-	{
-		RESOURCE_DIMENSION_UNKNOWN = 0,
-		RESOURCE_DIMENSION_BUFFER = 1,
-		RESOURCE_DIMENSION_TEXTURE1D = 2,
-		RESOURCE_DIMENSION_TEXTURE2D = 3,
-		RESOURCE_DIMENSION_TEXTURE3D = 4
-	} RESOURCE_DIMENSION;
-
-	typedef struct
-	{
-		uint32_t			format;
-		RESOURCE_DIMENSION  resourceDimension;
-		uint32_t              miscFlag;
-		uint32_t              arraySize;
-		uint32_t              reserved;
-	} DDS_HEADER_DXT10;
-
-	struct DDS_PIXELFORMAT
-	{
-		uint32_t size;
-		uint32_t flags;
-		uint32_t fourCC;
-		uint32_t bitCount;
-		uint32_t bitMaskR;
-		uint32_t bitMaskG;
-		uint32_t bitMaskB;
-		uint32_t bitMaskA;
-	};
-
-	struct DDS_HEADER
-	{
-
-		uint32_t          dwSize;
-		uint32_t          dwHeaderFlags;
-		uint32_t          dwHeight;
-		uint32_t          dwWidth;
-		uint32_t          dwPitchOrLinearSize;
-		uint32_t          dwDepth;
-		uint32_t          dwMipMapCount;
-		uint32_t          dwReserved1[11];
-		DDS_PIXELFORMAT ddspf;
-		uint32_t          dwSurfaceFlags;
-		uint32_t          dwCubemapFlags;
-		uint32_t          dwCaps3;
-		uint32_t          dwCaps4;
-		uint32_t          dwReserved2;
-	};
-
 	// Get the file size
 	int64_t fileSize = GetFileSize(textureFile);
 	int64_t rawTextureSize = fileSize;
 	if (fileSize == -1)
 	{
-		std::cerr << "Could not get file size of " << textureFile << std::endl;;
+		std::cerr << "LoadDDS: Could not get file size of " << textureFile << std::endl;;
 		return false;
 	}
 
@@ -312,7 +362,7 @@ bool LoadDDS(const char* textureFile, ImageRaw& p_data)
 	int64_t sizeRead = ReadFilePartial(textureFile, headerData, c_HEADER_SIZE, 0);
 	if (sizeRead != c_HEADER_SIZE)
 	{
-		std::cerr << "Error reading texture header data for file " << textureFile << std::endl;
+		std::cerr << "LoadDDS: Error reading texture header data for file " << textureFile << std::endl;
 		return false;
 	}
 
@@ -320,7 +370,7 @@ bool LoadDDS(const char* textureFile, ImageRaw& p_data)
 	uint32_t magicNumber = *reinterpret_cast<uint32_t*>(pByteData);
 	if (magicNumber != ' SDD')   // "DDS "
 	{
-		std::cerr << "DDSLoader could not find DDS indicator in header info " << textureFile << std::endl;
+		std::cerr << "LoadDDS: Could not find DDS indicator in header info " << textureFile << std::endl;
 		return false;
 	}
 
@@ -354,14 +404,24 @@ bool LoadDDS(const char* textureFile, ImageRaw& p_data)
 
 			break;
 		default:
+			std::cerr << "LoadDDS: Error reading texture data for file: " << textureFile << std::endl;
 			std::cerr << "LoadDDS: Unexpected Resource Dimension Encountered: " << pHeader10->resourceDimension << std::endl;
 			return false;
 		}
 	}
 	else
 	{
-		std::cerr << "DDSLoader::Load: Unsupported DDS Resource fourCC: " << pHeader->ddspf.fourCC << std::endl;
-		return false;
+		if (pHeader->dwCubemapFlags == 0xfe00)
+			p_data.depthOrArraySize = 6;
+		else
+			p_data.depthOrArraySize = 1;
+				
+		if (!GetChannelInfo(pHeader->ddspf, bitsPerChannel, p_data.channels))
+		{
+			std::cerr << "LoadDDS: Error reading texture data for file: " << textureFile << std::endl;
+			std::cerr << "LoadDDS: Unsupported DDS Resource fourCC: " << pHeader->ddspf.fourCC << std::endl;
+			return false;
+		}
 	}
 
 	// Will load HDR data without tone mapping
@@ -376,7 +436,7 @@ bool LoadDDS(const char* textureFile, ImageRaw& p_data)
 		else if(p_data.raw_hdr)
 			delete[](p_data.raw);
 
-		std::cerr << "DDSLoader::Load Error reading texture data for file: " << textureFile << std::endl;
+		std::cerr << "LoadDDS: Error reading texture data for file: " << textureFile << std::endl;
 		
 		return false;
 	}

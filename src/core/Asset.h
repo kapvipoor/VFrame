@@ -72,11 +72,11 @@ enum BindingDest
 	  bd_Gloabl_Uniform				= 0	, bd_Scene_MeshInfo_Uniform	= 0	, bd_UI_TexArray	= 0 , bd_Debug_Transforms_Uniform = 0
 	, bd_Linear_Sampler				= 1	, bd_Env_Specular			= 1	, bd_UI_max
 	, bd_Nearest_Sampler			= 2 , bd_Env_Diffuse			= 2
-	, bd_ObjPicker_Storage			= 3	, bd_Material_Storage		= 3
-	, bd_SSAOKernel_Storage			= 4 , bd_Scene_Lights			= 4
-	, bd_PrimaryRead_TexArray		= 5 , bd_SceneRead_TexArray		= 5
-	, bd_RTs_StorageImages			= 6 , bd_Scene_max				= 6
-	, bd_RTs_SampledImages			= 7
+	, bd_ObjPicker_Storage			= 3	, bd_Brdf_Lut				= 3
+	, bd_SSAOKernel_Storage			= 4 , bd_Material_Storage		= 4
+	, bd_PrimaryRead_TexArray		= 5 , bd_Scene_Lights			= 5
+	, bd_RTs_StorageImages			= 6 , bd_SceneRead_TexArray		= 6
+	, bd_RTs_SampledImages			= 7 , bd_Scene_max				= 7					
 	, bd_Primary_max				= 8
 };
 
@@ -208,6 +208,7 @@ public:
 		float						ssaoRadius;
 		int							enableShadow;
 		int							enableShadowPCF;
+		int							enableIBL;
 		float						pbrAmbientFactor;
 		int							enableSSAO;
 		float						biasSSAO;
@@ -221,7 +222,6 @@ public:
 		float						taaFlickerCorectionMode;
 		float						taaReprojectionFilter;
 		float						toneMappingExposure;
-		float						UNASSIGNED_float0;
 		float						UNASSIGNED_float1;
 		float						UNASSIGNED_float2;
 	};
@@ -458,7 +458,8 @@ public:
 		  tt_default				= 0
 		, tt_env_specular			= 1
 		, tt_env_diffuse			= 2
-		, tt_scene					= 3
+		, tt_brdfLut				= 3
+		, tt_scene					= 4
 	};
 
 	struct MeshPushConst
@@ -520,8 +521,7 @@ private:
 	uint32_t m_textureOffset;
 	uint32_t m_materialOffset;
 
-	bool LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
-	bool LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList , CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
+	bool LoadDefaultTextures(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 	bool LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
 	bool LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
 

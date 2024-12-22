@@ -78,21 +78,32 @@ float CalculateDirectonalShadow(vec4 L, vec3 N, bool applyPCF)
 void main()
 {
 	Material mat 							= g_materials.data[g_pushConstant.material_id];
-	// if roughness is 0, NDF is 0 and so is the entire cook-torrence factor withotu specular or diffuse
+	
 	vec2 roughMetal							= vec2(mat.roughness, mat.metallic);																			//vec2(max(mat.roughness, 0.1), mat.metallic);	
 	roughMetal								= GetRoughMetalPBR(mat.roughMetal_id, inUV, roughMetal);
 
-	vec4 color 								= GetColor(mat.color_id, inUV); 																				// vec4(roughMetal.x, roughMetal.y, 1.0, 1.0);
+	vec4 albedo 								= GetColor(mat.color_id, inUV); 																				// vec4(roughMetal.x, roughMetal.y, 1.0, 1.0);
 	vec3 camPosInViewSpace					= (g_Info.camView * vec4(g_Info.cameraLookFromX, g_Info.cameraLookFromY, g_Info.cameraLookFromZ, 0.0f)).xyz;
 	vec3 V 									= normalize(camPosInViewSpace - inPosinViewSpace.xyz);															// V in View Space
 	mat3 TBN 								= mat3(inTangentinViewSpace, inBiTangentinViewSpace, inNormalinViewSpace);	
 	vec3 N 									= GetNormal(TBN, mat.normal_id, inUV, inNormalinViewSpace);
-	vec3 Lo 								= vec3(0.0);
-	float shadow							= 0.0f;
+	
+	// For non-metallic surfaces, use a constant
+	// For metals, use albedo as metals have color to their
+	// specular
+	vec3 F0 = vec3(0.04);
+	F0 = mix(F0, albedo.xyz, roughMetal.y);
+				
+    vec3 Lo = vec3(0.0);
+	float shadow = 0.0f;
+	vec4 finalColor = vec4(0.0);
 
 	// for each light source
 	for(int i = 0; i < g_lights.count; i++)
 	{
+		vec3 radiance = vec3(0.0f);
+		float attenuation = 1.0;
+
 		Light light = g_lights.lights[i];
 		uint lightType = light.type_castShadow >> 16;
 
@@ -109,63 +120,99 @@ void main()
 			// Light color is directly impacted by the intensity
 			lightColor						= lightColor * light.intensity;
 
-			// before we calculate anything related to light, we want to make sure
-			// the position is not in shadow
-			shadow 								= CalculateDirectonalShadow(inPosinLightSpace, N, g_Info.enableShadowPCF);
+			// Compute Shadow if enabled
+			if(g_Info.enableShadow == 1.0)
+			{
+				shadow 								= CalculateDirectonalShadow(inPosinLightSpace, N, g_Info.enableShadowPCF);
+			}
 
-			lightColor = lightColor * (1.0f - shadow);
-
+			// Compute directional light if IBL is disabled
+			// Otherwise the ambient light is picked from
+			// Diffuse Irradiance and Specular IBL Maps
+			if(g_Info.enableIBL == 0)
+			{
+		 		// There is no attenuation for directional light
+				radiance = lightColor * light.intensity * attenuation * (1.0f - shadow);
+			}
 		}
 		else if (lightType == POINT_LIGHT_TYPE)
 		{
 			// light.vector3 is a position of the point light here.
 			// the light vector is going to be inPosinViewSpace - (view matrix * light position)
-			L 								= ((g_Info.camView * vec4(light.vector3[0], light.vector3[1], light.vector3[2], 1.0f)) - inPosinViewSpace).xyz; // L in View Space
+			// L in View Space
+			L = ((g_Info.camView * vec4(light.vector3[0], light.vector3[1], light.vector3[2], 1.0f)) - inPosinViewSpace).xyz;
 			
-			// checking to make sure the distance between the light source 
-			// and position is proportional supported intensity range of this point light
-			// for now intensity linearly reduces as the distance of light to poition
-			// increases.
-			lightColor						= lightColor * max(0.0f, light.intensity - length(L));
-			L 								= normalize(L);
+			float distance = length(L);
+			attenuation = max(0.0f, light.intensity - distance);
+
+			L = normalize(L);
+
+			// There is no attenuation for directional light
+			radiance = lightColor * light.intensity * attenuation;
 		}
 		
 		vec3 H 								= normalize(V+L);
 
 		if(any(greaterThan(lightColor, vec3(0.0f))))
 		{
-			vec3 radiance 					= lightColor;
-
 			// calculating fresnel value to get the reflection to refraction ratio
-			vec3 F0 						= vec3(0.04);
-			F0 								= mix(F0, color.xyz, roughMetal.y); 	// revisit this if necessary as the color here needs to be the metal's color for fresnel effect
-			vec3 F 							= FresnelSchlick(max(dot(H, V), 0.0) , F0);
+			vec3 F	= FresnelSchlick(max(dot(H, V), 0.0) , F0);
 
 			// calculating Geometry factor and Normal Distribution Function
-			float NDF 						= DistrubutionGGX(N, H, roughMetal.x);
-			float G 						= GeometrySmith(N, V, L, roughMetal.x);
+			float NDF = DistrubutionGGX(N, H, roughMetal.x);
+			float G = GeometrySmith(N, V, L, roughMetal.x);
 
-			vec3 numen 						= NDF * G * F;
-			 // adding 0.0001 to avoid division by 0
-			float denom 					= 4.0 * max(dot(N, V), 0.0) * max(dot(L, N), 0.0) + 0.0001;
-			vec3 specular					= numen/denom;
+			vec3 numen = NDF * G * F;
+			// adding 0.0001 to avoid division by 0
+			float denom	= 4.0 * max(dot(N, V), 0.0) * max(dot(L, N), 0.0) + 0.0001;
+			vec3 specular = numen/denom;
 
 			// Fresnel value directly corresponds to the reflection factor
-			vec3 Ks 						= F;
-			vec3 Kd 						= 1.0 - Ks;
+			vec3 Ks	= F;
+
+			// Energy conversation: Diffuse and Specular light cannot be over 1 unless the surface
+			// emits light. Until emissive surfaces are supported, we are strictly setting Kd + Ks = 1
+			vec3 Kd = 1.0 - Ks;
 			// As we know metals do not participate in diffuse
-			Kd 								= Kd * (1.0 - roughMetal.y);
+			Kd = Kd * (1.0 - roughMetal.y);
 
 			// calculating Lambertian diffuse
-			float NdotL 					= max(dot(N, L), 0.0);
-
-			Lo 								= (Lo + ((Kd * color.xyz / PI) + specular) * radiance * NdotL);
+			float NdotL	= max(dot(N, L), 0.0);
+			
+			// Add all outgoing radiance
+			Lo = (Lo + ((Kd * albedo.xyz / PI) + specular) * radiance * NdotL);
 		}
 	}
 
-	vec3 ambient 							= vec3(g_Info.pbrAmbientFactor) * color.xyz;
-	vec3 finalColor							= ambient + Lo;
+	if(g_Info.enableIBL == 1)
+	{
+		// Ambient lighting to use IBL
+		vec3 F = FresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughMetal.x);
+		vec3 Ks = F;
+		vec3 Kd = 1.0 - Ks;
+		Kd = Kd * (1.0 - roughMetal.y);
+		// We are sampling the irradiance at this given pixel position along the specified normal.
+		// This is computed by sampling all* possible directions of incoming light and averaging
+		// it. It is tonemapped because the flux at this point on the surface cannot be over 1 
+		// unless point is emitting light of its own
+		vec3 irradiance = texture(g_env_diffuse_Sampler, N).rgb;
+		vec3 diffuse = irradiance * albedo.xyz;
 
+		const float MAX_REFLECTION_LOD = 9.0;
+		vec3 R = reflect(-V, N);
+		vec3 preFilteredColor = textureLod(g_env_specular_Sampler, R, MAX_REFLECTION_LOD * roughMetal.x).xyz;
+		vec2 envBRDF = texture(sampler2D(g_brdf_lut, g_LinearSampler), vec2(max(dot(N, V), 0.0), roughMetal.x)).bg;
+		vec3 specular = preFilteredColor * (F * envBRDF.x + envBRDF.y);
+		
+		vec3 ambient = (Kd * diffuse + specular) * (1.0 - shadow) /* * ambient occlusion */;
+		finalColor = vec4(ambient + Lo, 1.0);	
+	}
+	else
+	{
+		vec3 ambient = vec3(g_Info.pbrAmbientFactor) * albedo.xyz;
+		finalColor = vec4(ambient + Lo, 1.0);
+	}
+	
 	// Calculate motion vectors
 	{
 		// Perspective divide both positions

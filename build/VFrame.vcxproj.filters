@@ -230,6 +230,9 @@
     <ClCompile Include="..\external\imgui\backends\imgui_impl_win32.cpp">
       <Filter>external\imgui</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\Pass.cpp">
+      <Filter>frontend\Passes</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\Src\VFrame.rc">

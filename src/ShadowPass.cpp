@@ -161,10 +161,9 @@ bool CStaticShadowPrepass::Render(RenderData* p_renderData)
 
 void CStaticShadowPrepass::Show(CVulkanRHI* p_rhi)
 {
+	ImGui::Checkbox(std::to_string(m_passIndex).c_str(), &m_isEnabled);
+	ImGui::SameLine(40);
 	bool shadowNode = ImGui::TreeNode("Shadow");
-	ImGui::SameLine(75);
-	ImGui::Checkbox(" ", &m_isEnabled);
-
 	if (shadowNode)
 	{
 		ImGui::Checkbox("PCF", &m_enablePCF);

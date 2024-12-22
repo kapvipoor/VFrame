@@ -111,6 +111,8 @@ void CToneMapPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBin
 
 void CToneMapPass::Show(CVulkanRHI* p_rhi)
 {
+    ImGui::Checkbox(std::to_string(m_passIndex).c_str(), &m_isEnabled);
+    ImGui::SameLine(40);
     bool toneMappingNode = ImGui::TreeNode("Tone Mapping");
     if (toneMappingNode)
     {
@@ -187,13 +189,10 @@ bool CTAAComputePass::Dispatch(RenderData* p_renderData)
 }
 
 void CTAAComputePass::Show(CVulkanRHI* p_rhi)
-{
-    bool taaNode = ImGui::TreeNode("TAA");
-    ImGui::SameLine(75);
-    bool isTAAEnabled = IsEnabled();
-    ImGui::Checkbox(" ", &isTAAEnabled);
-    Enable(isTAAEnabled);
-
+{    
+    ImGui::Checkbox(std::to_string(m_passIndex).c_str(), &m_isEnabled);
+    ImGui::SameLine(40);
+    bool taaNode = ImGui::TreeNode("TAA"); 
     if (m_isEnabled == false)
     {
         m_jitterHelper->m_jitterMode = CJitterHelper::JitterMode::None;

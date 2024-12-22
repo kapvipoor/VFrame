@@ -186,7 +186,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 
 	m_rhi->SetRenderType(CVulkanRHI::RendererType::Deferred);
 	m_staticShadowPass->Enable(false);
-	m_ssrComputePass->Enable(true);
+	m_ssrComputePass->Enable(false);
 	m_taaComputePass->Enable(false);
 
 	return true;
