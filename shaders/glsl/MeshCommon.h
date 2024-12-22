@@ -14,7 +14,9 @@ layout(set = 1, binding = 0) uniform Mesh
 	MeshData data[1];
 } g_meshUniform;
 
-layout(set = 1, binding = 1) uniform samplerCube g_skyboxSampler;
+layout(set = 1, binding = 1) uniform samplerCube g_env_specular_Sampler;
+layout(set = 1, binding = 2) uniform samplerCube g_env_diffuse_Sampler;
+layout(set = 1, binding = 3) uniform texture2D g_brdf_lut;
 
 struct Material
 {
@@ -27,7 +29,7 @@ struct Material
 	uint roughMetal_id;
 	uint unassigned_0;
 };
-layout(set = 1, binding = 2) buffer Material_Storage
+layout(set = 1, binding = 4) buffer Material_Storage
 {
 	Material data[1];			// list of all material
 } g_materials;
@@ -41,13 +43,13 @@ struct Light
 	float viewProj[16];
 };
 
-layout(set = 1, binding = 3) buffer Light_Storage
+layout(set = 1, binding = 5) buffer Light_Storage
 {
 	uint count;
 	Light lights[];
 } g_lights;
 
-layout(set = 1, binding = 4) uniform texture2D g_textures[];
+layout(set = 1, binding = 6) uniform texture2D g_textures[];
 
 vec4 GetColor(uint color_id, vec2 uv)
 {

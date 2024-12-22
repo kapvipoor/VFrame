@@ -306,53 +306,50 @@ bool CTextures::CreateTexture(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 	return false;
 }
 
-bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, const std::vector<ImageRaw>& p_rawList, 
-	const CVulkanRHI::SamplerList& p_samplers, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id)
+bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, ImageRaw& cubeMapRaw, const CVulkanRHI::SamplerList& p_samplers, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int p_id)
 {
-	if (p_rawList.size() != 6)
-	{
-		std::cerr << "CTextures::CreateCubemap Error: Cannot create cube map because raw data has slices less/more than 6: " << p_debugName << std::endl;
-		return false;
-	}
+	VkFormat cubeMapFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
-	VkFormat cubemapFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+	size_t cubeMapSize = CVulkanRHI::Image::GetTextureSizePerLayer(cubeMapRaw.width, cubeMapRaw.height, cubeMapFormat,
+		cubeMapRaw.mipLevels, nullptr);
 
-	std::vector<float> megaStg_data;
-	for (int i = 0; i< p_rawList.size(); i++)
-	{
-		int size = p_rawList[i].width * p_rawList[i].height * p_rawList[i].channels;
-		megaStg_data.insert(megaStg_data.end(), p_rawList[i].raw_hdr, p_rawList[i].raw_hdr + size);
-	}
-
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(megaStg_data.size() * sizeof(float), p_stg,
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(cubeMapSize * cubeMapRaw.depthOrArraySize, p_stg,
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
 		p_debugName + "_transfer"));
 
-	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)megaStg_data.data(), p_stg));
+	if (cubeMapRaw.raw)
+	{
+		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)cubeMapRaw.raw, p_stg));
+	}
+	else
+	{
+		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)cubeMapRaw.raw_hdr, p_stg));
+	}
+
 	CVulkanRHI::Image cubemap;
 	cubemap.descInfo.imageLayout					= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	cubemap.descInfo.sampler						= p_samplers[SamplerId::s_Linear].descInfo.sampler;
-	cubemap.format									= cubemapFormat;
-	cubemap.width									= p_rawList[0].width;
-	cubemap.height									= p_rawList[0].height;
+	cubemap.format									= cubeMapFormat;
+	cubemap.width									= cubeMapRaw.width;
+	cubemap.height									= cubeMapRaw.height;
 	cubemap.layerCount								= 6;
-	cubemap.bufOffset								= p_rawList[0].width 
-		* p_rawList[0].height 
-		* p_rawList[0].channels 
-		* GetBytesPerChannel(cubemapFormat);
 	cubemap.viewType								= VK_IMAGE_VIEW_TYPE_CUBE;
+	cubemap.SetLevelCount(cubeMapRaw.mipLevels);
 
 	VkImageCreateInfo imgInfo						= CVulkanCore::ImageCreateInfo();
-	imgInfo.extent.width							= p_rawList[0].width;					// assuming all the loaded cube map images have same width
-	imgInfo.extent.height							= p_rawList[0].height;					// assuming all the loaded cube map images have same height
+	imgInfo.extent.width							= cubeMapRaw.width;		// assuming all the loaded cube map images have same width
+	imgInfo.extent.height							= cubeMapRaw.height;	// assuming all the loaded cube map images have same height
 	imgInfo.arrayLayers								= 6;
 	imgInfo.flags									= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 	imgInfo.usage									= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-	imgInfo.format									= cubemapFormat;
+	imgInfo.format									= cubeMapFormat;
+	imgInfo.mipLevels								= cubeMapRaw.mipLevels;
 
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateTexture(p_stg, cubemap, imgInfo, p_cmdBfr, p_debugName));
-	// Doing this because; if the id is set to -1, then the intent is to grow the texture list at runtime and not a fixed size
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateTexture(p_stg, cubemap, imgInfo, p_cmdBfr, p_debugName, false /* upload, don't create mips, provided in staging */));
+	
+	// Doing this because; if the id is set to -1, then the intent 
+	// is to grow the texture list at runtime and not a fixed size
 	if (p_id == -1)
 	{
 		m_textures.push_back(cubemap);
@@ -368,21 +365,6 @@ bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, cons
 void CTextures::IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id, int p_mipLevel)
 {
 	p_rhi->IssueLayoutBarrier(p_imageLayout, m_textures[p_id], p_cmdBfr, p_mipLevel);
-}
-
-uint8_t CTextures::GetBytesPerChannel(VkFormat p_format)
-{
-	if (p_format >= VK_FORMAT_R8_UNORM && p_format <= VK_FORMAT_A8B8G8R8_SRGB_PACK32)
-		return 1;
-	else if (p_format >= VK_FORMAT_R16_UNORM && p_format <= VK_FORMAT_R16G16B16A16_SFLOAT)
-		return 2;
-	else if (p_format >= VK_FORMAT_R32_UINT && p_format <= VK_FORMAT_R32G32B32A32_SFLOAT)
-		return 4;
-
-	// slapping warning to avoid patching other cases. Will address them
-	// based on need.
-	std::cout << "Warning - CTextures::GetBytesPerChannel is returning 0." << std::endl;
-	return 0;
 }
 
 void CTextures::PushBackPreLoadedTexture(uint32_t p_texIndex)
@@ -828,15 +810,9 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1, &debugMarker));
 	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
 
-	if (!LoadDefaultTexture(p_rhi, stgList, cmdBfr))
+	if (!LoadDefaultTextures(p_rhi, p_samplerList, stgList, cmdBfr))
 	{
-		std::cerr << "CScene::Create Error: Failed to Load Default Texture" << std::endl;
-		return false;
-	}
-
-	if (!LoadSkybox(p_rhi, p_samplerList, stgList, cmdBfr))
-	{
-		std::cerr << "CScene::Create Error: Failed to Load Sky box" << std::endl;
+		std::cerr << "CScene::Create Error: Failed to Load Default Textures" << std::endl;
 		return false;
 	}
 
@@ -1022,72 +998,88 @@ bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 	return true;
 }
 
-bool CScene::LoadDefaultTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
+bool CScene::LoadDefaultTextures(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
-	std::clog << "Loading Default resources" << std::endl;
-
 	// load default texture to compensate for bad textures
 	{
-		CVulkanRHI::Buffer stg;
 		ImageRaw tex;
 		
-		RETURN_FALSE_IF_FALSE(LoadRawImage((g_DefaultPath / "tex_not_found.png").string().c_str(), tex));
-		RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateTexture(p_rhi, stg, &tex, VK_FORMAT_B8G8R8A8_SRGB,p_cmdBfr, "default_scene"));
+		std::filesystem::path resourcePath = g_DefaultPath / "Textures/Placeholder/tex_not_found.png";
+		std::clog << "Loading Placeholder for tex_not_found: " << resourcePath.string().c_str() << std::endl;
+
+		RETURN_FALSE_IF_FALSE(LoadRawImage(resourcePath.string().c_str(), tex));
+
+		CVulkanRHI::Buffer stg;
+		RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateTexture(p_rhi, stg, &tex, VK_FORMAT_B8G8R8A8_SRGB,p_cmdBfr, "tex_not_found"));
 		
 		FreeRawImage(tex);
 		p_stgList.push_back(stg);
 	}
 
-	return true;
-}
-
-bool CScene::LoadSkybox(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr)
-{
-	std::clog << "Loading Skybox Resources" << std::endl;
-
-	// Load sky box cube map
+	// Load specular environment map
 	{
-		std::filesystem::path cubemap_path[6]{
-			g_DefaultPath / "skybox_hdr/pz.hdr"
-		,	g_DefaultPath / "skybox_hdr/nz.hdr"
-		,	g_DefaultPath / "skybox_hdr/py_cw.hdr"
-		,	g_DefaultPath / "skybox_hdr/ny_ccw.hdr"
-		,	g_DefaultPath / "skybox_hdr/nx.hdr"
-		,	g_DefaultPath / "skybox_hdr/px.hdr"
-		};
+		ImageRaw cubeMapRaw;
 
-		std::vector<ImageRaw> cubemap_raw;
-		cubemap_raw.resize(6);
-		for (int i = 0; i < 6; i++)
-		{
-			RETURN_FALSE_IF_FALSE(LoadRawImage(cubemap_path[i].string().c_str(), cubemap_raw[i]));
-		}
+		std::filesystem::path cubemap_path = g_DefaultPath / "Textures/IBL/georgentor_Specular.dds";
+		std::clog << "Loading Specular IBL Mips: " << cubemap_path.string().c_str() << std::endl;
+		
+		RETURN_FALSE_IF_FALSE(LoadRawImage(cubemap_path.string().c_str(), cubeMapRaw));
 
 		CVulkanRHI::Buffer stg;
-		RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateCubemap(p_rhi, stg, cubemap_raw, *p_samplerList, p_cmdBfr, "skybox"));
+		RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateCubemap(p_rhi, stg, cubeMapRaw, *p_samplerList, p_cmdBfr, "environment_specular"));
 
 		p_stgList.push_back(stg);
 
-		for (int i = 0; i < 6; i++)
-		{
-			FreeRawImage(cubemap_raw[i]);
-		}
+		FreeRawImage(cubeMapRaw);
+	}
+
+	// Load diffuse environment map
+	{
+		ImageRaw cubeMapRaw;
+		std::filesystem::path cubemap_path = g_DefaultPath / "Textures/IBL/georgentor_Diffuse.dds";
+		std::clog << "Loading Diffuse Irradiance Mips: " << cubemap_path.string().c_str() << std::endl;
+
+		RETURN_FALSE_IF_FALSE(LoadRawImage(cubemap_path.string().c_str(), cubeMapRaw));
+
+		CVulkanRHI::Buffer stg;
+		RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateCubemap(p_rhi, stg, cubeMapRaw, *p_samplerList, p_cmdBfr, "environment_diffuse"));
+
+		p_stgList.push_back(stg);
+
+		FreeRawImage(cubeMapRaw);
+	}
+
+	// Load BRDFLut
+	{
+		ImageRaw tex;
+
+		std::filesystem::path resourcePath = g_DefaultPath / "Textures/BRDF/BrdfLut.dds";
+		std::clog << "Loading BRDF Lut: " << resourcePath.string().c_str() << std::endl;
+
+		RETURN_FALSE_IF_FALSE(LoadRawImage(resourcePath.string().c_str(), tex));
+
+		CVulkanRHI::Buffer stg;
+		RETURN_FALSE_IF_FALSE(m_sceneTextures->CreateTexture(p_rhi, stg, &tex, VK_FORMAT_B8G8R8A8_SRGB, p_cmdBfr, "brdf_lut"));
+
+		FreeRawImage(tex);
+		p_stgList.push_back(stg);
 	}
 
 	// Load skybox geometry
 	{
 		SceneRaw sceneraw;
 		ObjLoadData loadData{};
-		loadData.flipUV					= false;
-		loadData.loadMeshOnly			= true;
+		loadData.flipUV = false;
+		loadData.loadMeshOnly = true;
 
-		RETURN_FALSE_IF_FALSE(LoadObj((g_DefaultPath / "cube.obj").string().c_str(), sceneraw, loadData));
+		RETURN_FALSE_IF_FALSE(LoadObj((g_DefaultPath / "3D/cube.obj").string().c_str(), sceneraw, loadData));
 
-		MeshRaw meshraw					= sceneraw.meshList[0];
-		CRenderableMesh* mesh			= new CRenderableMesh("Skybox", MeshType::mt_Skybox, nm::Transform());
+		MeshRaw meshraw = sceneraw.meshList[0];
+		CRenderableMesh* mesh = new CRenderableMesh("Skybox", MeshType::mt_Skybox, nm::Transform());
 		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr, "skybox"));
 		m_meshes.push_back(mesh);
 	}
+
 
 	return true;
 }
@@ -1097,15 +1089,16 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	std::vector<std::filesystem::path>		defaultScenePaths;
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels / 2.0 / DragonAttenuation / glTF / DragonAttenuation.gltf");				//0
 	//m_scenePaths.push_back(g_AssetPath/"shadow_test_3.gltf");																		//1
-	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");						//2
+	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");					//2
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
-	defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
+	defaultScenePaths.push_back(g_AssetPath / "glTFSampleModels/2.0/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf");
+	//defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
 	//defaultScenePaths.push_back(g_AssetPath / "glTFSampleModels/2.0/Sponza/glTF/Sponza.gltf");
-	defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");											//4													//5
+	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");									//4
 	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf");
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");				//6
-	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/cube/cube.obj");																			//7
-	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/icosphere.gltf");																			//8
+	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/cube/cube.obj");											//7
+	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/icosphere.gltf");											//8
 	//m_scenePaths.push_back(g_AssetPath/"dragon/dragon.obj");															f			//9
 	//m_scenePaths.push_back(g_AssetPath/"stanford_dragon_pbr/scene.gltf");															//10
 	//m_scenePaths.push_back(g_AssetPath/"mitsuba/mitsuba.obj");																	//11
@@ -1297,10 +1290,13 @@ bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
 	VkShaderStageFlags vertex_frag		= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	VkShaderStageFlags frag				= VK_SHADER_STAGE_FRAGMENT_BIT;
 	VkShaderStageFlags vert_frag_comp	= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+	VkShaderStageFlags frag_comp		= VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
 	{
 		// Creating Descriptors and descriptor set based on following type and count
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag},	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_CubeMap_Texture,			1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	frag },			0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	frag_comp },	0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	frag_comp },	0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			frag_comp },	0);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			frag },			0);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vert_frag_comp},0);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			frag },	        0);
@@ -1310,7 +1306,9 @@ bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
 	// Creating descriptor set for swap chain utility 1
 	{
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag},	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_CubeMap_Texture,			1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	frag },			1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	frag_comp },	1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	frag_comp },	1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			frag_comp },	1);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			frag },			1);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vert_frag_comp},1);
 		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			frag },			1);
@@ -1321,7 +1319,9 @@ bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
 	for (uint32_t i = 0; i < FRAME_BUFFER_COUNT; i++)
 	{
 		BindlessWrite(i, BindingDest::bd_Scene_MeshInfo_Uniform, &m_meshInfo_uniform[0].descInfo, 1);
-		BindlessWrite(i, BindingDest::bd_CubeMap_Texture, &m_sceneTextures->GetTexture(TextureType::tt_skybox).descInfo, 1);
+		BindlessWrite(i, BindingDest::bd_Env_Specular, &m_sceneTextures->GetTexture(TextureType::tt_env_specular).descInfo, 1);
+		BindlessWrite(i, BindingDest::bd_Env_Diffuse, &m_sceneTextures->GetTexture(TextureType::tt_env_diffuse).descInfo, 1);
+		BindlessWrite(i, BindingDest::bd_Brdf_Lut, &m_sceneTextures->GetTexture(TextureType::tt_brdfLut).descInfo, 1);
 		BindlessWrite(i, BindingDest::bd_Material_Storage, &m_material_storage.descInfo, 1);
 		BindlessWrite(i, BindingDest::bd_Scene_Lights, &m_light_storage.descInfo, 1);
 		BindlessWrite(i, BindingDest::bd_SceneRead_TexArray, imageInfoList.data(), (uint32_t)imageInfoList.size());
@@ -1554,7 +1554,9 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 							// I have no idea why, but this is causing a crash on debug. Release works fine.
 							// m_DescData[][BindingDest::bd_CubeMap_Texture].imgDesinfo is null right after control returns from
 							// Creating and loading textures - m_sceneTextures->CreateTexture 
-							BindlessWrite(i, BindingDest::bd_CubeMap_Texture, &m_sceneTextures->GetTexture(TextureType::tt_skybox).descInfo, 1);
+							BindlessWrite(i, BindingDest::bd_Env_Specular, &m_sceneTextures->GetTexture(TextureType::tt_env_specular).descInfo, 1);
+							BindlessWrite(i, BindingDest::bd_Env_Diffuse, &m_sceneTextures->GetTexture(TextureType::tt_env_diffuse).descInfo, 1);
+							BindlessWrite(i, BindingDest::bd_Brdf_Lut, &m_sceneTextures->GetTexture(TextureType::tt_brdfLut).descInfo, 1);
 							BindlessWrite(i, BindingDest::bd_SceneRead_TexArray, imageInfoList.data(), (uint32_t)imageInfoList.size(), arrayDestIndex);
 							BindlessUpdate(p_rhi, i);
 						}
@@ -1889,7 +1891,9 @@ CFixedBuffers::CFixedBuffers()
 	m_primaryUniformData.ssaoKernelSize			= 64.0f;
 	m_primaryUniformData.ssaoNoiseScale         = nm::float2((float)RENDER_RESOLUTION_X / 4.0f, (float)RENDER_RESOLUTION_Y / 4.0f);
 	m_primaryUniformData.ssaoRadius				= 0.5f;
+	m_primaryUniformData.enableShadow			= 0;
 	m_primaryUniformData.enableShadowPCF		= 0;
+	m_primaryUniformData.enableIBL				= 0;
 	m_primaryUniformData.pbrAmbientFactor		= 0.05f;
 	m_primaryUniformData.enableSSAO				= 1;
 	m_primaryUniformData.biasSSAO				= 0.015f;
@@ -1904,10 +1908,8 @@ CFixedBuffers::CFixedBuffers()
 	m_primaryUniformData.taaReprojectionFilter	= 0;		// Standard
 	m_primaryUniformData.toneMappingSelection	= 0.0f;
 	m_primaryUniformData.toneMappingExposure	= 1.0f;
-	m_primaryUniformData.UNASSIGNED_float0		= 0.0f;
 	m_primaryUniformData.UNASSIGNED_float1		= 0.0f;
 	m_primaryUniformData.UNASSIGNED_float2		= 0.0f;
-	m_primaryUniformData.UNASSIGNED_float3		= 0.0f;
 }
 
 CFixedBuffers::~CFixedBuffers()
@@ -1917,7 +1919,7 @@ CFixedBuffers::~CFixedBuffers()
 bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 {
 	size_t primaryUniformBufferSize =
-		  (sizeof(float) * 1)				// Tone Mapper Active
+		(sizeof(float) * 1)				// Tone Mapper Active
 		+ (sizeof(float) * 3)				// camera look-from
 		+ (sizeof(float) * 16)				// camera view projection
 		+ (sizeof(float) * 16)				// camera view projection with Jitter
@@ -1936,6 +1938,7 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(int) * 1)					// enabled PCF for shadow
 		+ (sizeof(float) * 3)				// sun light direction in view space
 		+ (sizeof(float) * 1)				// sun intensity
+		+ (sizeof(float) * 1)				// Enable IBL
 		+ (sizeof(float) * 1)				// PBR ambient Factor
 		+ (sizeof(int) * 1)					// enable SSAO
 		+ (sizeof(float) * 1)				// biasSSAO
@@ -1949,10 +1952,8 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(float) * 1)				// TAA Flicker Correction Mode
 		+ (sizeof(float) * 1)				// TAA Reprojection Filter
 		+ (sizeof(float) * 1)				// Tone Mapping Exposure
-		+ (sizeof(float) * 1)				// UNASSIGINED_Float_0
 		+ (sizeof(float) * 1)				// UNASSIGINED_Float_1
-		+ (sizeof(float) * 1)				// UNASSIGINED_Float_2
-		+ (sizeof(float) * 1);				// UNASSIGINED_Float_3
+		+ (sizeof(float) * 1);				// UNASSIGINED_Float_2
 		
 
 	size_t objPickerBufferSize = sizeof(uint32_t) * 1; // selected mesh ID
@@ -1993,27 +1994,6 @@ void CFixedBuffers::Show(CVulkanRHI* p_rhi)
 		{
 			ImGui::TreePop();
 		}
-		if (ImGui::TreeNode("Shadow"))
-		{
-			bool enablePCF = (bool)m_primaryUniformData.enableShadowPCF;
-			ImGui::Checkbox("PCF", &enablePCF);
-			m_primaryUniformData.enableShadowPCF = (int)enablePCF;
-			ImGui::TreePop();
-
-		}
-		if (ImGui::TreeNode("PBR"))
-		{
-			ImGui::SliderFloat("Ambient Factor", &m_primaryUniformData.pbrAmbientFactor, 0.00f, 1.0f);
-			ImGui::TreePop();
-		}
-		//if (ImGui::TreeNode("SSR"))
-		//{
-		//	ImGui::SliderFloat("Max Distance", &m_primaryUniformData.ssrMaxDistance, 0.0f, 50.0f);
-		//	ImGui::SliderFloat("Resolution", &m_primaryUniformData.ssrResolution, 0.0f, 1.0f);
-		//	ImGui::SliderFloat("Steps", &m_primaryUniformData.ssrSteps, 1, 50);
-		//	ImGui::SliderFloat("Thickness", &m_primaryUniformData.ssrThickness, 0.0f, 4.0f);
-		//	ImGui::TreePop();
-		//}
 		ImGui::Unindent();
 	}
 }
@@ -2057,7 +2037,9 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[0]); uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[1]);			// SSAO noise scale
 	uniformValues.push_back((float)m_primaryUniformData.ssaoKernelSize);																					// SSAO kernel size
 	uniformValues.push_back((float)m_primaryUniformData.ssaoRadius);																						// SSAO radius
+	uniformValues.push_back((float)m_primaryUniformData.enableShadow);																						// enable Shadows
 	uniformValues.push_back((float)m_primaryUniformData.enableShadowPCF);																					// enable PCF for shadows
+	uniformValues.push_back(m_primaryUniformData.enableIBL);																								// enable IBL
 	uniformValues.push_back(m_primaryUniformData.pbrAmbientFactor);																							// PBR Ambient Factor
 	uniformValues.push_back((float)m_primaryUniformData.enableSSAO);																						// enable SSAO
 	uniformValues.push_back(m_primaryUniformData.biasSSAO);																									// SSAO Bias
@@ -2071,11 +2053,8 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	uniformValues.push_back((float)m_primaryUniformData.taaFlickerCorectionMode);																			// TAA Flicker Correction Mode
 	uniformValues.push_back((float)m_primaryUniformData.taaReprojectionFilter);																				// TAA Reprojection Filter
 	uniformValues.push_back(m_primaryUniformData.toneMappingExposure);																						// Tone Mapping Exposure
-	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float0);																					// UNASSIGINED_0
 	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float1);																					// UNASSIGINED_1
 	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float2);																					// UNASSIGINED_2
-	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float3);																					// UNASSIGINED_3
-
 	
 	uint8_t* data							= (uint8_t*)(uniformValues.data());
 	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, m_buffers[p_scId], false));

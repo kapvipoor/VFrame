@@ -146,10 +146,9 @@ bool CSSAOComputePass::Dispatch(RenderData* p_renderData)
 
 void CSSAOComputePass::Show(CVulkanRHI* p_rhi)
 {
+	ImGui::Checkbox(std::to_string(m_passIndex).c_str(), &m_isEnabled);
+	ImGui::SameLine(40);
 	bool ssaoNode = ImGui::TreeNode("SSAO");
-	ImGui::SameLine(75);
-	ImGui::Checkbox(" ", &m_isEnabled);
-
 	if (ssaoNode)
 	{
 		ImGui::SliderFloat("SSAO Bias", &m_bias, 0.00f, 0.1f);
@@ -267,12 +266,9 @@ bool CSSRComputePass::Dispatch(RenderData* p_renderData)
 
 void CSSRComputePass::Show(CVulkanRHI* p_rhi)
 {
+	ImGui::Checkbox(std::to_string(m_passIndex).c_str(), &m_isEnabled);
+	ImGui::SameLine(40);
 	bool ssrNode = ImGui::TreeNode("SSR");
-	ImGui::SameLine(75);
-	bool isSSREnabled = IsEnabled();
-	ImGui::Checkbox(" ", &isSSREnabled);
-	Enable(isSSREnabled);
-
 	if (ssrNode)
 	{
 		ImGui::Indent();

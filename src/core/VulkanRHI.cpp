@@ -100,8 +100,8 @@ bool CVulkanRHI::CreateAllocateBindBuffer(size_t p_size, Buffer& p_buffer, VkBuf
 	return true;
 }
 
-bool CVulkanRHI::CreateTexture(Buffer& p_staging, Image& p_Image, 
-	VkImageCreateInfo p_createInfo, VkCommandBuffer& p_cmdBfr, std::string p_DebugName)
+bool CVulkanRHI::CreateTexture(Buffer& p_staging, Image& p_Image, VkImageCreateInfo p_createInfo, 
+	VkCommandBuffer& p_cmdBfr, std::string p_DebugName, bool p_createMips)
 {
 	p_Image.descInfo.imageLayout					= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // final layout
 	p_Image.usage									= p_createInfo.usage;
@@ -114,12 +114,19 @@ bool CVulkanRHI::CreateTexture(Buffer& p_staging, Image& p_Image,
 		return false;
 
 	IssueImageLayoutBarrier(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image.layerCount, p_Image.GetLevelCount(), p_Image.image, p_Image.usage, p_cmdBfr);
-	UploadFromHostToDevice(p_staging, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image, p_cmdBfr);
+	
+	UploadFromHostToDevice(p_staging, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image, p_cmdBfr, !p_createMips /* upload mips only when available */);
 
-	if (p_Image.GetLevelCount() > 1)
+	bool needsMips = p_Image.GetLevelCount() > 1;
+	// Mips are not available in the staging buffer, create them
+	if (needsMips && p_createMips)
+	{
 		CreateMipmaps(p_Image, p_cmdBfr);
+	}
 	else
+	{
 		IssueImageLayoutBarrier(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, p_Image.descInfo.imageLayout, p_Image.layerCount, p_Image.GetLevelCount(), p_Image.image, p_Image.usage, p_cmdBfr);
+	}
 	
 	SetDebugName((uint64_t)p_Image.image, VK_OBJECT_TYPE_IMAGE, (p_DebugName + "_image").c_str());
 

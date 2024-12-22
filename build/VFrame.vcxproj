@@ -211,6 +211,7 @@
     <ClCompile Include="..\src\core\VulkanRHI.cpp" />
     <ClCompile Include="..\src\core\WinCore.cpp" />
     <ClCompile Include="..\src\LightingPass.cpp" />
+    <ClCompile Include="..\src\Pass.cpp" />
     <ClCompile Include="..\src\PostProcessingPasses.cpp" />
     <ClCompile Include="..\Src\RasterRender.cpp" />
     <ClCompile Include="..\src\ScreenSpacePass.cpp" />

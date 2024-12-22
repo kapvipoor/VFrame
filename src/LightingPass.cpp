@@ -258,6 +258,9 @@ void CSkyboxPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBind
 
 CDeferredPass::CDeferredPass(CVulkanRHI* p_rhi)
 	: CDynamicRenderingPass(p_rhi)
+	, CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
+	, m_ambientFactor(0.01f)
+	, m_enableIBL(true)
 {}
 
 CDeferredPass::~CDeferredPass()
@@ -352,8 +355,10 @@ bool CDeferredPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
 	return true;
 }
 
-bool CDeferredPass::Update(UpdateData*)
+bool CDeferredPass::Update(UpdateData* p_updateData)
 {
+	p_updateData->uniformData->enableIBL = m_enableIBL;
+	p_updateData->uniformData->pbrAmbientFactor = m_ambientFactor;
 	return true;
 }
 
@@ -364,7 +369,6 @@ bool CDeferredPass::Render(RenderData* p_renderData)
 	const CScene* scene											= p_renderData->loadedAssets->GetScene();
 	const CPrimaryDescriptors* primaryDesc						= p_renderData->primaryDescriptors;
 
-	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Deferred GBuffer"));
 	{
 		vkCmdBeginRendering(cmdBfr, &m_renderingInfo);
 		{
@@ -400,9 +404,21 @@ bool CDeferredPass::Render(RenderData* p_renderData)
 		}
 		vkCmdEndRendering(cmdBfr);
 	}
-	//m_rhi->EndCommandBuffer(cmdBfr);
 
 	return true;
+}
+
+void CDeferredPass::Show(CVulkanRHI* p_rhi)
+{
+	ImGui::Checkbox(std::to_string(m_passIndex).c_str(), &m_isEnabled);
+	ImGui::SameLine(40);
+	bool differedPass = ImGui::TreeNode("Differed Lighting");
+	if (differedPass)
+	{
+		ImGui::Checkbox("IBL", &m_enableIBL);
+		ImGui::SliderFloat("Ambient Factor", &m_ambientFactor, 0.00f, 1.0f);
+		ImGui::TreePop();
+	}
 }
 
 void CDeferredPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
@@ -563,3 +579,5 @@ void CSkyboxDeferredPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_ve
 	p_vertexBinding.attributeDescription = m_pipeline.vertexAttributeDesc;
 	p_vertexBinding.bindingDescription = m_pipeline.vertexInBinding;
 }
+
+

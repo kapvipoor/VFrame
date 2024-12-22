@@ -49,7 +49,7 @@ public:
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 };
 
-class CDeferredPass : public CDynamicRenderingPass
+class CDeferredPass : public CDynamicRenderingPass, CUIParticipant
 {
 public:
 	CDeferredPass(CVulkanRHI*);
@@ -60,8 +60,13 @@ public:
 
 	virtual bool Update(UpdateData*) override;
 	virtual bool Render(RenderData*) override;
+	virtual void Show(CVulkanRHI* p_rhi) override;
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+
+private:
+	bool m_enableIBL;
+	float m_ambientFactor;
 };
 
 class CDeferredLightingPass : public CComputePass

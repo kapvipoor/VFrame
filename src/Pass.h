@@ -4,6 +4,8 @@
 #include "core/VulkanRHI.h"
 #include "core/Asset.h"
 
+extern uint32_t g_passIndex;
+
 class CPass
 {
 public:
@@ -30,11 +32,8 @@ public:
 		CFixedBuffers::PrimaryUniformData*  uniformData;
 	};
 
-	CPass(CVulkanRHI* p_core)
-		: m_rhi(p_core)
-		, m_isEnabled(true)
-	{}
-	~CPass() {}
+	CPass(CVulkanRHI* p_core);
+	~CPass();
 
 	virtual bool CreatePipeline(CVulkanRHI::Pipeline) = 0;
 	
@@ -50,6 +49,9 @@ protected:
 	bool m_isEnabled;
 	CVulkanRHI* m_rhi;
 	CVulkanRHI::Pipeline m_pipeline;
+
+	uint32_t m_passIndex;
+private:
 };
 
 class CComputePass : public CPass

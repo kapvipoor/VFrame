@@ -182,16 +182,73 @@ public:
 		uint32_t											height;
 
 		uint32_t											layerCount;
-		uint32_t											bufOffset;			// assuming the buffer offset for each layer is going to be same
 
 		uint32_t GetLevelCount() { return levelCount; }
 		void SetLevelCount(uint32_t p_levelCount) { levelCount = p_levelCount; curLayout.resize(levelCount); }
 
 		Image() :
 			layerCount(1)
-			, levelCount(1)
-			, bufOffset(0) {
+			, levelCount(1) {
 			curLayout.resize(1);
+		}
+
+		static uint8_t GetChannelCount(VkFormat p_format)
+		{
+			if (p_format == VK_FORMAT_R16G16B16A16_SFLOAT ||
+				p_format == VK_FORMAT_R32G32B32A32_SFLOAT || 
+				p_format == VK_FORMAT_B8G8R8A8_SRGB ||
+				p_format == VK_FORMAT_R8G8B8A8_UNORM)
+				return 4;
+
+			// slapping warning to avoid patching other cases. Will address them
+			// based on need.
+			std::clog << "Warning - CTextures::GetChannelCount is returning 0." << std::endl;
+			return 0;
+		}
+
+		static uint8_t GetBytesPerChannel(VkFormat p_format)
+		{
+			if (p_format >= VK_FORMAT_R8_UNORM && p_format <= VK_FORMAT_A8B8G8R8_SRGB_PACK32)
+				return 1;
+			else if (p_format >= VK_FORMAT_R16_UNORM && p_format <= VK_FORMAT_R16G16B16A16_SFLOAT)
+				return 2;
+			else if (p_format >= VK_FORMAT_R32_UINT && p_format <= VK_FORMAT_R32G32B32A32_SFLOAT)
+				return 4;
+
+			// slapping warning to avoid patching other cases. Will address them
+			// based on need.
+			std::clog << "Warning - CTextures::GetBytesPerChannel is returning 0." << std::endl;
+			return 0;
+		}
+
+		static size_t GetTextureSizePerLayer(uint32_t p_width, uint32_t p_height,
+			VkFormat p_format, uint32_t p_mipCount,	std::vector<uint32_t>* p_mipOffsets)
+		{
+			size_t totalSize = 0;
+			uint32_t sizePerPixel = GetBytesPerChannel(p_format) * GetChannelCount(p_format);
+			
+			if(p_mipOffsets)
+				p_mipOffsets->clear();
+
+			for (uint32_t i = 0; i < p_mipCount; ++i)
+			{
+				if(p_mipOffsets)
+					p_mipOffsets->push_back((uint32_t)totalSize);
+
+				totalSize += p_width * p_height * sizePerPixel;
+				p_width /= 2;
+				p_height /= 2;
+			}
+			return totalSize;
+		}
+
+		static size_t GetTextureSizePerLayerNoMips(uint32_t p_width, uint32_t p_height,
+			VkFormat p_format)
+		{
+			size_t totalSize = 0;
+			uint32_t sizePerPixel = GetBytesPerChannel(p_format) * GetChannelCount(p_format);
+			totalSize += p_width * p_height * sizePerPixel;
+			return totalSize;
 		}
 	};
 
@@ -411,7 +468,7 @@ public:
 	bool ReadFromBuffer(void* p_data, Buffer p_buffer);
 	bool WriteToBuffer(void* p_data, Buffer p_buffer, bool p_bFlush = false);
 	bool UploadFromHostToDevice(Buffer& p_staging, Buffer& p_dest, VkCommandBuffer & p_cmdBfr);
-	void UploadFromHostToDevice(Buffer& p_staging, VkImageLayout p_finLayout, Image& p_dest, VkCommandBuffer& p_cmdBfr);
+	void UploadFromHostToDevice(Buffer& p_staging, VkImageLayout p_finLayout, Image& p_dest, VkCommandBuffer& p_cmdBfr, bool p_uploadMips = false);
 	
 	bool ListAvailableInstanceLayers(std::vector<const char*> reqList);
 	bool ListAvailableInstanceExtensions(std::vector<const char*> reqList);
