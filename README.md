@@ -20,7 +20,7 @@ Feature Integrated
 * [Screen Space Reflections](https://github.com/kapvipoor/VFrame/blob/main/notes/Screen%20Space%20Reflections.md)
 * [Temporal Anti Aliasing](https://github.com/kapvipoor/VFrame/blob/main/notes/Temporal%20Anti-Aliasing.md)
 * [Tone Mapping](https://github.com/kapvipoor/VFrame/blob/main/notes/Tone%20Mapping.md)
-* [PBR and IBL] (https://github.com/kapvipoor/VFrame/blob/main/notes/IBL.md)
+* [PBR and IBL](https://github.com/kapvipoor/VFrame/blob/main/notes/IBL.md)
 
 4.	Object Picker
 	- Challanges Faced:	- 
