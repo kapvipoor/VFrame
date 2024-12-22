@@ -18,4 +18,6 @@ be applied.
 * https://learnopengl.com/PBR/IBL/Specular-IBL
   
 ## Screenshots
+<img width="1444" alt="IBL" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/IBL.PNG">
+
 

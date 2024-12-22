@@ -20,6 +20,7 @@ Feature Integrated
 * [Screen Space Reflections](https://github.com/kapvipoor/VFrame/blob/main/notes/Screen%20Space%20Reflections.md)
 * [Temporal Anti Aliasing](https://github.com/kapvipoor/VFrame/blob/main/notes/Temporal%20Anti-Aliasing.md)
 * [Tone Mapping](https://github.com/kapvipoor/VFrame/blob/main/notes/Tone%20Mapping.md)
+* [PBR and IBL](https://github.com/kapvipoor/VFrame/blob/main/notes/IBL.md)
 
 4.	Object Picker
 	- Challanges Faced:	- 
@@ -62,18 +63,6 @@ Feature Integrated
 		2. Peter-Panning effect has not been addressed
 		3. Front face culling in shadow pass is producing buggy results
 		4. PCF Causing HAlo effect aroung intersecting geometry (Eg: Sponza and Suzzane)
-
-9.	Physically Based Rendering
-	- Features 
-		1. Using Schlick GGX Geometry Shadowing and Geometry Occlusion
-		2. Using Trowbridge-Reitz GGX normal distribution
-		3. Schlick GGX to statistically estiamte light ray occlusion
-		4. Fresnel Schlick Approximation for Fresnel Effect
-	- Challanges Faced:	- 
-	- Algorithm Limitations:
-		1. Not implemented IBL for accuracy
-		2. Only using Lambertian for diffuse computation
-	- Bugs: - 
 
 10.	Gltf loader with stb_image support
 	- Challanges Faced:	- 
