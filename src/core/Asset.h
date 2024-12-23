@@ -546,6 +546,8 @@ private:
 
 	bool AddEntity(CVulkanRHI* p_rhi, std::string p_path);
 	bool DeleteEntity();
+
+	void DestroyStaging(CVulkanRHI* p_rhi, CVulkanRHI::BufferList&);
 };
 
 class CReadOnlyTextures : public CTextures

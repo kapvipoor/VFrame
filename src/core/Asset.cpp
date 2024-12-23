@@ -844,11 +844,6 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 		}
 
 		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true/*wait for finish*/));
-
-		for (auto& stg : stgList)
-			p_rhi->FreeMemoryDestroyBuffer(stg);
-
-		stgList.clear();
 	}
 
 	debugMarker = "BLAS Loading";
@@ -856,11 +851,6 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
 		RETURN_FALSE_IF_FALSE(LoadBLAS(p_rhi, stgList, cmdBfr));
 		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true /*waitForFinish*/));
-	
-		for (auto& stg : stgList)
-			p_rhi->FreeMemoryDestroyBuffer(stg);
-	
-		stgList.clear();
 	}
 
 	debugMarker = "TLAS Loading";
@@ -868,12 +858,9 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
 		RETURN_FALSE_IF_FALSE(LoadTLAS(p_rhi, stgList, cmdBfr));
 		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true/*wait for finish*/));
-
-		for (auto& stg : stgList)
-			p_rhi->FreeMemoryDestroyBuffer(stg);
-
-		stgList.clear();
 	}
+
+	DestroyStaging(p_rhi, stgList);
 
 	RETURN_FALSE_IF_FALSE(CreateMeshUniformBuffer(p_rhi));
 
@@ -1668,8 +1655,7 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 					CVulkanRHI::BufferList stgList;
 
 					std::string debugMarker = "Entity Loading";
-					RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(m_assetLoaderCommandPool, &cmdBfr, 1, &debugMarker));
-					RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
+					RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(m_assetLoaderCommandPool, &cmdBfr, debugMarker));
 
 					std::vector<VkDescriptorImageInfo> imageInfoList;
 					uint32_t arrayDestIndex = (uint32_t)m_sceneTextures->GetTextures().size() - TextureType::tt_scene;
@@ -1784,24 +1770,13 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 						sceneraw.textureList.clear();
 					}
 
-					std::clog << "Preparing to transfer resources to Device visible memory locations" << std::endl;
-					if (!p_rhi->EndCommandBuffer(cmdBfr))
-						return false;
-
-					CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
-					CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
-
-					// Submit command buffer and wait for completion
-					bool waitForFinish = true;
 					std::clog << "Submitting command buffer" << std::endl;
-					RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish,
-						VK_NULL_HANDLE, false, nullptr, nullptr, CVulkanRHI::QueueType::qt_Secondary));
+					RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true /*wait for finish*/, CVulkanRHI::QueueType::qt_Secondary));
 					m_assetLoadingTracker.progress = 0.8f;
 
 					// Destroy local staging resources
 					std::clog << "Cleaning all Staging buffers" << std::endl;
-					for (auto& stg : stgList)
-						p_rhi->FreeMemoryDestroyBuffer(stg);
+					DestroyStaging(p_rhi, stgList);
 
 					// Reset the command pool
 					std::clog << "Resetting Command Pool" << std::endl;
@@ -1814,7 +1789,7 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 					{
 						for (uint32_t i = 0; i < FRAME_BUFFER_COUNT; i++)
 						{
-							// I have no idea why, but this is causing a crash on debug. Release works fine.
+							// TODO: I have no idea why, but this is causing a crash on debug. Release works fine.
 							// m_DescData[][BindingDest::bd_CubeMap_Texture].imgDesinfo is null right after control returns from
 							// Creating and loading textures - m_sceneTextures->CreateTexture 
 							BindlessWrite(i, BindingDest::bd_Env_Specular, &m_sceneTextures->GetTexture(TextureType::tt_env_specular).descInfo, 1);
@@ -1859,6 +1834,14 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 bool CScene::DeleteEntity()
 {
 	return false;
+}
+
+void CScene::DestroyStaging(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList)
+{
+	for (auto& stg : p_stgList)
+		p_rhi->FreeMemoryDestroyBuffer(stg);
+
+	p_stgList.clear();
 }
 
 CReadOnlyTextures::CReadOnlyTextures()
