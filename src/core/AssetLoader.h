@@ -355,11 +355,12 @@ struct MeshRaw
 		, transform(nm::Transform())
 	{};
 };
+typedef std::vector<MeshRaw> MeshRawList;
 
 struct SceneRaw
 {
 	std::vector<ImageRaw>		textureList;
-	std::vector<MeshRaw>		meshList;
+	MeshRawList					meshList;
 	std::vector<Material>		materialsList;
 	uint32_t					materialOffset;
 	uint32_t					textureOffset;

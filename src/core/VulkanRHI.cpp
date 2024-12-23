@@ -88,9 +88,17 @@ bool CVulkanRHI::CreateAllocateBindBuffer(size_t p_size, Buffer& p_buffer, VkBuf
 	p_buffer.descInfo.offset						= 0;
 	p_buffer.memPropFlags							= p_propFlag;
 
+	VkMemoryAllocateFlagsInfo memAllocFlagInfo{};
+	memAllocFlagInfo.sType							= VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+	memAllocFlagInfo.flags							= VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+	
+	void* memAllocFlags = &memAllocFlagInfo;
+	if (!(p_bfrUsg & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT))
+		memAllocFlags = nullptr;
+
 	if (!CreateBuffer(bufferCreateInfo, p_buffer.descInfo.buffer))
 		return false;
-	if (!AllocateBufferMemory(p_buffer.descInfo.buffer, p_propFlag, p_buffer.devMem, p_buffer.reqMemSize))
+	if (!AllocateBufferMemory(p_buffer.descInfo.buffer, p_propFlag, p_buffer.devMem, p_buffer.reqMemSize, memAllocFlags))
 		return false;
 	if (!BindBufferMemory(p_buffer.descInfo.buffer, p_buffer.devMem))
 		return false;

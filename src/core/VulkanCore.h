@@ -365,6 +365,11 @@ protected:
 
 	VkPhysicalDeviceMemoryProperties m_vkPhysicalDeviceMemProp{};
 
+	// Ray Tracing 
+	PFN_vkGetAccelerationStructureBuildSizesKHR				m_pfnGetAccelerationStructureBuildSizesKHR;
+	PFN_vkCreateAccelerationStructureKHR					m_pfnvkCreateAccelerationStructureKHR;
+	PFN_vkCmdBuildAccelerationStructuresKHR					m_pfnvkCmdBuildAccelerationStructuresKHR;
+
 #if VULKAN_DEBUG == 1
 	VkDebugUtilsMessengerEXT                                m_debugUtilsMessenger{ VK_NULL_HANDLE };
 	VkDebugReportCallbackEXT                                m_debugReportCallback{ VK_NULL_HANDLE };
@@ -456,10 +461,16 @@ public:
 	void DestroySampler(VkSampler p_sampler);
 
 	bool CreateBuffer(VkBufferCreateInfo p_bufferCreateInfo, VkBuffer& p_buffer);
-	bool AllocateBufferMemory(VkBuffer p_buffer, VkMemoryPropertyFlags p_memFlags, VkDeviceMemory& p_devMem, size_t& p_reqSize);
+	bool AllocateBufferMemory(VkBuffer p_buffer, VkMemoryPropertyFlags p_memFlags, VkDeviceMemory& p_devMem, size_t& p_reqSize, void* p_allocFlags = nullptr /*VkMemoryAllocateFlagsInfo*/);
 	bool BindBufferMemory(VkBuffer& p_buffer, VkDeviceMemory& p_devMem);
 	void FreeDeviceMemory(VkDeviceMemory& p_devMem);
 	void DestroyBuffer(VkBuffer& p_buffer);
+	VkDeviceAddress GetBufferDeviceAddress(const VkBuffer&);
+
+	// Ray Tracing
+	void GetAccelerationStructureBuildSize(VkAccelerationStructureBuildTypeKHR p_type, const VkAccelerationStructureBuildGeometryInfoKHR*, uint32_t p_primCount, VkAccelerationStructureBuildSizesInfoKHR* p_sizeInfo);
+	bool CreateAccelerationStructure(VkAccelerationStructureCreateInfoKHR*, VkAccelerationStructureKHR&);
+	void BuildAccelerationStructure(VkCommandBuffer p_cmdBfr, uint32_t p_infoCount, VkAccelerationStructureBuildGeometryInfoKHR*, const VkAccelerationStructureBuildRangeInfoKHR* const*);
 
 	bool MapMemory(Buffer p_buffer, bool p_flushMemRanges, void** p_data, std::vector<VkMappedMemoryRange>* p_memRanges);
 	bool FlushMemoryRanges(std::vector<VkMappedMemoryRange>* p_memRanges);

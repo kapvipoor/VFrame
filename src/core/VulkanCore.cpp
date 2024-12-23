@@ -227,6 +227,7 @@ bool CVulkanCore::CreateInstance(const char* p_applicaitonName)
 	instanceExtensionList.push_back("VK_KHR_win32_surface");
 	instanceExtensionList.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 	instanceExtensionList.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+
 #if VULKAN_DEBUG == 1
 		instanceExtensionList.push_back("VK_EXT_debug_utils");
 		instanceExtensionList.push_back("VK_EXT_debug_report");
@@ -365,13 +366,15 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	// not supported 
 	std::vector<const char*> deviceExtensionList;
 	{
-		//deviceExtensionList.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 		deviceExtensionList.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
 		deviceExtensionList.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 		deviceExtensionList.push_back(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
 		deviceExtensionList.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
 		deviceExtensionList.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-		//deviceExtensionList.push_back(VK_NV_RAY_TRACING_EXTENSION_NAME);
+		deviceExtensionList.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);		// Is required to set acceleration structure extension
+		deviceExtensionList.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+		deviceExtensionList.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+
 #if VULKAN_DEBUG_MARKERS == 1
 		deviceExtensionList.push_back(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
 #endif
@@ -405,8 +408,23 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 		}
 	}
 
-	VkPhysicalDeviceFeatures supportedFeatures{};
-	vkGetPhysicalDeviceFeatures(m_vkPhysicalDevice, &supportedFeatures);
+	// Enable Acceleration Structure support
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR accStructFeature{};
+	accStructFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+	accStructFeature.accelerationStructure								= VK_TRUE;
+	accStructFeature.pNext												= nullptr;
+
+	//Enable support for Ray Query
+	VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeature{};
+	rayQueryFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+	rayQueryFeature.rayQuery											= VK_TRUE;
+	rayQueryFeature.pNext												= &accStructFeature;
+
+	// Enable support for dynamic rendering
+	VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
+	dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+	dynamicRenderingFeatures.dynamicRendering							= VK_TRUE;
+	dynamicRenderingFeatures.pNext										= &rayQueryFeature;
 
 	VkPhysicalDeviceFeatures enabledFeatures{};
 	enabledFeatures.geometryShader										= VK_TRUE;
@@ -414,50 +432,32 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	enabledFeatures.shaderStorageImageReadWithoutFormat					= VK_TRUE;
 	enabledFeatures.shaderStorageImageWriteWithoutFormat				= VK_TRUE;
 	enabledFeatures.vertexPipelineStoresAndAtomics						= VK_TRUE;
-	//enabledFeatures.separateDepthStencilLayouts
-
-	if (enabledFeatures.geometryShader != supportedFeatures.geometryShader &&
-		enabledFeatures.fragmentStoresAndAtomics != supportedFeatures.fragmentStoresAndAtomics)
-	{
-		std::cerr << "CVulkanCore::CreateDevice Error: vkGetPhysicalDeviceFeatures: Requested features not supported by device. " << std::endl;
-		return false;
-	}
-
-	// Enable support for separate depth and stencil buffers
-	VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures separateDepthStencilFeatures{};
-	separateDepthStencilFeatures.sType									= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES_KHR;
-	separateDepthStencilFeatures.separateDepthStencilLayouts			= true;
-	separateDepthStencilFeatures.pNext									= nullptr;
-
-
-	// Enable support for dynamic rendering
-	VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
-	dynamicRenderingFeatures.sType										= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
-	dynamicRenderingFeatures.dynamicRendering							= VK_TRUE;
-	dynamicRenderingFeatures.pNext										= &separateDepthStencilFeatures;
-
-	// Enable support for bindless
-	VkPhysicalDeviceDescriptorIndexingFeaturesEXT bindlessDescFeatures{};
-	bindlessDescFeatures.sType											= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
-	bindlessDescFeatures.pNext											= &dynamicRenderingFeatures;
-	bindlessDescFeatures.shaderSampledImageArrayNonUniformIndexing		= VK_TRUE;
-	bindlessDescFeatures.runtimeDescriptorArray							= VK_TRUE;
-	bindlessDescFeatures.descriptorBindingVariableDescriptorCount		= VK_TRUE;
-	bindlessDescFeatures.descriptorBindingPartiallyBound				= VK_TRUE;
-	bindlessDescFeatures.descriptorBindingSampledImageUpdateAfterBind	= VK_TRUE;
-	bindlessDescFeatures.descriptorBindingStorageImageUpdateAfterBind	= VK_TRUE;
-	bindlessDescFeatures.descriptorBindingUniformBufferUpdateAfterBind	= VK_TRUE;
-	bindlessDescFeatures.descriptorBindingStorageBufferUpdateAfterBind  = VK_TRUE;
-	bindlessDescFeatures.descriptorBindingUpdateUnusedWhilePending		= VK_TRUE;
 
 	VkPhysicalDeviceFeatures2 physicalDeviceFeatures2{};
-	physicalDeviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-	physicalDeviceFeatures2.features = enabledFeatures;
-	physicalDeviceFeatures2.pNext = (void*)&bindlessDescFeatures;
-		
+	physicalDeviceFeatures2.sType										= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	physicalDeviceFeatures2.features									= enabledFeatures;
+	physicalDeviceFeatures2.pNext										= &dynamicRenderingFeatures;
+			
+	// Enable Vulakn 1.2 Features
+	VkPhysicalDeviceVulkan12Features vulkan12Features{};
+	vulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+	vulkan12Features.bufferDeviceAddress								= VK_TRUE;
+	vulkan12Features.shaderSampledImageArrayNonUniformIndexing			= VK_TRUE;
+	vulkan12Features.runtimeDescriptorArray								= VK_TRUE;
+	vulkan12Features.descriptorBindingVariableDescriptorCount			= VK_TRUE;
+	vulkan12Features.descriptorBindingPartiallyBound					= VK_TRUE;
+	vulkan12Features.descriptorBindingSampledImageUpdateAfterBind		= VK_TRUE;
+	vulkan12Features.descriptorBindingStorageImageUpdateAfterBind		= VK_TRUE;
+	vulkan12Features.descriptorBindingUniformBufferUpdateAfterBind		= VK_TRUE;
+	vulkan12Features.descriptorBindingStorageBufferUpdateAfterBind		= VK_TRUE;
+	vulkan12Features.descriptorBindingUpdateUnusedWhilePending			= VK_TRUE;
+	vulkan12Features.separateDepthStencilLayouts						= VK_TRUE;
+	vulkan12Features.descriptorIndexing									= VK_TRUE;
+	vulkan12Features.pNext												= &physicalDeviceFeatures2;
+
 	VkDeviceCreateInfo deviceCreateInfo{};
 	deviceCreateInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	deviceCreateInfo.pNext = &physicalDeviceFeatures2;
+	deviceCreateInfo.pNext = &vulkan12Features;
 	deviceCreateInfo.pEnabledFeatures = nullptr;
 	deviceCreateInfo.queueCreateInfoCount = (uint32_t)deviceQueueCreateInfos.size();
 	deviceCreateInfo.pQueueCreateInfos = deviceQueueCreateInfos.data();
@@ -484,6 +484,35 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 		if(m_secondaryQueue == VK_NULL_HANDLE)
 		{
 			std::cerr << "vkGetDeviceQueue failed for secondary queue" << std::endl;
+			return false;
+		}
+	}
+
+	// Get Ray Tracing function pointers
+	{
+		m_pfnGetAccelerationStructureBuildSizesKHR = 
+			reinterpret_cast<PFN_vkGetAccelerationStructureBuildSizesKHR>(vkGetDeviceProcAddr(m_vkDevice, 
+				"vkGetAccelerationStructureBuildSizesKHR"));
+		if (!m_pfnGetAccelerationStructureBuildSizesKHR)
+		{
+			std::cerr << "Failed to get valid function pointer for vkGetAccelerationStructureBuildSizesKHR" << std::endl;
+			return false;
+		}
+
+		m_pfnvkCreateAccelerationStructureKHR =
+			reinterpret_cast<PFN_vkCreateAccelerationStructureKHR>(vkGetDeviceProcAddr(m_vkDevice,
+				"vkCreateAccelerationStructureKHR"));
+		if (!m_pfnvkCreateAccelerationStructureKHR)
+		{
+			std::cerr << "Failed to get valid function pointer for vkCreateAccelerationStructureKHR" << std::endl;
+			return false;
+		}
+
+		m_pfnvkCmdBuildAccelerationStructuresKHR = reinterpret_cast<PFN_vkCmdBuildAccelerationStructuresKHR>(vkGetDeviceProcAddr(m_vkDevice,
+			"vkCmdBuildAccelerationStructuresKHR"));
+		if (!m_pfnvkCmdBuildAccelerationStructuresKHR)
+		{
+			std::cerr << "Failed to get valid function pointer for vkCmdBuildAccelerationStructuresKHR" << std::endl;
 			return false;
 		}
 	}
@@ -1699,7 +1728,8 @@ bool CVulkanCore::CreateBuffer(VkBufferCreateInfo p_bufferCreateInfo, VkBuffer& 
 	return true;
 }
 
-bool CVulkanCore::AllocateBufferMemory(VkBuffer p_buffer, VkMemoryPropertyFlags p_memFlags, VkDeviceMemory& p_devMem, size_t& p_reqSize)
+bool CVulkanCore::AllocateBufferMemory(VkBuffer p_buffer, VkMemoryPropertyFlags p_memFlags, 
+	VkDeviceMemory& p_devMem, size_t& p_reqSize, void* p_memAllocFlags)
 {
 	VkMemoryRequirements bufferMemReq;
 	vkGetBufferMemoryRequirements(m_vkDevice, p_buffer, &bufferMemReq);
@@ -1709,7 +1739,7 @@ bool CVulkanCore::AllocateBufferMemory(VkBuffer p_buffer, VkMemoryPropertyFlags 
 
 	VkMemoryAllocateInfo memoryAllocateInfo = {};
 	memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	memoryAllocateInfo.pNext = nullptr;
+	memoryAllocateInfo.pNext = p_memAllocFlags;
 	memoryAllocateInfo.allocationSize = bufferMemReq.size;
 	memoryAllocateInfo.memoryTypeIndex = memIndex;
 
@@ -1744,6 +1774,46 @@ void CVulkanCore::DestroyBuffer(VkBuffer &p_buffer)
 	vkDestroyBuffer(m_vkDevice, p_buffer, nullptr);
 	p_buffer = VK_NULL_HANDLE;
 
+}
+
+VkDeviceAddress CVulkanCore::GetBufferDeviceAddress(const VkBuffer& p_buffer)
+{
+	VkBufferDeviceAddressInfo bufAddrInfo{};
+	bufAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	bufAddrInfo.buffer = p_buffer;
+
+	return vkGetBufferDeviceAddress(m_vkDevice, &bufAddrInfo);
+
+}
+
+void CVulkanCore::GetAccelerationStructureBuildSize(VkAccelerationStructureBuildTypeKHR p_type, 
+	const VkAccelerationStructureBuildGeometryInfoKHR* geoInfo, uint32_t p_primCount, VkAccelerationStructureBuildSizesInfoKHR* p_sizeInfo)
+{
+	p_sizeInfo->sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+
+	if(m_pfnGetAccelerationStructureBuildSizesKHR)
+		m_pfnGetAccelerationStructureBuildSizesKHR( m_vkDevice, p_type, geoInfo, &p_primCount, p_sizeInfo);
+}
+
+bool CVulkanCore::CreateAccelerationStructure(VkAccelerationStructureCreateInfoKHR* p_createInfo, VkAccelerationStructureKHR& p_accStructure)
+{
+	VkResult res = VK_RESULT_MAX_ENUM;
+	if (m_pfnvkCreateAccelerationStructureKHR)
+	{
+		res = m_pfnvkCreateAccelerationStructureKHR(m_vkDevice, p_createInfo, nullptr, &p_accStructure);
+		if (res == VK_SUCCESS)
+			return true;
+	}
+
+	std::cerr << "vkCreateAccelerationStructureKHR failed to create acceleration structure: " << res << std::endl;
+	return false;
+}
+
+void CVulkanCore::BuildAccelerationStructure(VkCommandBuffer p_cmdBfr, uint32_t p_infoCount, 
+	VkAccelerationStructureBuildGeometryInfoKHR* p_acBuildInfo, const VkAccelerationStructureBuildRangeInfoKHR* const* p_acRange)
+{
+	if(m_pfnvkCmdBuildAccelerationStructuresKHR)
+		m_pfnvkCmdBuildAccelerationStructuresKHR(p_cmdBfr, p_infoCount, p_acBuildInfo, p_acRange);
 }
 
 bool CVulkanCore::MapMemory(Buffer p_buffer, bool p_flushMemRanges, void** p_data, std::vector<VkMappedMemoryRange>* p_memRanges)

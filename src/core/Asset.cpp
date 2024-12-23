@@ -126,9 +126,15 @@ void CRenderable::DestroyRenderable(CVulkanRHI* p_rhi)
 }
 
 bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, 
-	const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t p_id)
+	const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t p_id, bool p_useForRaytracing)
 {
 	std::clog << "Creating Vertex and Index Buffer for " << p_debugStr << std::endl;
+
+	// for creating Acceleration Structure
+	m_primitiveCount = (uint32_t)p_meshRaw->indicesList.size() / 3;
+	m_vertexStride = p_meshRaw->vertexList.GetVertexSize();
+	m_vertexCount = (uint32_t)p_meshRaw->vertexList.size() / (uint32_t)m_vertexStride;
+	uint32_t rayTracingUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
 	{
 		CVulkanRHI::Buffer vertexStg;
@@ -139,8 +145,13 @@ bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferL
 		p_stgList.push_back(vertexStg);
 
 		CVulkanRHI::Buffer vertexBuffer;
+		VkBufferUsageFlags bufferUsageFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+
+		if (p_useForRaytracing)
+			bufferUsageFlags |= rayTracingUsage;
+
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(vertexStg.descInfo.range, vertexBuffer, 
-			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, p_debugStr + "_vertex"));
+			bufferUsageFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, p_debugStr + "_vertex"));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(vertexStg, vertexBuffer, p_cmdBfr));
 		
@@ -165,8 +176,13 @@ bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferL
 		p_stgList.push_back(indxStg);
 
 		CVulkanRHI::Buffer indexBuffer;
+		VkBufferUsageFlags bufferUsageFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+
+		if (p_useForRaytracing)
+			bufferUsageFlags |= rayTracingUsage;
+
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(indxStg.descInfo.range, indexBuffer, 
-			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, p_debugStr + "_index"));
+			bufferUsageFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, p_debugStr + "_index"));
 
 		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(indxStg, indexBuffer, p_cmdBfr));
 		
@@ -806,38 +822,61 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 	CVulkanRHI::CommandBuffer cmdBfr;
 	CVulkanRHI::BufferList stgList;
 
-	std::string debugMarker = "Scene Loading";
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1, &debugMarker));
-	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
-
-	if (!LoadDefaultTextures(p_rhi, p_samplerList, stgList, cmdBfr))
+	std::string debugMarker = "Default Resources/Scene Loading";
 	{
-		std::cerr << "CScene::Create Error: Failed to Load Default Textures" << std::endl;
-		return false;
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1, &debugMarker));
+		RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
+
+		if (!LoadDefaultTextures(p_rhi, p_samplerList, stgList, cmdBfr))
+		{
+			std::cerr << "CScene::Create Error: Failed to Load Default Textures" << std::endl;
+			return false;
+		}
+
+		if (!LoadDefaultScene(p_rhi, stgList, cmdBfr))
+		{
+			std::cerr << "CScene::Create Error: Failed to Load Scene" << std::endl;
+			return false;
+		}
+
+		if (!LoadLights(p_rhi, stgList, cmdBfr))
+		{
+			std::cerr << "CScene::Create Error: Failed to Load Lights" << std::endl;
+			return false;
+		}
+
+		RETURN_FALSE_IF_FALSE(p_rhi->EndCommandBuffer(cmdBfr));
+
+		CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
+		CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
+		bool waitForFinish = true;
+		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish));
+
+		for (auto& stg : stgList)
+			p_rhi->FreeMemoryDestroyBuffer(stg);
+
+		stgList.clear();
 	}
 
-	if (!LoadDefaultScene(p_rhi, stgList, cmdBfr))
+	debugMarker = "BLAS Loading";
 	{
-		std::cerr << "CScene::Create Error: Failed to Load Scene" << std::endl;
-		return false;
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1, &debugMarker));
+		RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
+	
+		RETURN_FALSE_IF_FALSE(LoadBLAS(p_rhi, stgList, cmdBfr));
+	
+		RETURN_FALSE_IF_FALSE(p_rhi->EndCommandBuffer(cmdBfr));
+	
+		CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
+		CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
+		bool waitForFinish = true;
+		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish));
+	
+		for (auto& stg : stgList)
+			p_rhi->FreeMemoryDestroyBuffer(stg);
+	
+		stgList.clear();
 	}
-
-	if (!LoadLights(p_rhi, stgList, cmdBfr))
-	{
-		std::cerr << "CScene::Create Error: Failed to Load Lights" << std::endl;
-		return false;
-	}
-
-	if (!p_rhi->EndCommandBuffer(cmdBfr))
-		return false;
-
-	CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
-	CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
-	bool waitForFinish = true;
-	RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish));
-
-	for (auto& stg : stgList)
-		p_rhi->FreeMemoryDestroyBuffer(stg);
 
 	RETURN_FALSE_IF_FALSE(CreateMeshUniformBuffer(p_rhi));
 
@@ -850,6 +889,10 @@ void CScene::Destroy(CVulkanRHI* p_rhi)
 {
 	DestroyDescriptors(p_rhi);
 	m_sceneTextures->DestroyTextures(p_rhi);
+
+	// destroy Acceleration Structures
+	// destroy m_blasBuffers;
+	delete m_blasBuffers;
 
 	for (auto& mesh : m_meshes)
 	{
@@ -1092,11 +1135,11 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");					//2
 	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
 	//defaultScenePaths.push_back(g_AssetPath / "glTFSampleModels/2.0/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf");
-	//defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
+	defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
 	//defaultScenePaths.push_back(g_AssetPath / "glTFSampleModels/2.0/Sponza/glTF/Sponza.gltf");
 	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");									//4
 	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf");
-	defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");				//6
+	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");				//6
 	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/cube/cube.obj");											//7
 	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/icosphere.gltf");											//8
 	//m_scenePaths.push_back(g_AssetPath/"dragon/dragon.obj");															f			//9
@@ -1108,12 +1151,13 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	//m_scenePaths.push_back(g_AssetPath/"an_afternoon_in_a_persian_garden/scene.obj");												//15
 	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/glTFSampleModels/2.0/SpecGlossVsMetalRough/glTF/SpecGlossVsMetalRough.gltf");
 
-	std::vector<bool> flipYList{ true, false, false };
+	std::vector<bool> flipYList{ false, false, false };
 
 	SceneRaw sceneraw;
 	sceneraw.materialOffset = 0;
 	sceneraw.textureOffset = 0;
 	
+	// Load the assets to system memory
 	for (unsigned int i = 0; i < defaultScenePaths.size(); i++)
 	{
 		std::clog << "Loading Scene Resources - " << defaultScenePaths[i] << std::endl;
@@ -1147,6 +1191,7 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 		m_materialOffset = sceneraw.materialOffset;
 	}
 	
+	// Load to staging and set loading of mesh to device memory
 	for (auto& meshraw : sceneraw.meshList)
 	{
 		CRenderableMesh* mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform);
@@ -1160,10 +1205,11 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 			mesh->SetSubBoundingBox(bbox);
 		}
 
-		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr, meshraw.name));
+		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr, meshraw.name, -1, true /*use for ray tracing*/));
 		m_meshes.push_back(mesh);
 	}
 	
+	// Load to staging and set loading of textures to device memory
 	for (const auto& tex : sceneraw.textureList)
 	{
 		CVulkanRHI::Image img;
@@ -1181,7 +1227,7 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 		}
 	}
 
-	// storage buffer for materials
+	// Load to staging and set loading of materials to device memory
 	std::copy(sceneraw.materialsList.begin(), sceneraw.materialsList.end(), std::back_inserter(m_materialsList));
 	if(!m_materialsList.empty())
 	{
@@ -1199,13 +1245,16 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(matStg, m_material_storage, p_cmdBfr));
 	}
 
+	// Clear all loaded resources from system memroy
 	// can binary dump in future to optimized format for faster binary loading
-	sceneraw.meshList.clear();
+	{		
+		sceneraw.meshList.clear();
 
-	for(auto& tex : sceneraw.textureList)
-		FreeRawImage(tex);
+		for (auto& tex : sceneraw.textureList)
+			FreeRawImage(tex);
 
-	sceneraw.textureList.clear();
+		sceneraw.textureList.clear();
+	}
 
 	return true;
 }
@@ -1244,6 +1293,126 @@ bool CScene::LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferLi
 
 		delete[] rawData;
 	}
+
+	return true;
+}
+
+bool CScene::LoadBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer& p_cmdBfr)
+{
+	// As of now I have 1 buffer per mesh with all the sub-meshes with in
+	// Can this buffer be used to create the acceleration structure?  
+	// So for now, I will simply create 1 acceleration structure per Mesh 
+	// (including all it sub-meshes)
+	// TODO: Look into VkAccelerationStructureBuildRangeInfoKHR for ^
+
+	size_t meshCount = m_meshes.size() - (size_t)MeshType::mt_Scene;
+
+	std::vector<uint32_t> primitiveCounts(meshCount);
+	std::vector<VkAccelerationStructureGeometryKHR> geometries(meshCount);
+	std::vector<VkAccelerationStructureBuildGeometryInfoKHR> buildInfos(meshCount);
+
+	std::vector<size_t> accelerationOffset(meshCount);
+	std::vector<size_t> accelerationSizes(meshCount);
+	std::vector<size_t> scratchOffset(meshCount);
+
+	size_t totalAccelerationSize = 0;
+	size_t toalScratchSize = 0;
+	size_t alignment = 256; // required by spec
+
+	for(size_t i = 0; i < meshCount; i++)
+	{
+		CRenderableMesh* mesh = m_meshes[i+ MeshType::mt_Scene];
+
+		VkDeviceAddress vbAddress = p_rhi->GetBufferDeviceAddress(mesh->GetVertexBuffer()->descInfo.buffer);
+		VkDeviceAddress ibAddress = p_rhi->GetBufferDeviceAddress(mesh->GetIndexBuffer()->descInfo.buffer);
+
+		VkAccelerationStructureGeometryKHR& geometry = geometries[i];
+		VkAccelerationStructureBuildGeometryInfoKHR& buildInfo = buildInfos[i];
+
+		primitiveCounts[i] = mesh->GetPrimitiveCount();
+
+		geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+		geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+
+		geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+		geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT; // refer for vertex attribute defined for shadow pass and reused everywhere else
+		geometry.geometry.triangles.vertexStride = mesh->GetVertexStride();
+		geometry.geometry.triangles.maxVertex = mesh->GetVertexCount();
+		geometry.geometry.triangles.vertexData.deviceAddress = vbAddress;
+		geometry.geometry.triangles.indexType = VK_INDEX_TYPE_UINT32;
+		geometry.geometry.triangles.indexData.deviceAddress = ibAddress;
+
+		buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+		buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+		buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+		buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;	// might want to use the update flag when add geometry at runtime?
+		buildInfo.geometryCount = 1;
+		buildInfo.pGeometries = &geometry; // as of now, I am using 1 geometry per Mesh (includes all its sub-meshes)
+
+		VkAccelerationStructureBuildSizesInfoKHR sizeInfo{};
+		// Build type is device because we are choosing to create the resources on the device instead
+		// of host. The driver spawns a compute shader to build the acceleration structure
+		p_rhi->GetAccelerationStructureBuildSize(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, primitiveCounts[i], &sizeInfo);
+
+		accelerationOffset[i] = totalAccelerationSize;
+		scratchOffset[i] = toalScratchSize;
+
+		accelerationSizes[i] = sizeInfo.accelerationStructureSize;
+
+		// Returns totalAccelerationSize to be next multiple of the alignment immediately greater than totalAccelerationSize
+		totalAccelerationSize = (totalAccelerationSize + sizeInfo.accelerationStructureSize + alignment - 1) & ~(alignment - 1);
+		toalScratchSize = (toalScratchSize + sizeInfo.buildScratchSize + alignment - 1) & ~(alignment - 1);
+	}
+
+	std::clog << "LoadBLAS: Total Acceleration Structure Size: " << totalAccelerationSize / 1048576.0f << " Mb." << std::endl;
+	std::clog << "LoadBLAS: Total Scratch Size: " << toalScratchSize / 1048576.0f << " Mb." << std::endl;
+
+	// Create Scratch Buffer
+	VkDeviceAddress scratchAddress;
+	{
+		CVulkanRHI::Buffer scratchBuffer;
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(toalScratchSize, scratchBuffer, 
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, "BLAS Scratch"));
+	
+		scratchAddress = p_rhi->GetBufferDeviceAddress(scratchBuffer.descInfo.buffer);
+
+		p_stgbufferList.push_back(scratchBuffer);
+	}
+
+	std::vector<VkAccelerationStructureBuildRangeInfoKHR> buildRanges(meshCount);
+	std::vector<const VkAccelerationStructureBuildRangeInfoKHR*> buildRangePtrs(meshCount);
+	
+	m_blasBuffers = new CBuffers((uint32_t)meshCount);
+	m_accelerationStructures.resize(meshCount);
+
+	std::vector<VkAccelerationStructureCreateInfoKHR> accelerationStructureCreateInfos(meshCount);
+	for (size_t i = 0; i < meshCount; i++)
+	{
+		CRenderableMesh* mesh = m_meshes[i + MeshType::mt_Scene];
+
+		// Create Acceleration Buffer
+		RETURN_FALSE_IF_FALSE(m_blasBuffers->CreateBuffer(p_rhi, (uint32_t)i, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, totalAccelerationSize, "Primary BLAS" + std::to_string(i)));
+
+		VkAccelerationStructureCreateInfoKHR& accelerationStructureCreateInfo = accelerationStructureCreateInfos[i];
+		accelerationStructureCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+		accelerationStructureCreateInfo.buffer = m_blasBuffers->GetBuffer((uint32_t)i).descInfo.buffer;
+		accelerationStructureCreateInfo.offset = accelerationOffset[i];
+		accelerationStructureCreateInfo.size = accelerationSizes[i];
+		accelerationStructureCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAccelerationStructure(&accelerationStructureCreateInfo, m_accelerationStructures[i]));
+		std::clog << "LoadBLAS: Creating Acceleration Structure for " << mesh->GetName() << std::endl;
+
+		buildInfos[i].dstAccelerationStructure = m_accelerationStructures[i];
+		buildInfos[i].scratchData.deviceAddress = scratchAddress;
+				
+		buildRanges[i].primitiveCount = mesh->GetPrimitiveCount();
+		buildRangePtrs[i] = &buildRanges[i];
+	}
+
+	p_rhi->BuildAccelerationStructure(p_cmdBfr, (uint32_t)meshCount, buildInfos.data(), buildRangePtrs.data());
+	std::clog << "LoadBLAS: Building Acceleration Structures " << std::endl;
 
 	return true;
 }

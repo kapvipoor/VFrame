@@ -302,8 +302,8 @@ public:
 	// This is a clean up operation performed during shut down
 	void DestroyRenderable(CVulkanRHI*);
 
-	bool CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw, 
-		CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index = -1);
+	bool CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw,
+		CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index = -1, bool p_useForRaytracing = false);
 
 	void SetVertexBuffer(CVulkanRHI::Buffer p_vertBuf, uint32_t p_idx = 0) { m_vertexBuffers[p_idx] = p_vertBuf; }
 	void SetIndexBuffer(CVulkanRHI::Buffer p_indxBuf, uint32_t p_idx = 0) { m_indexBuffers[p_idx] = p_indxBuf; }
@@ -312,11 +312,19 @@ public:
 	const CVulkanRHI::Buffer* GetIndexBuffer(uint32_t p_idx = 0) const { return &m_indexBuffers[p_idx]; };
 
 	uint32_t GetInstanceCount() { return m_instanceCount; }
+	uint32_t GetPrimitiveCount() { return m_primitiveCount; }
+	uint32_t GetVertexCount() { return m_vertexCount; }
+	size_t GetVertexStride() { return m_vertexStride; }
 
 protected:
 	CVulkanRHI::BufferList			m_vertexBuffers;
 	CVulkanRHI::BufferList			m_indexBuffers;
 	uint32_t						m_instanceCount;
+
+	// for creating Acceleration Structure
+	uint32_t						m_primitiveCount;
+	uint32_t						m_vertexCount;
+	size_t							m_vertexStride;
 };
 
 class CRenderableUI : public CRenderable, public CTextures, public CDescriptor, public CUIParticipant, public CSelectionListener
@@ -391,7 +399,7 @@ private:
 	std::vector<BBox>				m_subBoundingBoxes;
 	uint32_t						m_mesh_id;
 	nm::float4x4					m_viewNormalTransform;
-
+	
 	// few members needed for ui
 	int								m_selectedSubMeshId;
 };
@@ -508,6 +516,10 @@ private:
 	CLights*								m_sceneLights;		// List of all the lights used by the scene
 	std::vector<Material>					m_materialsList;	// List of all the materials used by the scene
 	
+	// Used for Ray Tracing
+	CBuffers*								m_blasBuffers;
+	std::vector<VkAccelerationStructureKHR>	m_accelerationStructures;
+	
 	// TODO: need to fix the current selected render-able mesh 
 	// it is used by object picker pass and is not the best way to do.
 	int										m_curSelecteRenderableMesh;
@@ -524,6 +536,7 @@ private:
 	bool LoadDefaultTextures(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 	bool LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
 	bool LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
+	bool LoadBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 
 	bool CreateMeshUniformBuffer(CVulkanRHI* p_rhi);
 	bool CreateSceneDescriptors(CVulkanRHI* p_rhi);
