@@ -1,4 +1,5 @@
 #include "VulkanRHI.h"
+#include "Global.h"
 
 CVulkanRHI::CVulkanRHI(const char* p_applicaitonName, int p_renderWidth, int p_renderHeight)
 : CVulkanCore(p_applicaitonName, p_renderWidth, p_renderHeight)
@@ -8,6 +9,13 @@ CVulkanRHI::CVulkanRHI(const char* p_applicaitonName, int p_renderWidth, int p_r
 
 CVulkanRHI::~CVulkanRHI()
 {
+}
+
+bool CVulkanRHI::CreateCommandBuffer(VkCommandPool p_cmdPool, VkCommandBuffer* p_cmdBuffer, std::string p_debugName)
+{
+	RETURN_FALSE_IF_FALSE(CreateCommandBuffers(p_cmdPool, p_cmdBuffer, 1, &p_debugName));
+	RETURN_FALSE_IF_FALSE(BeginCommandBuffer(*p_cmdBuffer, p_debugName.c_str()));
+	return true;
 }
 
 bool CVulkanRHI::SubmitCommandBuffers(
@@ -67,6 +75,40 @@ bool CVulkanRHI::SubmitCommandBuffers(
 	{
 		// This is a blocking call
 		if (!WaitFence(*p_fence))
+			return false;
+	}
+
+	return true;
+}
+
+bool CVulkanRHI::SubmitCommandBuffer(CommandBuffer p_commndBfr, bool p_waitForFinish, QueueType p_queueType)
+{
+	if (p_commndBfr == VK_NULL_HANDLE)
+	{
+		std::cerr << "CVulkanRHI::SubmitCommandBuffer Failed - CommandBuffer is invalid. " << std::endl;
+		return false;
+	}
+
+	CVulkanRHI::Queue queue = VK_NULL_HANDLE;
+	if (p_queueType == QueueType::qt_Secondary)
+		queue = GetSecondaryQueue();
+	else // defaulting to executing to primary (graphics) queue if none provided
+		queue = GetQueue(0);
+
+	RETURN_FALSE_IF_FALSE(EndCommandBuffer(p_commndBfr));
+
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &p_commndBfr;
+
+	if (!SubmitCommandbuffer(queue, &submitInfo, 1, nullptr))
+		return false;
+
+	if (p_waitForFinish)
+	{
+		// This is a blocking call
+		if (!WaitToFinish(queue))
 			return false;
 	}
 

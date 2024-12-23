@@ -34,11 +34,15 @@ public:
 	CVulkanRHI(const char* p_applicaitonName, int p_renderWidth, int p_renderHeight);
 	~CVulkanRHI();
 
+	bool CreateCommandBuffer(VkCommandPool p_cmdPool, VkCommandBuffer* p_cmdBuffer, std::string p_debugName);
+
 	bool SubmitCommandBuffers(
 		CommandBufferList* p_commndBfrList, PipelineStageFlagsList* p_psfList, 
 		bool p_waitForFinish = false, VkFence* p_fence = VK_NULL_HANDLE, 
 		bool p_waitforFence = false, SemaphoreList* p_signalList = nullptr, 
 		SemaphoreList* p_waitList = nullptr, QueueType p_queueType = QueueType::qt_Primary);
+
+	bool SubmitCommandBuffer(CommandBuffer p_commndBfr, bool p_waitForFinish = false, QueueType p_queueType = QueueType::qt_Primary);
 
 	bool CreateAllocateBindBuffer(size_t p_size, Buffer& p_buffer, VkBufferUsageFlags p_bfrUsg, VkMemoryPropertyFlags p_propFlagm, std::string p_DebugName);
 	bool CreateTexture(Buffer& p_staging, Image& p_Image, VkImageCreateInfo p_createInfo, VkCommandBuffer& p_cmdBfr, std::string p_DebugName, bool p_createMips = true);

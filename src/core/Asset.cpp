@@ -824,9 +824,7 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 
 	std::string debugMarker = "Default Resources/Scene Loading";
 	{
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1, &debugMarker));
-		RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
-
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
 		if (!LoadDefaultTextures(p_rhi, p_samplerList, stgList, cmdBfr))
 		{
 			std::cerr << "CScene::Create Error: Failed to Load Default Textures" << std::endl;
@@ -845,12 +843,7 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 			return false;
 		}
 
-		RETURN_FALSE_IF_FALSE(p_rhi->EndCommandBuffer(cmdBfr));
-
-		CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
-		CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
-		bool waitForFinish = true;
-		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish));
+		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true/*wait for finish*/));
 
 		for (auto& stg : stgList)
 			p_rhi->FreeMemoryDestroyBuffer(stg);
@@ -860,17 +853,9 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 
 	debugMarker = "BLAS Loading";
 	{
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1, &debugMarker));
-		RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
-	
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
 		RETURN_FALSE_IF_FALSE(LoadBLAS(p_rhi, stgList, cmdBfr));
-	
-		RETURN_FALSE_IF_FALSE(p_rhi->EndCommandBuffer(cmdBfr));
-	
-		CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
-		CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
-		bool waitForFinish = true;
-		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish));
+		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true /*waitForFinish*/));
 	
 		for (auto& stg : stgList)
 			p_rhi->FreeMemoryDestroyBuffer(stg);
@@ -880,17 +865,9 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 
 	debugMarker = "TLAS Loading";
 	{
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1, &debugMarker));
-		RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
-
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
 		RETURN_FALSE_IF_FALSE(LoadTLAS(p_rhi, stgList, cmdBfr));
-
-		RETURN_FALSE_IF_FALSE(p_rhi->EndCommandBuffer(cmdBfr));
-
-		CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
-		CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
-		bool waitForFinish = true;
-		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish));
+		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true/*wait for finish*/));
 
 		for (auto& stg : stgList)
 			p_rhi->FreeMemoryDestroyBuffer(stg);
@@ -1461,19 +1438,23 @@ bool CScene::LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 	// Create TLAS instance buffer that holds the transform of the mesh we are rendering. 
 	// EG: Since we are only rendering sponza atm to test ray tracing, we ll provide
 	// its transform
+	// We are treating the instance buffer as a staging resource. Once the building of the
+	// Top Acceleration Structure is complete, this buffer is destroyed.
+	CVulkanRHI::Buffer instanceTLASResource;
 	{
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(VkAccelerationStructureInstanceKHR) * m_BLASs.size(), m_instanceTLASResource,
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(VkAccelerationStructureInstanceKHR) * m_BLASs.size(), instanceTLASResource,
 			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, 
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, "TLAS Instance Resource"));
 
-		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)instances.data(), m_instanceTLASResource));
+		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)instances.data(), instanceTLASResource));
+		p_stgbufferList.push_back(instanceTLASResource);
 	}
 		
 	VkAccelerationStructureGeometryKHR geometry{};
 	geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
 	geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
 	geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
-	geometry.geometry.instances.data.deviceAddress = p_rhi->GetBufferDeviceAddress(m_instanceTLASResource.descInfo.buffer);
+	geometry.geometry.instances.data.deviceAddress = p_rhi->GetBufferDeviceAddress(instanceTLASResource.descInfo.buffer);
 	geometry.geometry.instances.arrayOfPointers = VK_FALSE;
 	geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
 	
