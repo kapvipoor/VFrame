@@ -515,6 +515,14 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 			std::cerr << "Failed to get valid function pointer for vkCmdBuildAccelerationStructuresKHR" << std::endl;
 			return false;
 		}
+
+		m_pfnvkGetAccelerationStructureDeviceAddressKHR = reinterpret_cast<PFN_vkGetAccelerationStructureDeviceAddressKHR>(vkGetDeviceProcAddr(m_vkDevice,
+			"vkGetAccelerationStructureDeviceAddressKHR"));
+		if (!m_pfnvkGetAccelerationStructureDeviceAddressKHR)
+		{
+			std::cerr << "Failed to get valid function pointer for vkGetAccelerationStructureDeviceAddressKHR" << std::endl;
+			return false;
+		}
 	}
 
 	return true;
@@ -1783,7 +1791,6 @@ VkDeviceAddress CVulkanCore::GetBufferDeviceAddress(const VkBuffer& p_buffer)
 	bufAddrInfo.buffer = p_buffer;
 
 	return vkGetBufferDeviceAddress(m_vkDevice, &bufAddrInfo);
-
 }
 
 void CVulkanCore::GetAccelerationStructureBuildSize(VkAccelerationStructureBuildTypeKHR p_type, 
@@ -1803,9 +1810,15 @@ bool CVulkanCore::CreateAccelerationStructure(VkAccelerationStructureCreateInfoK
 		res = m_pfnvkCreateAccelerationStructureKHR(m_vkDevice, p_createInfo, nullptr, &p_accStructure);
 		if (res == VK_SUCCESS)
 			return true;
+		else
+		{
+			std::cerr << "vkCreateAccelerationStructureKHR failed to create acceleration structure: " << res << std::endl;
+			return false;
+		}
+
 	}
 
-	std::cerr << "vkCreateAccelerationStructureKHR failed to create acceleration structure: " << res << std::endl;
+	std::cerr << "CVulkanCore::CreateAccelerationStructure: vkCreateAccelerationStructureKHR is invalid" << std::endl;
 	return false;
 }
 
@@ -1814,6 +1827,23 @@ void CVulkanCore::BuildAccelerationStructure(VkCommandBuffer p_cmdBfr, uint32_t 
 {
 	if(m_pfnvkCmdBuildAccelerationStructuresKHR)
 		m_pfnvkCmdBuildAccelerationStructuresKHR(p_cmdBfr, p_infoCount, p_acBuildInfo, p_acRange);
+
+	std::cout << "CVulkanCore::BuildAccelerationStructure: Warning vkCmdBuildAccelerationStructuresKHR is invalid" << std::endl;
+}
+
+VkDeviceAddress CVulkanCore::GetAccelerationStructureDeviceAddress(const VkAccelerationStructureKHR& p_accStructure)
+{
+	if (m_pfnvkGetAccelerationStructureDeviceAddressKHR)
+	{
+		VkAccelerationStructureDeviceAddressInfoKHR info{};
+		info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+		info.accelerationStructure = p_accStructure;
+
+		return m_pfnvkGetAccelerationStructureDeviceAddressKHR(m_vkDevice, &info);
+	}
+
+	std::cout << "CVulkanCore::GetAccelerationStructureDeviceAddress: Warning vkGetAccelerationStructureDeviceAddressKHR is invalid" << std::endl;
+	return 0;
 }
 
 bool CVulkanCore::MapMemory(Buffer p_buffer, bool p_flushMemRanges, void** p_data, std::vector<VkMappedMemoryRange>* p_memRanges)

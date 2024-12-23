@@ -878,6 +878,26 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 		stgList.clear();
 	}
 
+	debugMarker = "TLAS Loading";
+	{
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_cmdPool, &cmdBfr, 1, &debugMarker));
+		RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
+
+		RETURN_FALSE_IF_FALSE(LoadTLAS(p_rhi, stgList, cmdBfr));
+
+		RETURN_FALSE_IF_FALSE(p_rhi->EndCommandBuffer(cmdBfr));
+
+		CVulkanRHI::CommandBufferList cbrList{ cmdBfr };
+		CVulkanRHI::PipelineStageFlagsList psfList{ VkPipelineStageFlags {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} };
+		bool waitForFinish = true;
+		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffers(&cbrList, &psfList, waitForFinish));
+
+		for (auto& stg : stgList)
+			p_rhi->FreeMemoryDestroyBuffer(stg);
+
+		stgList.clear();
+	}
+
 	RETURN_FALSE_IF_FALSE(CreateMeshUniformBuffer(p_rhi));
 
 	RETURN_FALSE_IF_FALSE(CreateSceneDescriptors(p_rhi));
@@ -1384,7 +1404,7 @@ bool CScene::LoadBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 	std::vector<const VkAccelerationStructureBuildRangeInfoKHR*> buildRangePtrs(meshCount);
 	
 	m_blasBuffers = new CBuffers((uint32_t)meshCount);
-	m_accelerationStructures.resize(meshCount);
+	m_BLASs.resize(meshCount);
 
 	std::vector<VkAccelerationStructureCreateInfoKHR> accelerationStructureCreateInfos(meshCount);
 	for (size_t i = 0; i < meshCount; i++)
@@ -1392,7 +1412,7 @@ bool CScene::LoadBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 		CRenderableMesh* mesh = m_meshes[i + MeshType::mt_Scene];
 
 		// Create Acceleration Buffer
-		RETURN_FALSE_IF_FALSE(m_blasBuffers->CreateBuffer(p_rhi, (uint32_t)i, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR,
+		RETURN_FALSE_IF_FALSE(m_blasBuffers->CreateBuffer(p_rhi, (uint32_t)i, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, totalAccelerationSize, "Primary BLAS" + std::to_string(i)));
 
 		VkAccelerationStructureCreateInfoKHR& accelerationStructureCreateInfo = accelerationStructureCreateInfos[i];
@@ -1401,10 +1421,10 @@ bool CScene::LoadBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 		accelerationStructureCreateInfo.offset = accelerationOffset[i];
 		accelerationStructureCreateInfo.size = accelerationSizes[i];
 		accelerationStructureCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAccelerationStructure(&accelerationStructureCreateInfo, m_accelerationStructures[i]));
-		std::clog << "LoadBLAS: Creating Acceleration Structure for " << mesh->GetName() << std::endl;
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAccelerationStructure(&accelerationStructureCreateInfo, m_BLASs[i]));
+		std::clog << "LoadBLAS: Creating Bottom Acceleration Structure for " << mesh->GetName() << std::endl;
 
-		buildInfos[i].dstAccelerationStructure = m_accelerationStructures[i];
+		buildInfos[i].dstAccelerationStructure = m_BLASs[i];
 		buildInfos[i].scratchData.deviceAddress = scratchAddress;
 				
 		buildRanges[i].primitiveCount = mesh->GetPrimitiveCount();
@@ -1413,6 +1433,99 @@ bool CScene::LoadBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 
 	p_rhi->BuildAccelerationStructure(p_cmdBfr, (uint32_t)meshCount, buildInfos.data(), buildRangePtrs.data());
 	std::clog << "LoadBLAS: Building Acceleration Structures " << std::endl;
+
+	return true;
+}
+
+bool CScene::LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer& p_cmdBfr)
+{
+	// Needs one TLAS, that will be updated every frame if we are moving
+	// objects
+
+	// TODO: As of now, I am only packing transform data
+	// of the meshes I am rendering. Once instancing is 
+	// implemented, it ll get valuable to implement TLASs
+	// that reflect the feature
+	std::vector<VkAccelerationStructureInstanceKHR> instances(m_BLASs.size());
+	for (size_t i = 0; i < m_BLASs.size(); i++)
+	{
+		VkAccelerationStructureInstanceKHR& instance = instances[i];
+		instance.transform = m_meshes[i + MeshType::mt_Scene]->GetTransform().GetTransformAffine();
+		instance.instanceCustomIndex = i;
+		instance.mask = 0xFF;
+		instance.instanceShaderBindingTableRecordOffset = 0;
+		instance.flags = 0;
+		instance.accelerationStructureReference = p_rhi->GetAccelerationStructureDeviceAddress(m_BLASs[i]);
+	}
+
+	// Create TLAS instance buffer that holds the transform of the mesh we are rendering. 
+	// EG: Since we are only rendering sponza atm to test ray tracing, we ll provide
+	// its transform
+	{
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(VkAccelerationStructureInstanceKHR) * m_BLASs.size(), m_instanceTLASResource,
+			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, 
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, "TLAS Instance Resource"));
+
+		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)instances.data(), m_instanceTLASResource));
+	}
+		
+	VkAccelerationStructureGeometryKHR geometry{};
+	geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+	geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+	geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+	geometry.geometry.instances.data.deviceAddress = p_rhi->GetBufferDeviceAddress(m_instanceTLASResource.descInfo.buffer);
+	geometry.geometry.instances.arrayOfPointers = VK_FALSE;
+	geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+	
+	VkAccelerationStructureBuildGeometryInfoKHR buildInfo{};
+	buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+	buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+	buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+	buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;	// might want to use the update flag when add geometry at runtime?
+	buildInfo.geometryCount = 1;
+	buildInfo.pGeometries = &geometry;
+
+	VkAccelerationStructureBuildSizesInfoKHR sizeInfo{};
+	p_rhi->GetAccelerationStructureBuildSize(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, (uint32_t)m_BLASs.size(), &sizeInfo);
+
+	std::clog << "LoadTLAS: Total Acceleration Structure Size: " << sizeInfo.accelerationStructureSize / 1048576.0f << " Mb." << std::endl;
+	std::clog << "LoadTLAS: Total Scratch Size: " << sizeInfo.buildScratchSize / 1048576.0f << " Mb." << std::endl;
+
+	// Create Scratch Buffer
+	VkDeviceAddress scratchAddress;
+	{
+		CVulkanRHI::Buffer scratchBuffer;
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeInfo.buildScratchSize, scratchBuffer,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, "TLAS Scratch"));
+
+		scratchAddress = p_rhi->GetBufferDeviceAddress(scratchBuffer.descInfo.buffer);
+
+		p_stgbufferList.push_back(scratchBuffer);
+	}
+
+	// Create Acceleration Buffer
+	{
+		m_tlasBuffers = new CBuffers(1);
+		RETURN_FALSE_IF_FALSE(m_tlasBuffers->CreateBuffer(p_rhi, 0, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeInfo.accelerationStructureSize, "Primary TLAS"));
+	}
+
+	VkAccelerationStructureCreateInfoKHR accelerationStructureCreateInfo{};
+	accelerationStructureCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+	accelerationStructureCreateInfo.buffer = m_tlasBuffers->GetBuffer(0).descInfo.buffer;
+	accelerationStructureCreateInfo.size = sizeInfo.accelerationStructureSize;
+	accelerationStructureCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateAccelerationStructure(&accelerationStructureCreateInfo, m_TLAS));
+	std::clog << "LoadTLAS: Creating Top Acceleration Structure for the Scene" << std::endl;
+
+	VkAccelerationStructureBuildRangeInfoKHR buildRanges{};
+	buildRanges.primitiveCount = 1; // instance count is only 1
+	const VkAccelerationStructureBuildRangeInfoKHR* buildRangePtrs = &buildRanges;
+	
+	buildInfo.dstAccelerationStructure = m_TLAS;
+	buildInfo.scratchData.deviceAddress = scratchAddress;
+	p_rhi->BuildAccelerationStructure(p_cmdBfr, 1, &buildInfo, &buildRangePtrs);
+	std::clog << "LoadTLAS: Building Acceleration Structure for the Scene " << std::endl;
 
 	return true;
 }

@@ -518,7 +518,10 @@ private:
 	
 	// Used for Ray Tracing
 	CBuffers*								m_blasBuffers;
-	std::vector<VkAccelerationStructureKHR>	m_accelerationStructures;
+	CBuffers*								m_tlasBuffers;
+	std::vector<VkAccelerationStructureKHR>	m_BLASs;
+	VkAccelerationStructureKHR				m_TLAS;
+	CVulkanRHI::Buffer						m_instanceTLASResource;
 	
 	// TODO: need to fix the current selected render-able mesh 
 	// it is used by object picker pass and is not the best way to do.
@@ -537,6 +540,7 @@ private:
 	bool LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
 	bool LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
 	bool LoadBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
+	bool LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 
 	bool CreateMeshUniformBuffer(CVulkanRHI* p_rhi);
 	bool CreateSceneDescriptors(CVulkanRHI* p_rhi);

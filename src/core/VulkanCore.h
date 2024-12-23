@@ -369,6 +369,7 @@ protected:
 	PFN_vkGetAccelerationStructureBuildSizesKHR				m_pfnGetAccelerationStructureBuildSizesKHR;
 	PFN_vkCreateAccelerationStructureKHR					m_pfnvkCreateAccelerationStructureKHR;
 	PFN_vkCmdBuildAccelerationStructuresKHR					m_pfnvkCmdBuildAccelerationStructuresKHR;
+	PFN_vkGetAccelerationStructureDeviceAddressKHR			m_pfnvkGetAccelerationStructureDeviceAddressKHR;
 
 #if VULKAN_DEBUG == 1
 	VkDebugUtilsMessengerEXT                                m_debugUtilsMessenger{ VK_NULL_HANDLE };
@@ -471,6 +472,7 @@ public:
 	void GetAccelerationStructureBuildSize(VkAccelerationStructureBuildTypeKHR p_type, const VkAccelerationStructureBuildGeometryInfoKHR*, uint32_t p_primCount, VkAccelerationStructureBuildSizesInfoKHR* p_sizeInfo);
 	bool CreateAccelerationStructure(VkAccelerationStructureCreateInfoKHR*, VkAccelerationStructureKHR&);
 	void BuildAccelerationStructure(VkCommandBuffer p_cmdBfr, uint32_t p_infoCount, VkAccelerationStructureBuildGeometryInfoKHR*, const VkAccelerationStructureBuildRangeInfoKHR* const*);
+	VkDeviceAddress GetAccelerationStructureDeviceAddress(const VkAccelerationStructureKHR&);
 
 	bool MapMemory(Buffer p_buffer, bool p_flushMemRanges, void** p_data, std::vector<VkMappedMemoryRange>* p_memRanges);
 	bool FlushMemoryRanges(std::vector<VkMappedMemoryRange>* p_memRanges);
