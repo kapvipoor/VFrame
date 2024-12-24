@@ -1,4 +1,4 @@
-#version 450
+#version 460
 
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
@@ -43,6 +43,20 @@ float CalculateDirectonalShadow(vec4 L, vec3 N, bool applyPCF)
 	return 0.0f;
 }
 
+float RayTraceDirectionalShadow(vec3 origin, vec3 direction)
+{
+	float tMin = 1e-2f;
+	float tMax = 1000;
+	rayQueryEXT rq;
+	rayQueryInitializeEXT(rq, g_TLAS, gl_RayFlagsTerminateOnFirstHitEXT, 0xff, origin, tMin, direction, tMax);
+
+	// Traverse the acceleration structure and store information about the first intersection (if any)
+	rayQueryProceedEXT(rq);
+
+	return (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionNoneEXT)?
+	 1.0f : 0.0f;
+}
+
 layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) in;
 void main()
 {
@@ -51,8 +65,11 @@ void main()
     // these resources are in view space
 	vec4 skyboxColor = imageLoad(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy).xyzw;                                              
     vec3 camerPosition = vec3(0.0f);                                                                       
-	vec4 fragPos = imageLoad(g_RT_StorageImages[STORE_POSITION], xy).xyzw;                                              
-    vec3 V = normalize(camerPosition - fragPos.xyz);                                                                                 
+	
+	vec4 fragPos = imageLoad(g_RT_StorageImages[STORE_POSITION], xy).xyzw;                
+	vec4 posInWorldSpace = g_Info.invCamView * fragPos;                              
+    
+	vec3 V = normalize(camerPosition - fragPos.xyz);                                                                                 
     vec3 N = normalize(imageLoad(g_RT_StorageImages[STORE_NORMAL], xy).xyz);                                                         
     vec3 albedo = imageLoad(g_RT_StorageImages[STORE_ALBEDO], xy).xyz;
     
@@ -67,6 +84,8 @@ void main()
     vec3 Lo = vec3(0.0);
 	float shadow = 0;//
 	vec4 finalColor = skyboxColor;
+
+	shadow = RayTraceDirectionalShadow(posInWorldSpace.xyz, vec3(1.f, 1.0f, 1.0f));
 
 	// the the depth value of the fragment in NDC is calculated and checkd if it is within the far plane at 1.0
 	// if it is, compute the lighting, else the skybox is the final deciding color
@@ -89,9 +108,7 @@ void main()
 			vec3 L = vec3(0.0f, 0.0f, 0.0f);     
 			 if(lightType == DIRECTIONAL_LIGHT_TYPE)
 			 {
-			 	// calculating the current position from view space to world space
-			 	vec4 posInWorldSpace = g_Info.invCamView * fragPos;
-		 		// calculating current position in world space to Light's view space
+			 	// calculating current position in world space to Light's view space
 			 	vec4 v0 = vec4(light.viewProj[0], light.viewProj[1], light.viewProj[2], light.viewProj[3]);
 			 	vec4 v1 = vec4(light.viewProj[4], light.viewProj[5], light.viewProj[6], light.viewProj[7]);
 			 	vec4 v2 = vec4(light.viewProj[8], light.viewProj[9], light.viewProj[10], light.viewProj[11]);

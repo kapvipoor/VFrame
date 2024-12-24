@@ -28,6 +28,7 @@ public:
 		VkShaderStageFlags					shaderStage;
 		const VkDescriptorBufferInfo*		bufDesInfo;
 		const VkDescriptorImageInfo*		imgDesinfo;
+		const VkAccelerationStructureKHR*   accelerationStructure;
 	};
 	typedef std::vector<DescriptorData> DescDataList;
 

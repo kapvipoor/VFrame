@@ -1,3 +1,5 @@
+#extension GL_EXT_ray_query : require
+
 layout(push_constant) uniform MeshID
 {
 	uint mesh_id;
@@ -49,7 +51,9 @@ layout(set = 1, binding = 5) buffer Light_Storage
 	Light lights[];
 } g_lights;
 
-layout(set = 1, binding = 6) uniform texture2D g_textures[];
+layout(set = 1, binding = 6) uniform accelerationStructureEXT g_TLAS;
+
+layout(set = 1, binding = 7) uniform texture2D g_textures[];
 
 vec4 GetColor(uint color_id, vec2 uv)
 {

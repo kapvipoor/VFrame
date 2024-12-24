@@ -412,6 +412,7 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR accStructFeature{};
 	accStructFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
 	accStructFeature.accelerationStructure								= VK_TRUE;
+	accStructFeature.descriptorBindingAccelerationStructureUpdateAfterBind = VK_TRUE;
 	accStructFeature.pNext												= nullptr;
 
 	//Enable support for Ray Query
@@ -1854,13 +1855,16 @@ bool CVulkanCore::MapMemory(Buffer p_buffer, bool p_flushMemRanges, void** p_dat
 		std::cerr << "vkMapMemory failed " << res << std::endl;
 		return false;
 	}
-
+	
 	if (p_flushMemRanges == true && p_memRanges!= nullptr)
 	{
+		// we do this because VK_WHOLE_SIZE is raising a validation error because vulkan 
+		// driver is picking up VK_WHOLE_SIZE as device range and not required memory size 
+		// discovered during device buffer memory creation
 		VkMappedMemoryRange range{};
 		range.sType	= VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
 		range.memory = p_buffer.devMem;
-		range.size = p_buffer.reqMemSize; // we do this because VK_WHOLE_SIZE is raising a validation error because vulkan driver (or loader ?) is picking up VK_WHOLE_SIZE as device range and not required memory size discovered during device buffer memory creation
+		range.size = VK_WHOLE_SIZE; // p_buffer.reqMemSize;
 		p_memRanges->push_back(range);
 	}
 
@@ -1875,7 +1879,6 @@ bool CVulkanCore::FlushMemoryRanges(std::vector<VkMappedMemoryRange>* p_memRange
 		return false;
 	}
 
-	//we are 
 	for (auto& mapped : *p_memRanges)
 	{
 		VkResult res = vkFlushMappedMemoryRanges(m_vkDevice, 1, &mapped);

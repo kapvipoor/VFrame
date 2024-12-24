@@ -312,6 +312,8 @@ bool CVulkanRHI::CreateDescriptors(	const DescDataList& p_descdataList, VkDescri
 
 void CVulkanRHI::WriteUpdateDescriptors(VkDescriptorSet* p_desc, const DescDataList& p_descDataList)
 {
+	VkWriteDescriptorSetAccelerationStructureKHR descriptorASInfo{};
+
 	std::vector<VkWriteDescriptorSet> writeDescList;
 	for (const auto& desc : p_descDataList)
 	{
@@ -322,7 +324,6 @@ void CVulkanRHI::WriteUpdateDescriptors(VkDescriptorSet* p_desc, const DescDataL
 			{
 				if (desc.bufDesInfo == VK_NULL_HANDLE)
 					continue;
-
 
 				VkWriteDescriptorSet wdSet{};
 				wdSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -336,8 +337,7 @@ void CVulkanRHI::WriteUpdateDescriptors(VkDescriptorSet* p_desc, const DescDataL
 
 				writeDescList.push_back(wdSet);
 			}
-
-			if (desc.type == VK_DESCRIPTOR_TYPE_SAMPLER
+			else if (desc.type == VK_DESCRIPTOR_TYPE_SAMPLER
 				|| desc.type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
 				|| desc.type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
 				|| desc.type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
@@ -356,6 +356,21 @@ void CVulkanRHI::WriteUpdateDescriptors(VkDescriptorSet* p_desc, const DescDataL
 				wdSet.dstArrayElement = desc.arrayDestIndex;
 
 				writeDescList.push_back(wdSet);
+			}
+			else if (desc.type == VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)
+			{
+				descriptorASInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+				descriptorASInfo.accelerationStructureCount = 1;
+				descriptorASInfo.pAccelerationStructures = desc.accelerationStructure;
+
+				VkWriteDescriptorSet wdSet{};
+				wdSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				wdSet.pNext = &descriptorASInfo;
+				wdSet.dstSet = *p_desc;
+				wdSet.descriptorCount = desc.count;
+				wdSet.descriptorType = desc.type;
+				wdSet.dstBinding = desc.bindingDest;
+				wdSet.dstArrayElement = desc.arrayDestIndex;
 			}
 		}
 	}
@@ -392,9 +407,18 @@ bool CVulkanRHI::CreateDescriptors(	const DescDataList& p_descDataList, VkDescri
 		if (p_bindFlags & DescriptorBindFlag::Bindless)
 		{
 			hasSpecialDescriptorBindingFlags = true;
-			descBindFlags[i] |= VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
-				VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT |
-				VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
+
+			if (desc.type == VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)
+			{
+				descBindFlags[i] |= VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT;
+			}
+			else
+			{
+
+				descBindFlags[i] |= VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
+					VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT |
+					VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
+			}
 		}
 	}
 

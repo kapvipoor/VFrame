@@ -54,6 +54,25 @@ void CDescriptor::BindlessWrite(uint32_t p_swId, uint32_t p_index, const VkDescr
 	m_descList[p_swId].descDataList[p_index].bufDesInfo = p_bufferInfo;
 }
 
+void CDescriptor::BindlessWrite(uint32_t p_swId, uint32_t p_index, const VkAccelerationStructureKHR* p_accStructure, uint32_t p_count)
+{
+	if (p_swId >= m_descList.size())
+	{
+		std::cerr << "Attempting to Bindless Write a descriptor with a bad swap chain index" << std::endl;
+		return;
+	}
+
+
+	if (p_index >= m_descList[0].descDataList.size())
+	{
+		std::cerr << "Attempting to Bindless Write a descriptor with a bad binding index" << std::endl;
+		return;
+	}
+
+	m_descList[p_swId].descDataList[p_index].count = p_count;
+	m_descList[p_swId].descDataList[p_index].accelerationStructure = p_accStructure;
+}
+
 void CDescriptor::BindlessUpdate(CVulkanRHI* p_rhi, uint32_t p_swId)
 {
 	if (p_swId >= m_descList.size())
@@ -132,8 +151,8 @@ bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferL
 
 	// for creating Acceleration Structure
 	m_primitiveCount = (uint32_t)p_meshRaw->indicesList.size() / 3;
-	m_vertexStride = p_meshRaw->vertexList.GetVertexSize();
-	m_vertexCount = (uint32_t)p_meshRaw->vertexList.size() / (uint32_t)m_vertexStride;
+	m_vertexStrideInBytes = p_meshRaw->vertexList.GetVertexSize() * sizeof(float);
+	m_vertexCount = (uint32_t)p_meshRaw->vertexList.size() / (uint32_t)p_meshRaw->vertexList.GetVertexSize();
 	uint32_t rayTracingUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
 	{
@@ -1320,8 +1339,8 @@ bool CScene::LoadBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 		geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
 
 		geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-		geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT; // refer for vertex attribute defined for shadow pass and reused everywhere else
-		geometry.geometry.triangles.vertexStride = mesh->GetVertexStride();
+		geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT; // refer vertex attribute defined for shadow pass and reused everywhere else
+		geometry.geometry.triangles.vertexStride = mesh->GetVertexStrideInBytes();
 		geometry.geometry.triangles.maxVertex = mesh->GetVertexCount();
 		geometry.geometry.triangles.vertexData.deviceAddress = vbAddress;
 		geometry.geometry.triangles.indexType = VK_INDEX_TYPE_UINT32;
@@ -1418,7 +1437,7 @@ bool CScene::LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 		instance.instanceCustomIndex = i;
 		instance.mask = 0xFF;
 		instance.instanceShaderBindingTableRecordOffset = 0;
-		instance.flags = 0;
+		instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
 		instance.accelerationStructureReference = p_rhi->GetAccelerationStructureDeviceAddress(m_BLASs[i]);
 	}
 
@@ -1543,25 +1562,27 @@ bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
 	VkShaderStageFlags frag_comp		= VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
 	{
 		// Creating Descriptors and descriptor set based on following type and count
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag},	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	frag_comp },	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	frag_comp },	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			frag_comp },	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			frag },			0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vert_frag_comp},0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			frag },	        0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,				vertex_frag},	0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag_comp },	0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				frag },			0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				vert_frag_comp},0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_TLAS,				1,						VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,	frag_comp},		0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag },	        0);
 		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 0, "SceneDescriptorSet_0"));
 	}
 
 	// Creating descriptor set for swap chain utility 1
 	{
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			vertex_frag},	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	frag_comp },	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	frag_comp },	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			frag_comp },	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			frag },			1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			vert_frag_comp},1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,			frag },			1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,				vertex_frag},	1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag_comp },	1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				frag },			1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				vert_frag_comp},1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_TLAS,				1,						VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,	frag_comp },	1);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag },			1);
 		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 1, "SceneDescriptorSet_1"));
 	}
 
@@ -1574,6 +1595,7 @@ bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
 		BindlessWrite(i, BindingDest::bd_Brdf_Lut, &m_sceneTextures->GetTexture(TextureType::tt_brdfLut).descInfo, 1);
 		BindlessWrite(i, BindingDest::bd_Material_Storage, &m_material_storage.descInfo, 1);
 		BindlessWrite(i, BindingDest::bd_Scene_Lights, &m_light_storage.descInfo, 1);
+		BindlessWrite(i, BindingDest::bd_Scene_TLAS, &m_TLAS, 1);
 		BindlessWrite(i, BindingDest::bd_SceneRead_TexArray, imageInfoList.data(), (uint32_t)imageInfoList.size());
 		BindlessUpdate(p_rhi, i);
 	}

@@ -181,6 +181,9 @@ struct VertexList
 	size_t size() const { return raw.size(); }
 	const float* data() const { return raw.data(); }
 
+	// Returns the size in float and NOT bytes.
+	// TODO: Fix this patch of code or at-least make it
+	// more intuitive.
 	uint32_t GetVertexSize() const { return vertexSize; }
 
 	uint32_t GetOffsetOf(Vertex::AttributeFlag p_attributeFlag) 

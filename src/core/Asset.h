@@ -75,9 +75,9 @@ enum BindingDest
 	, bd_ObjPicker_Storage			= 3	, bd_Brdf_Lut				= 3
 	, bd_SSAOKernel_Storage			= 4 , bd_Material_Storage		= 4
 	, bd_PrimaryRead_TexArray		= 5 , bd_Scene_Lights			= 5
-	, bd_RTs_StorageImages			= 6 , bd_SceneRead_TexArray		= 6
-	, bd_RTs_SampledImages			= 7 , bd_Scene_max				= 7					
-	, bd_Primary_max				= 8
+	, bd_RTs_StorageImages			= 6 , bd_Scene_TLAS				= 6
+	, bd_RTs_SampledImages			= 7 , bd_SceneRead_TexArray		= 7					
+	, bd_Primary_max				= 8 , bd_Scene_max				= 8			
 };
 
 struct LoadedUpdateData
@@ -114,6 +114,7 @@ public:
 
 	void BindlessWrite(uint32_t p_swId, uint32_t p_index, const VkDescriptorImageInfo* p_imageInfo, uint32_t p_count = 1, uint32_t p_arrayDestIndex = 0);
 	void BindlessWrite(uint32_t p_swId, uint32_t p_index, const VkDescriptorBufferInfo* p_bufferInfo, uint32_t p_count = 1);
+	void BindlessWrite(uint32_t p_swId, uint32_t p_index, const VkAccelerationStructureKHR* p_accStructure, uint32_t p_count = 1);
 	void BindlessUpdate(CVulkanRHI* p_rhi, uint32_t p_swId);
 
 	const VkDescriptorSet* GetDescriptorSet(uint32_t p_id = 0) const{ return &m_descList[p_id].descSet; }
@@ -314,7 +315,7 @@ public:
 	uint32_t GetInstanceCount() { return m_instanceCount; }
 	uint32_t GetPrimitiveCount() { return m_primitiveCount; }
 	uint32_t GetVertexCount() { return m_vertexCount; }
-	size_t GetVertexStride() { return m_vertexStride; }
+	size_t GetVertexStrideInBytes() { return m_vertexStrideInBytes; }
 
 protected:
 	CVulkanRHI::BufferList			m_vertexBuffers;
@@ -324,7 +325,7 @@ protected:
 	// for creating Acceleration Structure
 	uint32_t						m_primitiveCount;
 	uint32_t						m_vertexCount;
-	size_t							m_vertexStride;
+	size_t							m_vertexStrideInBytes;
 };
 
 class CRenderableUI : public CRenderable, public CTextures, public CDescriptor, public CUIParticipant, public CSelectionListener
