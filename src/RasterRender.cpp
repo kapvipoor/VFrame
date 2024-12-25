@@ -225,6 +225,8 @@ bool CRasterRender::on_update(float delta)
 		RETURN_FALSE_IF_FALSE(m_loadableAssets->Update(m_rhi, loadedUpdate));
 	}
 
+	//RETURN_FALSE_IF_FALSE(m_loadableAssets->GetScene()->BuildTLAS(m_rhi, m_vkCmdPool, m_swapchainIndex));
+
 	{
 		CFixedBuffers::PrimaryUniformData* uniformData = m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
 		uniformData->cameraInvView					= nm::inverse(m_primaryCamera->GetView());

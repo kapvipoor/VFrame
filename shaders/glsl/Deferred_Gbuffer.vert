@@ -38,6 +38,5 @@ void main()
 
 	// Used to calculate the motion vectors
 	outPosinClipSpace		= g_Info.camViewProj * PosinWorldSpace;
-	outPrevPosinClipSpace	= PosinWorldSpace;
 	outPrevPosinClipSpace	= g_Info.camPreViewProj * PosinWorldSpace;
 }

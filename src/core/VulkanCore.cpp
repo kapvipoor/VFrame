@@ -1828,8 +1828,8 @@ void CVulkanCore::BuildAccelerationStructure(VkCommandBuffer p_cmdBfr, uint32_t 
 {
 	if(m_pfnvkCmdBuildAccelerationStructuresKHR)
 		m_pfnvkCmdBuildAccelerationStructuresKHR(p_cmdBfr, p_infoCount, p_acBuildInfo, p_acRange);
-
-	std::cout << "CVulkanCore::BuildAccelerationStructure: Warning vkCmdBuildAccelerationStructuresKHR is invalid" << std::endl;
+	else
+		std::cout << "CVulkanCore::BuildAccelerationStructure: Warning vkCmdBuildAccelerationStructuresKHR is invalid" << std::endl;
 }
 
 VkDeviceAddress CVulkanCore::GetAccelerationStructureDeviceAddress(const VkAccelerationStructureKHR& p_accStructure)

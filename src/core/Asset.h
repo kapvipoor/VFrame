@@ -483,6 +483,8 @@ public:
 	bool Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, const CVulkanRHI::CommandPool& p_cmdPool);
 	void Destroy(CVulkanRHI* p_rhi);
 
+	bool BuildTLAS(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool, uint32_t p_scId);
+
 	virtual void Show(CVulkanRHI* p_rhi) override;
 
 	bool Update(CVulkanRHI* p_rhi, const LoadedUpdateData&);
@@ -522,6 +524,8 @@ private:
 	CBuffers*								m_tlasBuffers;
 	std::vector<VkAccelerationStructureKHR>	m_BLASs;
 	VkAccelerationStructureKHR				m_TLAS;
+	CVulkanRHI::Buffer m_TLASscratchBuffer;
+	CVulkanRHI::Buffer m_instanceBuffer;
 	
 	// TODO: need to fix the current selected render-able mesh 
 	// it is used by object picker pass and is not the best way to do.
@@ -541,6 +545,8 @@ private:
 	bool LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
 	bool LoadBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 	bool LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
+
+	void BuilTLAS(CVulkanRHI* p_rhi, CVulkanRHI::CommandBuffer&);
 
 	bool CreateMeshUniformBuffer(CVulkanRHI* p_rhi);
 	bool CreateSceneDescriptors(CVulkanRHI* p_rhi);

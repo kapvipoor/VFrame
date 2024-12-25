@@ -102,7 +102,7 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float Roughness)
 // Fresnel Schlick Approximation for Fresnel Effect with roughness
 vec3 FresnelSchlickRoughness(float cosThetha, vec3 F0, float roughness)
 {
-	return F0 + ((max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosThetha, 0.0, 1.0), 5.0));
+	return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosThetha, 0.0, 1.0), 5.0);
 }
 
 // Fresnel Schlick Approximation for Fresnel Effect

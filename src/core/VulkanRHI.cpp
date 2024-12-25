@@ -371,6 +371,8 @@ void CVulkanRHI::WriteUpdateDescriptors(VkDescriptorSet* p_desc, const DescDataL
 				wdSet.descriptorType = desc.type;
 				wdSet.dstBinding = desc.bindingDest;
 				wdSet.dstArrayElement = desc.arrayDestIndex;
+
+				writeDescList.push_back(wdSet);
 			}
 		}
 	}

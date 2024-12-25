@@ -865,14 +865,14 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true/*wait for finish*/));
 	}
 
-	debugMarker = "BLAS Loading";
+	debugMarker = "BLAS Creation";
 	{
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
 		RETURN_FALSE_IF_FALSE(LoadBLAS(p_rhi, stgList, cmdBfr));
 		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true /*waitForFinish*/));
 	}
 
-	debugMarker = "TLAS Loading";
+	debugMarker = "TLAS Creation";
 	{
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
 		RETURN_FALSE_IF_FALSE(LoadTLAS(p_rhi, stgList, cmdBfr));
@@ -910,6 +910,18 @@ void CScene::Destroy(CVulkanRHI* p_rhi)
 		p_rhi->FreeMemoryDestroyBuffer(m_meshInfo_uniform[i]);
 
 	p_rhi->DestroyCommandPool(m_assetLoaderCommandPool);
+}
+
+bool CScene::BuildTLAS(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool, uint32_t p_scId)
+{
+	std::string debugMarker = "TLAS Building";
+	{
+		CVulkanRHI::CommandBuffer cmdBfr;
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
+		BuilTLAS(p_rhi, cmdBfr);
+		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true/*wait for finish*/));
+	}
+	return true;
 }
 
 void CScene::Show(CVulkanRHI* p_rhi)
@@ -1446,28 +1458,26 @@ bool CScene::LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 	// its transform
 	// We are treating the instance buffer as a staging resource. Once the building of the
 	// Top Acceleration Structure is complete, this buffer is destroyed.
-	CVulkanRHI::Buffer instanceTLASResource;
 	{
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(VkAccelerationStructureInstanceKHR) * m_BLASs.size(), instanceTLASResource,
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(VkAccelerationStructureInstanceKHR) * m_BLASs.size(), m_instanceBuffer,
 			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, 
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, "TLAS Instance Resource"));
 
-		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)instances.data(), instanceTLASResource));
-		p_stgbufferList.push_back(instanceTLASResource);
+		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)instances.data(), m_instanceBuffer));
 	}
 		
 	VkAccelerationStructureGeometryKHR geometry{};
 	geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
 	geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
 	geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
-	geometry.geometry.instances.data.deviceAddress = p_rhi->GetBufferDeviceAddress(instanceTLASResource.descInfo.buffer);
+	geometry.geometry.instances.data.deviceAddress = p_rhi->GetBufferDeviceAddress(m_instanceBuffer.descInfo.buffer);
 	geometry.geometry.instances.arrayOfPointers = VK_FALSE;
 	geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
 	
 	VkAccelerationStructureBuildGeometryInfoKHR buildInfo{};
 	buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
 	buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-	buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+	buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
 	buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;	// might want to use the update flag when add geometry at runtime?
 	buildInfo.geometryCount = 1;
 	buildInfo.pGeometries = &geometry;
@@ -1481,13 +1491,10 @@ bool CScene::LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 	// Create Scratch Buffer
 	VkDeviceAddress scratchAddress;
 	{
-		CVulkanRHI::Buffer scratchBuffer;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeInfo.buildScratchSize, scratchBuffer,
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeInfo.buildScratchSize, m_TLASscratchBuffer,
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, "TLAS Scratch"));
 
-		scratchAddress = p_rhi->GetBufferDeviceAddress(scratchBuffer.descInfo.buffer);
-
-		p_stgbufferList.push_back(scratchBuffer);
+		scratchAddress = p_rhi->GetBufferDeviceAddress(m_TLASscratchBuffer.descInfo.buffer);
 	}
 
 	// Create Acceleration Buffer
@@ -1509,12 +1516,40 @@ bool CScene::LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 	buildRanges.primitiveCount = 1; // instance count is only 1
 	const VkAccelerationStructureBuildRangeInfoKHR* buildRangePtrs = &buildRanges;
 	
+
+	buildInfo.srcAccelerationStructure = m_TLAS;
 	buildInfo.dstAccelerationStructure = m_TLAS;
 	buildInfo.scratchData.deviceAddress = scratchAddress;
+
 	p_rhi->BuildAccelerationStructure(p_cmdBfr, 1, &buildInfo, &buildRangePtrs);
 	std::clog << "LoadTLAS: Building Acceleration Structure for the Scene " << std::endl;
 
 	return true;
+}
+
+void CScene::BuilTLAS(CVulkanRHI* p_rhi, CVulkanRHI::CommandBuffer& p_cmdBfr)
+{
+	VkAccelerationStructureGeometryKHR geometry = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR };
+	geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+	geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+	geometry.geometry.instances.data.deviceAddress = p_rhi->GetBufferDeviceAddress(m_instanceBuffer.descInfo.buffer);
+
+	VkAccelerationStructureBuildGeometryInfoKHR buildInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR };
+	buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+	buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+	buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+	buildInfo.geometryCount = 1;
+	buildInfo.pGeometries = &geometry;
+
+	buildInfo.srcAccelerationStructure = m_TLAS;
+	buildInfo.dstAccelerationStructure = m_TLAS;
+	buildInfo.scratchData.deviceAddress = p_rhi->GetBufferDeviceAddress(m_TLASscratchBuffer.descInfo.buffer);
+
+	VkAccelerationStructureBuildRangeInfoKHR buildRange = {};
+	buildRange.primitiveCount = 1;
+	const VkAccelerationStructureBuildRangeInfoKHR* buildRangePtr = &buildRange;
+
+	p_rhi->BuildAccelerationStructure(p_cmdBfr, 1, &buildInfo, &buildRangePtr);	
 }
 
 bool CScene::CreateMeshUniformBuffer(CVulkanRHI* p_rhi)
