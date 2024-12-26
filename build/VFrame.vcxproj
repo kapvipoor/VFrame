@@ -188,7 +188,6 @@
     <ClInclude Include="..\Src\RasterRender.h" />
     <ClInclude Include="..\src\ScreenSpacePass.h" />
     <ClInclude Include="..\src\ShadowPass.h" />
-    <ClInclude Include="..\src\SharedGlobal.h" />
     <ClInclude Include="..\src\UIPass.h" />
   </ItemGroup>
   <ItemGroup>

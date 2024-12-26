@@ -1,6 +1,6 @@
 #include "Camera.h"
 #include "AssetLoader.h"
-#include "../SharedGlobal.h"
+#include "Global.h"
 
 CCamera::CCamera(/*std::string p_name*/)
 //    : CEntity(p_name)

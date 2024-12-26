@@ -524,6 +524,14 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 			std::cerr << "Failed to get valid function pointer for vkGetAccelerationStructureDeviceAddressKHR" << std::endl;
 			return false;
 		}
+
+		m_pfnvkDestroyAccelerationStructureKHR = reinterpret_cast<PFN_vkDestroyAccelerationStructureKHR>(vkGetDeviceProcAddr(m_vkDevice,
+			"vkDestroyAccelerationStructureKHR"));
+		if (!m_pfnvkDestroyAccelerationStructureKHR)
+		{
+			std::cerr << "Failed to get valid function pointer for m_pfnvkDestroyAccelerationStructureKHR" << std::endl;
+			return false;
+		}
 	}
 
 	return true;
@@ -1869,6 +1877,12 @@ bool CVulkanCore::MapMemory(Buffer p_buffer, bool p_flushMemRanges, void** p_dat
 	}
 
 	return true;
+}
+
+void CVulkanCore::DestroyAccelerationStrucutre(VkAccelerationStructureKHR p_accStructure)
+{
+	if (m_pfnvkDestroyAccelerationStructureKHR)
+		m_pfnvkDestroyAccelerationStructureKHR(m_vkDevice, p_accStructure, nullptr);
 }
 
 bool CVulkanCore::FlushMemoryRanges(std::vector<VkMappedMemoryRange>* p_memRanges)

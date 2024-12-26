@@ -7,7 +7,12 @@
 
 #include "external/NiceMath.h"
 
+
 #include "Global.h"
+
+bool GetFileExtention(const std::string fileName, std::string& pExtentionn);
+
+bool GetFileName(const std::string fileName, std::string& pExtentionn, const char pDelimiter[2] = "/");
 
 struct ImageRaw
 {

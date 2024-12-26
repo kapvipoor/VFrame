@@ -143,9 +143,10 @@ public:
 	const CVulkanRHI::Buffer& GetBuffer(uint32_t p_id) { return m_buffers[p_id]; }
 	const CVulkanRHI::Buffer GetBuffer(uint32_t p_id) const { return m_buffers[p_id]; }
 
+	void DestroyBuffers(CVulkanRHI*);
+
 protected:
 	CVulkanRHI::BufferList			m_buffers;
-	void DestroyBuffers(CVulkanRHI*);
 };
 
 class CTextures
@@ -317,15 +318,27 @@ public:
 	uint32_t GetVertexCount() { return m_vertexCount; }
 	size_t GetVertexStrideInBytes() { return m_vertexStrideInBytes; }
 
+	VkAccelerationStructureKHR GetBLAS() { return m_BLAS; }
+	const CBuffers* GetBLASBuffer() { return m_blasBuffer; }
+
 protected:
 	CVulkanRHI::BufferList			m_vertexBuffers;
 	CVulkanRHI::BufferList			m_indexBuffers;
+
+	//CBuffers						m_vertexBuffers;
+	//CBuffers						m_indexBuffers;
+
 	uint32_t						m_instanceCount;
 
 	// for creating Acceleration Structure
 	uint32_t						m_primitiveCount;
 	uint32_t						m_vertexCount;
 	size_t							m_vertexStrideInBytes;
+	CBuffers*						m_blasBuffer;
+	VkAccelerationStructureKHR		m_BLAS;
+
+private:
+	bool CreateBuildBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, std::string p_debugStr);
 };
 
 class CRenderableUI : public CRenderable, public CTextures, public CDescriptor, public CUIParticipant, public CSelectionListener
@@ -383,6 +396,7 @@ public:
 	~CRenderableMesh();
 	
 	virtual void Show(CVulkanRHI* p_rhi) override; //CUIParticipant virtual override
+
 	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox) override;
 
 	uint32_t GetMeshId() const { return m_mesh_id; }
@@ -520,9 +534,7 @@ private:
 	std::vector<Material>					m_materialsList;	// List of all the materials used by the scene
 	
 	// Used for Ray Tracing
-	CBuffers*								m_blasBuffers;
 	CBuffers*								m_tlasBuffers;
-	std::vector<VkAccelerationStructureKHR>	m_BLASs;
 	VkAccelerationStructureKHR				m_TLAS;
 	CVulkanRHI::Buffer						m_TLASscratchBuffer;
 	CVulkanRHI::Buffer						m_instanceBuffer;
@@ -543,9 +555,7 @@ private:
 	bool LoadDefaultTextures(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 	bool LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
 	bool LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
-	bool LoadBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
 	bool LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
-
 	void BuilTLAS(CVulkanRHI* p_rhi, CVulkanRHI::CommandBuffer&);
 
 	bool CreateMeshUniformBuffer(CVulkanRHI* p_rhi);

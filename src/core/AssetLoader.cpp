@@ -1,6 +1,5 @@
 #include "AssetLoader.h"
 #include "Global.h"
-#include "../SharedGlobal.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "external/tiny_obj_loader.h"
@@ -17,6 +16,47 @@
 #include <io.h>
 #define S_ISREG(e) (((e) & _S_IFMT) == _S_IFREG)
 #define S_ISDIR(e) (((e) & _S_IFMT) == _S_IFDIR)
+
+bool GetFileExtention(const std::string fileName, std::string& pExtentionn)
+{
+	// find the last occurance of "."
+	std::size_t found = fileName.find_last_of(".");
+
+	// if doesnt exist
+	if (found == std::string::npos)
+	{
+		return false;
+	}
+
+	// return estention
+	pExtentionn = fileName.substr(found + 1);
+
+	return true;
+}
+
+bool GetFileName(const std::string fileName, std::string& pFilename, const char pDelimiter[2])
+{
+	// find the last occurance of "."
+	std::size_t found = fileName.find_last_of(pDelimiter);
+
+	// if doesnt exist
+	if (found == std::string::npos)
+	{
+		return false;
+	}
+
+	std::string filenameWithExt = fileName.substr(found + 1);
+	found = filenameWithExt.find_last_of(".");
+	if (found == std::string::npos)
+	{
+		return false;
+	}
+
+	// return name
+	pFilename = filenameWithExt.substr(0, found);
+
+	return true;
+}
 
 nm::float4 ComputeTangent(Vertex p_a, Vertex p_b, Vertex p_c)
 {

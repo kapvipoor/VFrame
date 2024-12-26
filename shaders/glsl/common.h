@@ -1,6 +1,7 @@
 #extension GL_EXT_shader_image_load_formatted : require 
 
-#include "../../src/SharedGlobal.h"
+#define GPU
+#include "../../src/core/Global.h"
 
 layout(set = 0, binding = 0) uniform GlobalBuffer
 {

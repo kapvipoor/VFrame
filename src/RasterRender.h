@@ -13,7 +13,7 @@
 #include "UIPass.h"
 #include "PostProcessingPasses.h"
 
-#include "SharedGlobal.h"
+#include "core/Global.h"
 
 class CRasterRender : public CWinCore
 {

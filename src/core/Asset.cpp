@@ -110,7 +110,7 @@ void CDescriptor::DestroyDescriptors(CVulkanRHI* p_rhi)
 }
 
 CRenderable::CRenderable(uint32_t p_BufferCount)
-	:m_instanceCount(0)
+	:m_instanceCount(1)
 {
 	if (p_BufferCount > 0)
 	{
@@ -132,6 +132,9 @@ void CRenderable::Clear(CVulkanRHI* p_rhi, uint32_t p_idx)
 
 void CRenderable::DestroyRenderable(CVulkanRHI* p_rhi)
 {
+	m_blasBuffer->DestroyBuffers(p_rhi);
+	p_rhi->DestroyAccelerationStrucutre(m_BLAS);
+
 	for (int i = 0; i < m_vertexBuffers.size(); i++)
 	{
 		m_vertexBuffers[i].descInfo.offset = 0;
@@ -216,6 +219,86 @@ bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferL
 		else
 			m_indexBuffers.push_back(indexBuffer);
 	}
+
+	if(p_useForRaytracing)
+	{
+		RETURN_FALSE_IF_FALSE(CreateBuildBLAS(p_rhi, p_stgList, p_cmdBfr, p_debugStr));
+	}
+
+	return true;
+}
+
+bool CRenderable::CreateBuildBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr)
+{	
+	VkDeviceAddress vbAddress = p_rhi->GetBufferDeviceAddress(GetVertexBuffer()->descInfo.buffer);
+	VkDeviceAddress ibAddress = p_rhi->GetBufferDeviceAddress(GetIndexBuffer()->descInfo.buffer);
+
+	VkAccelerationStructureGeometryKHR geometry{};
+	geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+	geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+	geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+	geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+	geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT; // refer vertex attribute defined for shadow pass and reused everywhere else
+	geometry.geometry.triangles.vertexStride = GetVertexStrideInBytes();
+	geometry.geometry.triangles.maxVertex = GetVertexCount();
+	geometry.geometry.triangles.vertexData.deviceAddress = vbAddress;
+	geometry.geometry.triangles.indexType = VK_INDEX_TYPE_UINT32;
+	geometry.geometry.triangles.indexData.deviceAddress = ibAddress;
+
+	VkAccelerationStructureBuildGeometryInfoKHR buildInfo{};
+	buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+	buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+	buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+	buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;	// might want to use the update flag when add geometry at runtime?
+	buildInfo.geometryCount = 1;
+	buildInfo.pGeometries = &geometry; // as of now, I am using 1 geometry per Mesh (includes all its sub-meshes)
+
+	VkAccelerationStructureBuildSizesInfoKHR sizeInfo{};
+	// Build type is device because we are choosing to create the resources on the device instead
+	// of host. The driver spawns a compute shader to build the acceleration structure
+	p_rhi->GetAccelerationStructureBuildSize(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, GetPrimitiveCount(), &sizeInfo);
+
+	std::clog << "CRenderable::CreateBuildBLAS: Total Acceleration Structure Size: " << sizeInfo.accelerationStructureSize / 1048576.0f << " Mb." << std::endl;
+	std::clog << "CRenderable::CreateBuildBLAS: Total Scratch Size: " << sizeInfo.buildScratchSize / 1048576.0f << " Mb." << std::endl;
+
+	// Create Scratch Buffer
+	VkDeviceAddress scratchAddress;
+	{
+		CVulkanRHI::Buffer scratchBuffer;
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeInfo.buildScratchSize, scratchBuffer,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, "BLAS Scratch"));
+
+		scratchAddress = p_rhi->GetBufferDeviceAddress(scratchBuffer.descInfo.buffer);
+
+		p_stgbufferList.push_back(scratchBuffer);
+	}
+
+	VkAccelerationStructureBuildRangeInfoKHR buildRanges{};
+	const VkAccelerationStructureBuildRangeInfoKHR* buildRangePtrs;
+
+	m_blasBuffer = new CBuffers(1);
+	
+	// Create Acceleration Buffer
+	RETURN_FALSE_IF_FALSE(m_blasBuffer->CreateBuffer(p_rhi, 0, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeInfo.accelerationStructureSize, "Primary BLAS " + p_debugStr ));
+
+	VkAccelerationStructureCreateInfoKHR accelerationStructureCreateInfo{};
+	accelerationStructureCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+	accelerationStructureCreateInfo.buffer = m_blasBuffer->GetBuffer(0).descInfo.buffer;
+	accelerationStructureCreateInfo.offset = 0; 
+	accelerationStructureCreateInfo.size = sizeInfo.accelerationStructureSize;
+	accelerationStructureCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateAccelerationStructure(&accelerationStructureCreateInfo, m_BLAS));
+	std::clog << "CRenderable::CreateBuildBLAS: Creating Bottom Acceleration Structure for " << p_debugStr << std::endl;
+
+	buildInfo.dstAccelerationStructure = m_BLAS;
+	buildInfo.scratchData.deviceAddress = scratchAddress;
+
+	buildRanges.primitiveCount = GetPrimitiveCount();
+	buildRangePtrs = &buildRanges;
+	
+	p_rhi->BuildAccelerationStructure(p_cmdBfr, 1, &buildInfo, &buildRangePtrs);
+	std::clog << "CRenderable::CreateBuildBLAS: Building Acceleration Structures for " << p_debugStr << std::endl;
 
 	return true;
 }
@@ -864,14 +947,6 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 
 		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true/*wait for finish*/));
 	}
-
-	debugMarker = "BLAS Creation";
-	{
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
-		RETURN_FALSE_IF_FALSE(LoadBLAS(p_rhi, stgList, cmdBfr));
-		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true /*waitForFinish*/));
-	}
-
 	debugMarker = "TLAS Creation";
 	{
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
@@ -893,9 +968,11 @@ void CScene::Destroy(CVulkanRHI* p_rhi)
 	DestroyDescriptors(p_rhi);
 	m_sceneTextures->DestroyTextures(p_rhi);
 
-	// destroy Acceleration Structures
-	// destroy m_blasBuffers;
-	delete m_blasBuffers;
+	p_rhi->FreeMemoryDestroyBuffer(m_instanceBuffer);
+	p_rhi->FreeMemoryDestroyBuffer(m_TLASscratchBuffer);
+	m_tlasBuffers->DestroyBuffers(p_rhi);
+	p_rhi->DestroyAccelerationStrucutre(m_TLAS);
+
 
 	for (auto& mesh : m_meshes)
 	{
@@ -1312,148 +1389,31 @@ bool CScene::LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferLi
 	return true;
 }
 
-bool CScene::LoadBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer& p_cmdBfr)
-{
-	size_t meshCount = m_meshes.size() - (size_t)MeshType::mt_Scene;
-
-	std::vector<uint32_t> primitiveCounts(meshCount);
-	std::vector<VkAccelerationStructureGeometryKHR> geometries(meshCount);
-	std::vector<VkAccelerationStructureBuildGeometryInfoKHR> buildInfos(meshCount);
-
-	std::vector<size_t> accelerationOffset(meshCount);
-	std::vector<size_t> accelerationSizes(meshCount);
-	std::vector<size_t> scratchOffset(meshCount);
-
-	size_t totalAccelerationSize = 0;
-	size_t toalScratchSize = 0;
-	size_t alignment = 256; // required by spec
-
-	for(size_t i = 0; i < meshCount; i++)
-	{
-		CRenderableMesh* mesh = m_meshes[i+ MeshType::mt_Scene];
-
-		VkDeviceAddress vbAddress = p_rhi->GetBufferDeviceAddress(mesh->GetVertexBuffer()->descInfo.buffer);
-		VkDeviceAddress ibAddress = p_rhi->GetBufferDeviceAddress(mesh->GetIndexBuffer()->descInfo.buffer);
-
-		VkAccelerationStructureGeometryKHR& geometry = geometries[i];
-		VkAccelerationStructureBuildGeometryInfoKHR& buildInfo = buildInfos[i];
-
-		primitiveCounts[i] = mesh->GetPrimitiveCount();
-
-		geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-		geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
-
-		geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-		geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT; // refer vertex attribute defined for shadow pass and reused everywhere else
-		geometry.geometry.triangles.vertexStride = mesh->GetVertexStrideInBytes();
-		geometry.geometry.triangles.maxVertex = mesh->GetVertexCount();
-		geometry.geometry.triangles.vertexData.deviceAddress = vbAddress;
-		geometry.geometry.triangles.indexType = VK_INDEX_TYPE_UINT32;
-		geometry.geometry.triangles.indexData.deviceAddress = ibAddress;
-
-		buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-		buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-		buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
-		buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;	// might want to use the update flag when add geometry at runtime?
-		buildInfo.geometryCount = 1;
-		buildInfo.pGeometries = &geometry; // as of now, I am using 1 geometry per Mesh (includes all its sub-meshes)
-
-		VkAccelerationStructureBuildSizesInfoKHR sizeInfo{};
-		// Build type is device because we are choosing to create the resources on the device instead
-		// of host. The driver spawns a compute shader to build the acceleration structure
-		p_rhi->GetAccelerationStructureBuildSize(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, primitiveCounts[i], &sizeInfo);
-
-		accelerationOffset[i] = totalAccelerationSize;
-		scratchOffset[i] = toalScratchSize;
-
-		accelerationSizes[i] = sizeInfo.accelerationStructureSize;
-
-		// Returns totalAccelerationSize to be next multiple of the alignment immediately greater than totalAccelerationSize
-		totalAccelerationSize = (totalAccelerationSize + sizeInfo.accelerationStructureSize + alignment - 1) & ~(alignment - 1);
-		toalScratchSize = (toalScratchSize + sizeInfo.buildScratchSize + alignment - 1) & ~(alignment - 1);
-	}
-
-	std::clog << "LoadBLAS: Total Acceleration Structure Size: " << totalAccelerationSize / 1048576.0f << " Mb." << std::endl;
-	std::clog << "LoadBLAS: Total Scratch Size: " << toalScratchSize / 1048576.0f << " Mb." << std::endl;
-
-	// Create Scratch Buffer
-	VkDeviceAddress scratchAddress;
-	{
-		CVulkanRHI::Buffer scratchBuffer;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(toalScratchSize, scratchBuffer, 
-			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, "BLAS Scratch"));
-	
-		scratchAddress = p_rhi->GetBufferDeviceAddress(scratchBuffer.descInfo.buffer);
-
-		p_stgbufferList.push_back(scratchBuffer);
-	}
-
-	std::vector<VkAccelerationStructureBuildRangeInfoKHR> buildRanges(meshCount);
-	std::vector<const VkAccelerationStructureBuildRangeInfoKHR*> buildRangePtrs(meshCount);
-	
-	m_blasBuffers = new CBuffers((uint32_t)meshCount);
-	m_BLASs.resize(meshCount);
-
-	std::vector<VkAccelerationStructureCreateInfoKHR> accelerationStructureCreateInfos(meshCount);
-	for (size_t i = 0; i < meshCount; i++)
-	{
-		CRenderableMesh* mesh = m_meshes[i + MeshType::mt_Scene];
-
-		// Create Acceleration Buffer
-		RETURN_FALSE_IF_FALSE(m_blasBuffers->CreateBuffer(p_rhi, (uint32_t)i, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, totalAccelerationSize, "Primary BLAS" + std::to_string(i)));
-
-		VkAccelerationStructureCreateInfoKHR& accelerationStructureCreateInfo = accelerationStructureCreateInfos[i];
-		accelerationStructureCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
-		accelerationStructureCreateInfo.buffer = m_blasBuffers->GetBuffer((uint32_t)i).descInfo.buffer;
-		accelerationStructureCreateInfo.offset = accelerationOffset[i];
-		accelerationStructureCreateInfo.size = accelerationSizes[i];
-		accelerationStructureCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAccelerationStructure(&accelerationStructureCreateInfo, m_BLASs[i]));
-		std::clog << "LoadBLAS: Creating Bottom Acceleration Structure for " << mesh->GetName() << std::endl;
-
-		buildInfos[i].dstAccelerationStructure = m_BLASs[i];
-		buildInfos[i].scratchData.deviceAddress = scratchAddress + scratchOffset[i];
-				
-		buildRanges[i].primitiveCount = mesh->GetPrimitiveCount();
-		buildRangePtrs[i] = &buildRanges[i];
-	}
-
-	p_rhi->BuildAccelerationStructure(p_cmdBfr, (uint32_t)meshCount, buildInfos.data(), buildRangePtrs.data());
-	std::clog << "LoadBLAS: Building Acceleration Structures " << std::endl;
-
-	return true;
-}
-
 bool CScene::LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
 	// Needs one TLAS, that will be updated every frame if we are moving
 	// objects
+	size_t meshCount = m_meshes.size() - (size_t)MeshType::mt_Scene;
 
 	// TODO: As of now, I am only packing transform data
 	// of the meshes I am rendering. Once instancing is 
 	// implemented, it ll get valuable to implement TLASs
 	// that reflect the feature
-	std::vector<VkAccelerationStructureInstanceKHR> instances(m_BLASs.size());
-	for (size_t i = 0; i < m_BLASs.size(); i++)
+	std::vector<VkAccelerationStructureInstanceKHR> instances(meshCount);
+	for (size_t i = 0; i < meshCount; i++)
 	{
+		CRenderableMesh* mesh = m_meshes[i + MeshType::mt_Scene];
 		VkAccelerationStructureInstanceKHR& instance = instances[i];
 		instance.transform = m_meshes[i + MeshType::mt_Scene]->GetTransform().GetTransformAffine();
-		instance.instanceCustomIndex = i;
+		instance.instanceCustomIndex = 0;
 		instance.mask = 0xFF;
 		instance.instanceShaderBindingTableRecordOffset = 0;
 		instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-		instance.accelerationStructureReference = p_rhi->GetAccelerationStructureDeviceAddress(m_BLASs[i]);
+		instance.accelerationStructureReference = p_rhi->GetAccelerationStructureDeviceAddress(mesh->GetBLAS());
 	}
 
-	// Create TLAS instance buffer that holds the transform of the mesh we are rendering. 
-	// EG: Since we are only rendering sponza atm to test ray tracing, we ll provide
-	// its transform
-	// We are treating the instance buffer as a staging resource. Once the building of the
-	// Top Acceleration Structure is complete, this buffer is destroyed.
 	{
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(VkAccelerationStructureInstanceKHR) * m_BLASs.size(), m_instanceBuffer,
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(VkAccelerationStructureInstanceKHR) * meshCount, m_instanceBuffer,
 			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, 
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, "TLAS Instance Resource"));
 		
@@ -1478,7 +1438,7 @@ bool CScene::LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 	buildInfo.pGeometries = &geometry;
 
 	VkAccelerationStructureBuildSizesInfoKHR sizeInfo{};
-	p_rhi->GetAccelerationStructureBuildSize(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, (uint32_t)m_BLASs.size(), &sizeInfo);
+	p_rhi->GetAccelerationStructureBuildSize(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, (uint32_t)meshCount, &sizeInfo);
 
 	std::clog << "LoadTLAS: Total Acceleration Structure Size: " << sizeInfo.accelerationStructureSize / 1048576.0f << " Mb." << std::endl;
 	std::clog << "LoadTLAS: Total Scratch Size: " << sizeInfo.buildScratchSize / 1048576.0f << " Mb." << std::endl;
@@ -1509,7 +1469,7 @@ bool CScene::LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 	std::clog << "LoadTLAS: Creating Top Acceleration Structure for the Scene" << std::endl;
 
 	VkAccelerationStructureBuildRangeInfoKHR buildRanges{};
-	buildRanges.primitiveCount = (uint32_t)m_BLASs.size(); 
+	buildRanges.primitiveCount = (uint32_t)meshCount;
 	const VkAccelerationStructureBuildRangeInfoKHR* buildRangePtrs = &buildRanges;
 
 	buildInfo.srcAccelerationStructure = m_TLAS;
@@ -1538,7 +1498,7 @@ void CScene::BuilTLAS(CVulkanRHI* p_rhi, CVulkanRHI::CommandBuffer& p_cmdBfr)
 
 	buildInfo.srcAccelerationStructure = m_TLAS;
 	buildInfo.dstAccelerationStructure = m_TLAS;
-	buildInfo.scratchData.deviceAddress = p_rhi->GetBufferDeviceAddress(m_TLASscratchBuffer.descInfo.buffer);;
+	buildInfo.scratchData.deviceAddress = p_rhi->GetBufferDeviceAddress(m_TLASscratchBuffer.descInfo.buffer);
 
 	VkAccelerationStructureBuildRangeInfoKHR buildRange = {};
 	buildRange.primitiveCount = 1;

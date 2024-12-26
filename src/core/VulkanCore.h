@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../SharedGlobal.h"
+#include "Global.h"
 
 // 0 disable vulkan debug
 // 1 enable vulkan debug
@@ -370,6 +370,7 @@ protected:
 	PFN_vkCreateAccelerationStructureKHR					m_pfnvkCreateAccelerationStructureKHR;
 	PFN_vkCmdBuildAccelerationStructuresKHR					m_pfnvkCmdBuildAccelerationStructuresKHR;
 	PFN_vkGetAccelerationStructureDeviceAddressKHR			m_pfnvkGetAccelerationStructureDeviceAddressKHR;
+	PFN_vkDestroyAccelerationStructureKHR					m_pfnvkDestroyAccelerationStructureKHR;
 
 #if VULKAN_DEBUG == 1
 	VkDebugUtilsMessengerEXT                                m_debugUtilsMessenger{ VK_NULL_HANDLE };
@@ -473,6 +474,7 @@ public:
 	bool CreateAccelerationStructure(VkAccelerationStructureCreateInfoKHR*, VkAccelerationStructureKHR&);
 	void BuildAccelerationStructure(VkCommandBuffer p_cmdBfr, uint32_t p_infoCount, VkAccelerationStructureBuildGeometryInfoKHR*, const VkAccelerationStructureBuildRangeInfoKHR* const*);
 	VkDeviceAddress GetAccelerationStructureDeviceAddress(const VkAccelerationStructureKHR&);
+	void DestroyAccelerationStrucutre(VkAccelerationStructureKHR);
 
 	bool MapMemory(Buffer p_buffer, bool p_flushMemRanges, void** p_data, std::vector<VkMappedMemoryRange>* p_memRanges);
 	bool FlushMemoryRanges(std::vector<VkMappedMemoryRange>* p_memRanges);
