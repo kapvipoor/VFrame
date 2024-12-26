@@ -524,8 +524,8 @@ private:
 	CBuffers*								m_tlasBuffers;
 	std::vector<VkAccelerationStructureKHR>	m_BLASs;
 	VkAccelerationStructureKHR				m_TLAS;
-	CVulkanRHI::Buffer m_TLASscratchBuffer;
-	CVulkanRHI::Buffer m_instanceBuffer;
+	CVulkanRHI::Buffer						m_TLASscratchBuffer;
+	CVulkanRHI::Buffer						m_instanceBuffer;
 	
 	// TODO: need to fix the current selected render-able mesh 
 	// it is used by object picker pass and is not the best way to do.
