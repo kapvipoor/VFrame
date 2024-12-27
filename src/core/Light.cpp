@@ -10,7 +10,7 @@ CLight::CLight(std::string p_name, Type p_type, float p_intensity, bool p_castSh
 	m_transform.SetScale(nm::float3(m_intensity));
 }
 
-void CLight::SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox)
+void CLight::SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform, bool p_bRecomputeSceneBBox)
 {
 	m_dirty = true;
 	m_transform = p_transform;
@@ -123,11 +123,11 @@ bool CDirectionaLight::Update(const CCamera::UpdateData& p_data, const CSceneGra
 	return true;
 }
 
-void CDirectionaLight::SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox)
+void CDirectionaLight::SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform, bool p_bRecomputeSceneBBox)
 {
 	// we do not expect directional light to trigger re-computation of scene
 	// bounding box; hence not calling CSceneGraph::RequestSceneBBoxUpdate();
-	CLight::SetTransform(p_transform, p_bRecomputeSceneBBox);
+	CLight::SetTransform(p_rhi, p_transform, p_bRecomputeSceneBBox);
 }
 
 void CDirectionaLight::Show(CVulkanRHI* p_rhi)
@@ -188,7 +188,7 @@ bool CPointLight::Update(const CCamera::UpdateData&, const CSceneGraph*)
 	return true;
 }
 
-void CPointLight::SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox)
+void CPointLight::SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform, bool p_bRecomputeSceneBBox)
 {
 	// assuming uniform scaling on all axis. We are applying the scaling on the
 	// axis that has changed from last update to all the axises
@@ -204,7 +204,7 @@ void CPointLight::SetTransform(nm::Transform p_transform, bool p_bRecomputeScene
 		p_transform.SetScale(nm::float3(m_intensity));
 	}
 
-	CLight::SetTransform(p_transform);
+	CLight::SetTransform(p_rhi, p_transform);
 
 	// we expect point light to trigger re-computation of scene 
 	// bounding box if it goes out of scene bounds

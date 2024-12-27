@@ -58,7 +58,7 @@ public:
 
 	virtual bool Init(const CCamera::InitData&) = 0;
 	virtual bool Update(const CCamera::UpdateData&, const CSceneGraph*) = 0;
-	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox = true);
+	virtual void SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform, bool p_bRecomputeSceneBBox = true);
 
 	virtual void Show(CVulkanRHI* p_rhi) override;
 
@@ -86,7 +86,7 @@ public:
 
 	virtual bool Init(const CCamera::InitData&) override;
 	virtual bool Update(const CCamera::UpdateData&, const CSceneGraph*) override;
-	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox = true) override;
+	virtual void SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform, bool p_bRecomputeSceneBBox = true) override;
 
 	virtual void Show(CVulkanRHI* p_rhi) override;
 
@@ -107,7 +107,7 @@ public:
 	virtual bool Init(const CCamera::InitData&) override;
 	virtual bool Update(const CCamera::UpdateData&, const CSceneGraph*) override;
 
-	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox) override;
+	virtual void SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform, bool p_bRecomputeSceneBBox) override;
 
 	virtual void Show(CVulkanRHI* p_rhi) override;
 

@@ -443,7 +443,7 @@ public:
 	
 	virtual void Show(CVulkanRHI* p_rhi) override; //CUIParticipant virtual override
 
-	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox) override;
+	virtual void SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform, bool p_bRecomputeSceneBBox) override;
 
 	uint32_t GetMeshId() const { return m_mesh_id; }
 	uint32_t GetSubmeshCount() const { return (uint32_t)m_submeshes.size(); }
@@ -468,13 +468,6 @@ private:
 class CRenderableDebug : public CRenderable, public CDescriptor
 {
 public:
-	//enum MeshType
-	//{
-	//	  Box_Sphere = 0	// combining vertex and index buffer pair for instanced box and sphere (created only once at the beginning of the application)
-	//	, Frustum			// another vertex and index buffer pair for frustums (created on demand) 
-	//	, Max
-	//};
-
 	struct DebugVertex
 	{
 		nm::float3	pos;

@@ -120,7 +120,7 @@ public:
 	int	GetId() { return m_id; }
 	const char* GetName() { return m_name.c_str(); }
 
-	virtual void SetTransform(nm::Transform p_transform, bool p_bRecomputeSceneBBox = true) = 0;
+	virtual void SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform, bool p_bRecomputeSceneBBox = true) = 0;
 	nm::Transform& GetTransform();
 	
 	void SetBoundingVolume(BVolume* p_bvol, bool p_bRecomputeSceneBBox = true);
