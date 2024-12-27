@@ -1689,6 +1689,18 @@ namespace nm {
              return affine;
          }
 
+         VkTransformMatrixKHR GetTransformAffine() const {
+
+             nm::float4x4 localTranspose = nm::transpose(transform);
+
+             VkTransformMatrixKHR affine{};
+             affine.matrix[0][0] = localTranspose.column[0][0]; affine.matrix[0][1] = localTranspose.column[0][1]; affine.matrix[0][2] = localTranspose.column[0][2]; affine.matrix[0][3] = localTranspose.column[0][3];
+             affine.matrix[1][0] = localTranspose.column[1][0]; affine.matrix[1][1] = localTranspose.column[1][1]; affine.matrix[1][2] = localTranspose.column[1][2]; affine.matrix[1][3] = localTranspose.column[1][3];
+             affine.matrix[2][0] = localTranspose.column[2][0]; affine.matrix[2][1] = localTranspose.column[2][1]; affine.matrix[2][2] = localTranspose.column[2][2]; affine.matrix[2][3] = localTranspose.column[2][3];
+
+             return affine;
+         }
+
          nm::float3 GetTranslateVector() { return translateVec; }
          nm::float3 GetRotateVector() { return rotateVec; }
          nm::float3 GetScaleVector() { return scaleVec; }

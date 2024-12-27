@@ -124,12 +124,13 @@ bool CForwardPass::Render(RenderData* p_renderData)
 
 			// Bind Index and Vertices buffers
 			VkDeviceSize offsets[1] = { 0 };
-			for (unsigned int i = CScene::MeshType::mt_Scene; i < scene->GetRenderableMeshCount(); i++)
+			for (unsigned int i = 0; i < scene->GetRenderableMeshCount(); i++)
 			{
-				const CRenderableMesh* mesh = scene->GetRenderableMesh(i);;
+				const CRenderableMesh* mesh = scene->GetRenderableMesh(i);
 
-				vkCmdBindVertexBuffers(cmdBfr, 0, 1, &mesh->GetVertexBuffer()->descInfo.buffer, offsets);
-				vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer()->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+				std::vector<VkBuffer> vtxBuffers{ mesh->GetVertexBuffer().descInfo.buffer };
+				vkCmdBindVertexBuffers(cmdBfr, 0, (uint32_t)vtxBuffers.size(), vtxBuffers.data(), offsets);
+				vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer().descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 				for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
 				{
@@ -236,11 +237,13 @@ bool CSkyboxPass::Render(RenderData* p_renderData)
 		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
 
 		VkDeviceSize offsets[1] = { 0 };
-		const CRenderableMesh* mesh = scene->GetRenderableMesh(CScene::MeshType::mt_Skybox);
-		vkCmdBindVertexBuffers(cmdBfr, 0, 1, &mesh->GetVertexBuffer()->descInfo.buffer, offsets);
-		vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer()->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+		const CRenderable* mesh = scene->GetSkyBoxMesh();
+		
+		std::vector<VkBuffer> vtxBuffers{ mesh->GetVertexBuffer().descInfo.buffer };
+		vkCmdBindVertexBuffers(cmdBfr, 0, (uint32_t)vtxBuffers.size(), vtxBuffers.data(), offsets); 
+		vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer().descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-		uint32_t count = (uint32_t)mesh->GetIndexBuffer()->descInfo.range / sizeof(uint32_t);
+		uint32_t count = (uint32_t)mesh->GetIndexBuffer().descInfo.range / sizeof(uint32_t);
 		vkCmdDrawIndexed(cmdBfr, count, 1, 0, 0, 1);
 
 		m_rhi->EndRenderPass(cmdBfr);
@@ -366,7 +369,7 @@ bool CDeferredPass::Render(RenderData* p_renderData)
 {
 	uint32_t scId												= p_renderData->scIdx;
 	CVulkanRHI::CommandBuffer cmdBfr							= p_renderData->cmdBfr;
-	const CScene* scene											= p_renderData->loadedAssets->GetScene();
+	CScene* scene											= p_renderData->loadedAssets->GetScene();
 	const CPrimaryDescriptors* primaryDesc						= p_renderData->primaryDescriptors;
 
 	{
@@ -382,12 +385,13 @@ bool CDeferredPass::Render(RenderData* p_renderData)
 
 			// Bind Index and Vertices buffers
 			VkDeviceSize offsets[1] = { 0 };
-			for (unsigned int i = CScene::MeshType::mt_Scene; i < scene->GetRenderableMeshCount(); i++)
+			for (unsigned int i = 0; i < scene->GetRenderableMeshCount(); i++)
 			{
 				const CRenderableMesh* mesh = scene->GetRenderableMesh(i);
 
-				vkCmdBindVertexBuffers(cmdBfr, 0, 1, &mesh->GetVertexBuffer()->descInfo.buffer, offsets);
-				vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer()->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+				std::vector<VkBuffer> vtxBuffers{ mesh->GetVertexBuffer().descInfo.buffer };
+				vkCmdBindVertexBuffers(cmdBfr, 0, (uint32_t)vtxBuffers.size(), vtxBuffers.data(), offsets);
+				vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer().descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 				for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
 				{
@@ -541,7 +545,7 @@ bool CSkyboxDeferredPass::Render(RenderData* p_renderData)
 {
 	uint32_t scId											= p_renderData->scIdx;
 	CVulkanRHI::CommandBuffer cmdBfr						= p_renderData->cmdBfr;
-	const CScene* scene										= p_renderData->loadedAssets->GetScene();
+	CScene* scene										= p_renderData->loadedAssets->GetScene();
 	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
 	CVulkanRHI::Renderpass renderPass						= m_pipeline.renderpassData;
 
@@ -560,11 +564,12 @@ bool CSkyboxDeferredPass::Render(RenderData* p_renderData)
 		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
 
 		VkDeviceSize offsets[1] = { 0 };
-		const CRenderableMesh* mesh = scene->GetRenderableMesh(CScene::MeshType::mt_Skybox);
-		vkCmdBindVertexBuffers(cmdBfr, 0, 1, &mesh->GetVertexBuffer()->descInfo.buffer, offsets);
-		vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer()->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+		const CRenderable* mesh = scene->GetSkyBoxMesh();
+		std::vector<VkBuffer> vtxBuffers{ mesh->GetVertexBuffer().descInfo.buffer };
+		vkCmdBindVertexBuffers(cmdBfr, 0, (uint32_t)vtxBuffers.size(), vtxBuffers.data(), offsets);
+		vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer().descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-		uint32_t count = (uint32_t)mesh->GetIndexBuffer()->descInfo.range / sizeof(uint32_t);
+		uint32_t count = (uint32_t)mesh->GetIndexBuffer().descInfo.range / sizeof(uint32_t);
 		vkCmdDrawIndexed(cmdBfr, count, 1, 0, 0, 1);
 
 		m_rhi->EndRenderPass(cmdBfr);

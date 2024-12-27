@@ -225,8 +225,6 @@ bool CRasterRender::on_update(float delta)
 		RETURN_FALSE_IF_FALSE(m_loadableAssets->Update(m_rhi, loadedUpdate));
 	}
 
-	//RETURN_FALSE_IF_FALSE(m_loadableAssets->GetScene()->BuildTLAS(m_rhi, m_vkCmdPool, m_swapchainIndex));
-
 	{
 		CFixedBuffers::PrimaryUniformData* uniformData = m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
 		uniformData->cameraInvView					= nm::inverse(m_primaryCamera->GetView());
@@ -602,6 +600,14 @@ bool CRasterRender::EndAllCommandBuffers(uint32_t p_swapchainIndex)
 
 bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 {
+	// If there is any edit to the scene, the instance buffer needs to be updated and 
+	// the TLAS needs to be updated as well. Otherwise the BVH will not update
+	// TODO: Insert a barrier here to ensure TLAS has finished updating before the Ray Tracing can happen
+	// Also might be valuable to pass the command buffer that only participates in first ray tracing pass.
+	// As of now there is a hard sync with a device wait for finish here.
+	if (m_sceneGraph->GetSceneStatus() >= CSceneGraph::SceneStatus::ss_SceneMoved)
+		RETURN_FALSE_IF_FALSE(m_loadableAssets->GetScene()->UpdateTLAS(m_rhi, m_vkCmdPool, m_swapchainIndex))
+
 	RETURN_FALSE_IF_FALSE(BeginAllCommandBuffers(m_swapchainIndex));
 
 	CPass::RenderData renderData{};

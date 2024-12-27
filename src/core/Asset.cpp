@@ -109,198 +109,181 @@ void CDescriptor::DestroyDescriptors(CVulkanRHI* p_rhi)
 	m_descList.clear();
 }
 
-CRenderable::CRenderable(uint32_t p_BufferCount)
-	:m_instanceCount(1)
+CRenderable::CRenderable(VkMemoryPropertyFlags p_memPropFlags, uint32_t p_BufferCount)
+	: m_vertexBuffers(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, p_memPropFlags, p_BufferCount)
+	, m_indexBuffers(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, p_memPropFlags, p_BufferCount)
+	, m_instanceCount(1)
 {
-	if (p_BufferCount > 0)
-	{
-		m_vertexBuffers.resize(p_BufferCount);
-		m_indexBuffers.resize(p_BufferCount);
-	}
+}
+
+CRenderable::CRenderable(VkBufferUsageFlags p_usageFlags, VkMemoryPropertyFlags p_memPropFlags, uint32_t p_BufferCount)
+	: m_vertexBuffers(p_usageFlags | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, p_memPropFlags, p_BufferCount)
+	, m_indexBuffers(p_usageFlags | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, p_memPropFlags, p_BufferCount)
+	, m_instanceCount(1)
+{
 }
 
 void CRenderable::Clear(CVulkanRHI* p_rhi, uint32_t p_idx)
 {
-	m_vertexBuffers[p_idx].descInfo.offset = 0;
-	m_vertexBuffers[p_idx].descInfo.range = 0;
-	p_rhi->FreeMemoryDestroyBuffer(m_vertexBuffers[p_idx]);
-	
-	m_indexBuffers[p_idx].descInfo.offset = 0;
-	m_indexBuffers[p_idx].descInfo.range = 0;
-	p_rhi->FreeMemoryDestroyBuffer(m_indexBuffers[p_idx]);
+	m_vertexBuffers.DestroyBuffer(p_rhi, p_idx);
+	m_indexBuffers.DestroyBuffer(p_rhi, p_idx);
+
+	//m_vertexBuffers[p_idx].descInfo.offset = 0;
+	//m_vertexBuffers[p_idx].descInfo.range = 0;
+	//p_rhi->FreeMemoryDestroyBuffer(m_vertexBuffers[p_idx]);
+	//
+	//m_indexBuffers[p_idx].descInfo.offset = 0;
+	//m_indexBuffers[p_idx].descInfo.range = 0;
+	//p_rhi->FreeMemoryDestroyBuffer(m_indexBuffers[p_idx]);
 }
 
 void CRenderable::DestroyRenderable(CVulkanRHI* p_rhi)
 {
-	m_blasBuffer->DestroyBuffers(p_rhi);
-	p_rhi->DestroyAccelerationStrucutre(m_BLAS);
+	//m_blasBuffer->DestroyBuffers(p_rhi);
+	//p_rhi->DestroyAccelerationStrucutre(m_BLAS);
 
-	for (int i = 0; i < m_vertexBuffers.size(); i++)
-	{
-		m_vertexBuffers[i].descInfo.offset = 0;
-		m_vertexBuffers[i].descInfo.range = 0;
-		p_rhi->FreeMemoryDestroyBuffer(m_vertexBuffers[i]);
+	m_vertexBuffers.DestroyBuffers(p_rhi);
+	m_indexBuffers.DestroyBuffers(p_rhi);
 
-		m_indexBuffers[i].descInfo.offset = 0;
-		m_indexBuffers[i].descInfo.range = 0;
-		p_rhi->FreeMemoryDestroyBuffer(m_indexBuffers[i]);
-	}
+	//for (int i = 0; i < m_vertexBuffers.size(); i++)
+	//{
+	//	m_vertexBuffers[i].descInfo.offset = 0;
+	//	m_vertexBuffers[i].descInfo.range = 0;
+	//	p_rhi->FreeMemoryDestroyBuffer(m_vertexBuffers[i]);
+	//
+	//	m_indexBuffers[i].descInfo.offset = 0;
+	//	m_indexBuffers[i].descInfo.range = 0;
+	//	p_rhi->FreeMemoryDestroyBuffer(m_indexBuffers[i]);
+	//}
 }
 
-bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, 
-	const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t p_id, bool p_useForRaytracing)
+//bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, 
+//	const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t p_id, bool p_useForRaytracing)
+//{
+//	std::clog << "Creating Vertex and Index Buffer for " << p_debugStr << std::endl;
+//
+//	// for creating Acceleration Structure
+//	m_primitiveCount = (uint32_t)p_meshRaw->indicesList.size() / 3;
+//	m_vertexStrideInBytes = p_meshRaw->vertexList.GetVertexSize() * sizeof(float);
+//	m_vertexCount = (uint32_t)p_meshRaw->vertexList.size() / (uint32_t)p_meshRaw->vertexList.GetVertexSize();
+//	uint32_t rayTracingUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+//
+//	{
+//		CVulkanRHI::Buffer vertexStg;
+//		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(float) * p_meshRaw->vertexList.size(), vertexStg, 
+//			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, p_debugStr + "_vert_transfer"));
+//
+//		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)p_meshRaw->vertexList.data(), vertexStg));
+//		p_stgList.push_back(vertexStg);
+//
+//		CVulkanRHI::Buffer vertexBuffer;
+//		VkBufferUsageFlags bufferUsageFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+//
+//		if (p_useForRaytracing)
+//			bufferUsageFlags |= rayTracingUsage;
+//
+//		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(vertexStg.descInfo.range, vertexBuffer, 
+//			bufferUsageFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, p_debugStr + "_vertex"));
+//
+//		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(vertexStg, vertexBuffer, p_cmdBfr));
+//		
+//		// An index (p_id) is passed in situations where we want to track the
+//		// specific buffer later in the frame This is useful in cases when you
+//		// want to access this buffer during the application's lifetime to
+//		// specially draw it with some conditions. Eg: The debug frustum vertex
+//		// buffer needs to be destroyed and recreated multiple time during the
+//		// application's lifetime.
+//		if (p_id >= 0)
+//			m_vertexBuffers[p_id] = vertexBuffer;
+//		else
+//			m_vertexBuffers.push_back(vertexBuffer);
+//	}
+//
+//	{
+//		CVulkanRHI::Buffer indxStg;
+//		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(uint32_t) * p_meshRaw->indicesList.size(), indxStg, 
+//			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, p_debugStr + "_ind_transfer"));
+//
+//		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)p_meshRaw->indicesList.data(), indxStg));
+//		p_stgList.push_back(indxStg);
+//
+//		CVulkanRHI::Buffer indexBuffer;
+//		VkBufferUsageFlags bufferUsageFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+//
+//		if (p_useForRaytracing)
+//			bufferUsageFlags |= rayTracingUsage;
+//
+//		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(indxStg.descInfo.range, indexBuffer, 
+//			bufferUsageFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, p_debugStr + "_index"));
+//
+//		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(indxStg, indexBuffer, p_cmdBfr));
+//		
+//		// An index (p_id) is passed in situations where we want to track the
+//		// specific buffer later in the frame This is useful in cases when you
+//		// want to access this buffer during the application's lifetime to
+//		// specially draw it with some conditions. Eg: The debug frustum index
+//		// buffer needs to be destroyed and recreated multiple time during the
+//		// application's lifetime.
+//		if (p_id >= 0)
+//			m_indexBuffers[p_id] = indexBuffer;
+//		else
+//			m_indexBuffers.push_back(indexBuffer);
+//	}
+//
+//	if(p_useForRaytracing)
+//	{
+//		RETURN_FALSE_IF_FALSE(CreateBuildBLAS(p_rhi, p_stgList, p_cmdBfr, p_debugStr));
+//	}
+//
+//	return true;
+//}
+
+bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index)
 {
-	std::clog << "Creating Vertex and Index Buffer for " << p_debugStr << std::endl;
+	if (!(m_vertexBuffers.GetMemoryProperties() & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
+	{
+		std::cerr << "CRenderable::CreateVertexIndexBuffer: Trying to create host memory resource for a buffer that is device local - " << p_debugStr << std::endl;
+		return false;
+	}
 
 	// for creating Acceleration Structure
 	m_primitiveCount = (uint32_t)p_meshRaw->indicesList.size() / 3;
 	m_vertexStrideInBytes = p_meshRaw->vertexList.GetVertexSize() * sizeof(float);
 	m_vertexCount = (uint32_t)p_meshRaw->vertexList.size() / (uint32_t)p_meshRaw->vertexList.GetVertexSize();
-	uint32_t rayTracingUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-	{
-		CVulkanRHI::Buffer vertexStg;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(float) * p_meshRaw->vertexList.size(), vertexStg, 
-			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, p_debugStr + "_vert_transfer"));
+	CVulkanRHI::Buffer vertexStg;
+	RETURN_FALSE_IF_FALSE(m_vertexBuffers.CreateBuffer(p_rhi, vertexStg, (void*)p_meshRaw->vertexList.data(), p_meshRaw->vertexList.size(), p_cmdBfr, p_debugStr + "_Vertex"));
+	p_stg.push_back(vertexStg);
 
-		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)p_meshRaw->vertexList.data(), vertexStg));
-		p_stgList.push_back(vertexStg);
-
-		CVulkanRHI::Buffer vertexBuffer;
-		VkBufferUsageFlags bufferUsageFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-
-		if (p_useForRaytracing)
-			bufferUsageFlags |= rayTracingUsage;
-
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(vertexStg.descInfo.range, vertexBuffer, 
-			bufferUsageFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, p_debugStr + "_vertex"));
-
-		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(vertexStg, vertexBuffer, p_cmdBfr));
-		
-		// An index (p_id) is passed in situations where we want to track the
-		// specific buffer later in the frame This is useful in cases when you
-		// want to access this buffer during the application's lifetime to
-		// specially draw it with some conditions. Eg: The debug frustum vertex
-		// buffer needs to be destroyed and recreated multiple time during the
-		// application's lifetime.
-		if (p_id >= 0)
-			m_vertexBuffers[p_id] = vertexBuffer;
-		else
-			m_vertexBuffers.push_back(vertexBuffer);
-	}
-
-	{
-		CVulkanRHI::Buffer indxStg;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(uint32_t) * p_meshRaw->indicesList.size(), indxStg, 
-			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, p_debugStr + "_ind_transfer"));
-
-		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)p_meshRaw->indicesList.data(), indxStg));
-		p_stgList.push_back(indxStg);
-
-		CVulkanRHI::Buffer indexBuffer;
-		VkBufferUsageFlags bufferUsageFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-
-		if (p_useForRaytracing)
-			bufferUsageFlags |= rayTracingUsage;
-
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(indxStg.descInfo.range, indexBuffer, 
-			bufferUsageFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, p_debugStr + "_index"));
-
-		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(indxStg, indexBuffer, p_cmdBfr));
-		
-		// An index (p_id) is passed in situations where we want to track the
-		// specific buffer later in the frame This is useful in cases when you
-		// want to access this buffer during the application's lifetime to
-		// specially draw it with some conditions. Eg: The debug frustum index
-		// buffer needs to be destroyed and recreated multiple time during the
-		// application's lifetime.
-		if (p_id >= 0)
-			m_indexBuffers[p_id] = indexBuffer;
-		else
-			m_indexBuffers.push_back(indexBuffer);
-	}
-
-	if(p_useForRaytracing)
-	{
-		RETURN_FALSE_IF_FALSE(CreateBuildBLAS(p_rhi, p_stgList, p_cmdBfr, p_debugStr));
-	}
+	CVulkanRHI::Buffer indexStg;
+	RETURN_FALSE_IF_FALSE(m_indexBuffers.CreateBuffer(p_rhi, indexStg, (void*)p_meshRaw->indicesList.data(), p_meshRaw->indicesList.size(), p_cmdBfr, p_debugStr + "_Index"));
+	p_stg.push_back(indexStg);
 
 	return true;
 }
 
-bool CRenderable::CreateBuildBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr)
-{	
-	VkDeviceAddress vbAddress = p_rhi->GetBufferDeviceAddress(GetVertexBuffer()->descInfo.buffer);
-	VkDeviceAddress ibAddress = p_rhi->GetBufferDeviceAddress(GetIndexBuffer()->descInfo.buffer);
-
-	VkAccelerationStructureGeometryKHR geometry{};
-	geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-	geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-	geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
-	geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-	geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT; // refer vertex attribute defined for shadow pass and reused everywhere else
-	geometry.geometry.triangles.vertexStride = GetVertexStrideInBytes();
-	geometry.geometry.triangles.maxVertex = GetVertexCount();
-	geometry.geometry.triangles.vertexData.deviceAddress = vbAddress;
-	geometry.geometry.triangles.indexType = VK_INDEX_TYPE_UINT32;
-	geometry.geometry.triangles.indexData.deviceAddress = ibAddress;
-
-	VkAccelerationStructureBuildGeometryInfoKHR buildInfo{};
-	buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-	buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-	buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
-	buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;	// might want to use the update flag when add geometry at runtime?
-	buildInfo.geometryCount = 1;
-	buildInfo.pGeometries = &geometry; // as of now, I am using 1 geometry per Mesh (includes all its sub-meshes)
-
-	VkAccelerationStructureBuildSizesInfoKHR sizeInfo{};
-	// Build type is device because we are choosing to create the resources on the device instead
-	// of host. The driver spawns a compute shader to build the acceleration structure
-	p_rhi->GetAccelerationStructureBuildSize(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, GetPrimitiveCount(), &sizeInfo);
-
-	std::clog << "CRenderable::CreateBuildBLAS: Total Acceleration Structure Size: " << sizeInfo.accelerationStructureSize / 1048576.0f << " Mb." << std::endl;
-	std::clog << "CRenderable::CreateBuildBLAS: Total Scratch Size: " << sizeInfo.buildScratchSize / 1048576.0f << " Mb." << std::endl;
-
-	// Create Scratch Buffer
-	VkDeviceAddress scratchAddress;
+bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, const InData& p_inData, std::string p_debugStr, int32_t index)
+{
+	if (m_vertexBuffers.GetMemoryProperties() & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 	{
-		CVulkanRHI::Buffer scratchBuffer;
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeInfo.buildScratchSize, scratchBuffer,
-			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, "BLAS Scratch"));
-
-		scratchAddress = p_rhi->GetBufferDeviceAddress(scratchBuffer.descInfo.buffer);
-
-		p_stgbufferList.push_back(scratchBuffer);
+		std::cerr << "CRenderable::CreateVertexIndexBuffer: Trying to create device memory resource for a buffer that is not device local - " << p_debugStr << std::endl;
+		return false;
 	}
 
-	VkAccelerationStructureBuildRangeInfoKHR buildRanges{};
-	const VkAccelerationStructureBuildRangeInfoKHR* buildRangePtrs;
-
-	m_blasBuffer = new CBuffers(1);
-	
-	// Create Acceleration Buffer
-	RETURN_FALSE_IF_FALSE(m_blasBuffer->CreateBuffer(p_rhi, 0, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeInfo.accelerationStructureSize, "Primary BLAS " + p_debugStr ));
-
-	VkAccelerationStructureCreateInfoKHR accelerationStructureCreateInfo{};
-	accelerationStructureCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
-	accelerationStructureCreateInfo.buffer = m_blasBuffer->GetBuffer(0).descInfo.buffer;
-	accelerationStructureCreateInfo.offset = 0; 
-	accelerationStructureCreateInfo.size = sizeInfo.accelerationStructureSize;
-	accelerationStructureCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateAccelerationStructure(&accelerationStructureCreateInfo, m_BLAS));
-	std::clog << "CRenderable::CreateBuildBLAS: Creating Bottom Acceleration Structure for " << p_debugStr << std::endl;
-
-	buildInfo.dstAccelerationStructure = m_BLAS;
-	buildInfo.scratchData.deviceAddress = scratchAddress;
-
-	buildRanges.primitiveCount = GetPrimitiveCount();
-	buildRangePtrs = &buildRanges;
-	
-	p_rhi->BuildAccelerationStructure(p_cmdBfr, 1, &buildInfo, &buildRangePtrs);
-	std::clog << "CRenderable::CreateBuildBLAS: Building Acceleration Structures for " << p_debugStr << std::endl;
+	RETURN_FALSE_IF_FALSE(m_vertexBuffers.CreateBuffer(p_rhi, p_inData.vertexBufferData, p_inData.vertexBufferSize, p_debugStr + "_Vertex"));
+	RETURN_FALSE_IF_FALSE(m_indexBuffers.CreateBuffer(p_rhi, p_inData.indexBufferData, p_inData.indexBufferSize, p_debugStr + "_Index"));
 
 	return true;
+}
+
+const CVulkanRHI::Buffer CRenderable::GetVertexBuffer(uint32_t p_idx) const
+{
+	return m_vertexBuffers.GetBuffer(p_idx);
+}
+
+const CVulkanRHI::Buffer CRenderable::GetIndexBuffer(uint32_t p_idx) const
+{
+	return m_indexBuffers.GetBuffer(p_idx);
 }
 
 CBuffers::CBuffers(int p_maxSize)
@@ -309,17 +292,56 @@ CBuffers::CBuffers(int p_maxSize)
 		m_buffers.resize(p_maxSize);
 }
 
-bool CBuffers::CreateBuffer(CVulkanRHI* p_rhi, uint32_t p_id, VkBufferUsageFlags p_usage, VkMemoryPropertyFlags p_memProp, size_t p_size, std::string p_debugName)
+CBuffers::CBuffers(VkBufferUsageFlags p_usageFlags, VkMemoryPropertyFlags p_memPropFlags, int p_maxSize)
+	: m_usageFlags(p_usageFlags)
+	, m_memPropFlags(p_memPropFlags)
+{
+	if (p_maxSize > 0)
+		m_buffers.resize(p_maxSize);
+}
+
+bool CBuffers::CreateBuffer(CVulkanRHI* p_rhi, VkBufferUsageFlags p_usageFlags, VkMemoryPropertyFlags p_memPropFlags, size_t p_size, std::string p_debugName, int32_t p_id)
 {
 	CVulkanRHI::Buffer buffer;
-	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(p_size, buffer, p_usage, p_memProp, p_debugName));
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(p_size, buffer, p_usageFlags, p_memPropFlags, p_debugName));
 
-	m_buffers[p_id] = buffer;
+	if (p_id == -1)
+		m_buffers.push_back(buffer);
+	else
+		m_buffers[p_id] = buffer;
 
 	return true;
 }
 
-bool CBuffers::CreateBuffer(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, void* p_data, size_t p_size, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, uint32_t p_id)
+bool CBuffers::CreateBuffer(CVulkanRHI* p_rhi, void* p_data, size_t p_size, std::string p_debugName, int32_t p_id)
+{
+	CVulkanRHI::Buffer buffer;
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(p_size, buffer, m_usageFlags, m_memPropFlags, p_debugName));
+
+	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)p_data, buffer));
+
+	if (p_id == -1)
+		m_buffers.push_back(buffer);
+	else
+		m_buffers[p_id] = buffer;
+
+	return true;
+}
+
+bool CBuffers::CreateBuffer(CVulkanRHI* p_rhi, size_t p_size, std::string p_debugName, int32_t p_id)
+{
+	CVulkanRHI::Buffer buffer;
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(p_size, buffer, m_usageFlags, m_memPropFlags, p_debugName));
+
+	if (p_id == -1)
+		m_buffers.push_back(buffer);
+	else
+		m_buffers[p_id] = buffer;
+
+	return true;
+}
+
+bool CBuffers::CreateBuffer(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, void* p_data, size_t p_size, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int32_t p_id)
 {
 	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(p_size, p_stg, 
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, p_debugName + "_transfer"));
@@ -328,11 +350,16 @@ bool CBuffers::CreateBuffer(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, void* 
 
 	CVulkanRHI::Buffer buffer;
 	RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(p_size, buffer, 
-		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, p_debugName));
+		m_usageFlags | VK_BUFFER_USAGE_TRANSFER_DST_BIT, m_memPropFlags, p_debugName));
 
 	RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(p_stg, buffer, p_cmdBfr));
 
-	// Doing this because; if the id is set to -1, then the intent is to grow the buffer at runtime and not a fixed size
+	// An index (p_id) is passed in situations where we want to track the
+	// specific buffer later in the frame This is useful in cases when you
+	// want to access this buffer during the application's lifetime to
+	// specially draw it with some conditions. Eg: The debug frustum index
+	// buffer needs to be destroyed and recreated multiple time during the
+	// application's lifetime.
 	if (p_id == -1)
 	{
 		m_buffers.push_back(buffer);
@@ -343,6 +370,39 @@ bool CBuffers::CreateBuffer(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, void* 
 	}
 
 	return true;
+}
+
+const CVulkanRHI::Buffer& CBuffers::GetBuffer(uint32_t p_id)
+{
+	if (p_id >= m_buffers.size())
+	{
+		std::cerr << "CBuffers::GetBuffer: Index is greater than the size of buffer list" << std::endl;
+		assert(p_id >= m_buffers.size());
+	}
+
+	return m_buffers[p_id]; 
+}
+
+const CVulkanRHI::Buffer CBuffers::GetBuffer(uint32_t p_id) const
+{
+	if (p_id >= m_buffers.size())
+	{
+		std::cerr << "CBuffers::GetBuffer: Index is greater than the size of buffer list" << std::endl;
+		return CVulkanRHI::Buffer();
+	}
+
+	return m_buffers[p_id];
+}
+
+void CBuffers::DestroyBuffer(CVulkanRHI* p_rhi, uint32_t p_idx)
+{
+	if (p_idx >= m_buffers.size())
+	{
+		std::cerr << "CBuffers::DestroyBuffer: Index is greater than the size of buffer list" << std::endl;
+	}
+
+	p_rhi->FreeMemoryDestroyBuffer(m_buffers[p_idx]);
+	//m_buffers.erase(m_buffers.begin() + p_idx);
 }
 
 void CBuffers::DestroyBuffers(CVulkanRHI* p_rhi)
@@ -506,7 +566,7 @@ void CTextures::DestroyTextures(CVulkanRHI* p_rhi)
 
 uint32_t CRenderableUI::fontID;
 CRenderableUI::CRenderableUI()
-	: CRenderable(FRAME_BUFFER_COUNT)
+	: CRenderable(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, FRAME_BUFFER_COUNT)
 	, CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_new, "VFrame Interface")
 	, CSelectionListener()
 	, m_showImguiDemo(false)
@@ -613,9 +673,8 @@ bool CRenderableUI::Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_c
 	return true;
 }
 
-void CRenderableUI::Destroy(CVulkanRHI* p_rhi)
+void CRenderableUI::DestroyRenderable(CVulkanRHI* p_rhi)
 {
-	DestroyRenderable(p_rhi);
 	DestroyTextures(p_rhi);
 }
 
@@ -787,18 +846,36 @@ bool CRenderableUI::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx)
 		if (drawData->TotalVtxCount > 0)
 		{
 			// Create or resize the vertex / index buffers
-			size_t verteSize				= drawData->TotalVtxCount * sizeof(ImDrawVert);
-			size_t indexSize				= drawData->TotalIdxCount * sizeof(ImDrawIdx);
+			CRenderable::InData data{};
+
+			data.vertexBufferSize = drawData->TotalVtxCount * sizeof(ImDrawVert);
+			data.indexBufferSize = drawData->TotalIdxCount * sizeof(ImDrawIdx);
 
 			// if the vertex buffer if already created from previous frame, destroy them and free the associated memory for this frame's use
-			if (m_vertexBuffers[p_scIdx].descInfo.buffer != VK_NULL_HANDLE)
+			if (m_vertexBuffers.GetBuffer(p_scIdx).descInfo.buffer != VK_NULL_HANDLE)
 			{
 				Clear(p_rhi, p_scIdx);
 			}
 
 			// Creating vertex and index buffers and upload all data to single continuous GPU buffers respectively
 			{
-				p_rhi->CreateAllocateBindBuffer(verteSize, m_vertexBuffers[p_scIdx], VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, "imgui_vert");
+				ImDrawVert* vertexMemIdx = nullptr;
+				ImDrawIdx* indexMemIdx = nullptr;
+				for (int n = 0; n < drawData->CmdListsCount; n++)
+				{
+					const ImDrawList* cmdList = drawData->CmdLists[n];
+					memcpy(vertexMemIdx, cmdList->VtxBuffer.Data, cmdList->VtxBuffer.Size * sizeof(ImDrawVert));
+					memcpy(indexMemIdx, cmdList->IdxBuffer.Data, cmdList->IdxBuffer.Size * sizeof(ImDrawIdx));
+
+					vertexMemIdx += cmdList->VtxBuffer.Size;
+					indexMemIdx += cmdList->IdxBuffer.Size;
+				}
+
+				data.vertexBufferData = vertexMemIdx;
+				data.indexBufferData = indexMemIdx;
+				RETURN_FALSE_IF_FALSE(CreateVertexIndexBuffer(p_rhi, data, "imgui"));
+
+				/*p_rhi->CreateAllocateBindBuffer(verteSize, m_vertexBuffers[p_scIdx], VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, "imgui_vert");
 				p_rhi->CreateAllocateBindBuffer(indexSize, m_indexBuffers[p_scIdx], VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, "imgui_index");
 				
 				ImDrawVert* vertexMemIdx	= nullptr;
@@ -826,7 +903,7 @@ bool CRenderableUI::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx)
 					return false;
 
 				p_rhi->UnMapMemory(m_vertexBuffers[p_scIdx]);
-				p_rhi->UnMapMemory(m_indexBuffers[p_scIdx]);
+				p_rhi->UnMapMemory(m_indexBuffers[p_scIdx]);*/
 			}
 		}
 	}
@@ -834,12 +911,14 @@ bool CRenderableUI::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx)
 	return true;
 }
 
-CRenderableMesh::CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat)
-	: CEntity(p_name)
+CRenderableMesh::CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat, VkAccelerationStructureInstanceKHR* p_accStructInstance)
+	: CRayTracingRenderable(p_accStructInstance)
+	, CEntity(p_name)
 	, m_mesh_id(p_meshId)
 	, m_selectedSubMeshId(-1)
 {
 	CEntity::m_transform = p_modelMat;
+	p_accStructInstance->transform = p_modelMat.GetTransformAffine();
 }
 
 CRenderableMesh::~CRenderableMesh()
@@ -909,6 +988,7 @@ CScene::CScene(CSceneGraph* p_sceneGraph)
 	m_sceneTextures = new CTextures();
 	m_sceneLights = new CLights();
 	m_materialsList.reserve(MAX_SUPPORTED_MATERIALS);
+	m_accStructInstances.resize(MAX_SUPPORTED_MESHES, VkAccelerationStructureInstanceKHR{});
 }
 
 CScene::~CScene()
@@ -919,6 +999,7 @@ CScene::~CScene()
 
 bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, const CVulkanRHI::CommandPool& p_cmdPool)
 {
+	m_cmdPool = p_cmdPool;
 	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandPool(p_rhi->GetQueueFamiliyIndex(), m_assetLoaderCommandPool));
 
 	CVulkanRHI::CommandBuffer cmdBfr;
@@ -965,6 +1046,9 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 
 void CScene::Destroy(CVulkanRHI* p_rhi)
 {
+	m_skyBox->DestroyRenderable(p_rhi);
+	delete m_skyBox;
+
 	DestroyDescriptors(p_rhi);
 	m_sceneTextures->DestroyTextures(p_rhi);
 
@@ -972,7 +1056,6 @@ void CScene::Destroy(CVulkanRHI* p_rhi)
 	p_rhi->FreeMemoryDestroyBuffer(m_TLASscratchBuffer);
 	m_tlasBuffers->DestroyBuffers(p_rhi);
 	p_rhi->DestroyAccelerationStrucutre(m_TLAS);
-
 
 	for (auto& mesh : m_meshes)
 	{
@@ -989,13 +1072,13 @@ void CScene::Destroy(CVulkanRHI* p_rhi)
 	p_rhi->DestroyCommandPool(m_assetLoaderCommandPool);
 }
 
-bool CScene::BuildTLAS(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool, uint32_t p_scId)
+bool CScene::UpdateTLAS(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool, uint32_t p_scId)
 {
 	std::string debugMarker = "TLAS Building";
 	{
 		CVulkanRHI::CommandBuffer cmdBfr;
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
-		BuilTLAS(p_rhi, cmdBfr);
+		RETURN_FALSE_IF_FALSE(UpdateTLAS(p_rhi, cmdBfr));
 		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true/*wait for finish*/));
 	}
 	return true;
@@ -1210,11 +1293,9 @@ bool CScene::LoadDefaultTextures(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerLis
 		RETURN_FALSE_IF_FALSE(LoadObj((g_DefaultPath / "3D/cube.obj").string().c_str(), sceneraw, loadData));
 
 		MeshRaw meshraw = sceneraw.meshList[0];
-		CRenderableMesh* mesh = new CRenderableMesh("Skybox", MeshType::mt_Skybox, nm::Transform());
-		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr, "skybox"));
-		m_meshes.push_back(mesh);
+		m_skyBox = new CRenderable(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0);
+		RETURN_FALSE_IF_FALSE(m_skyBox->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr, "skybox"));
 	}
-
 
 	return true;
 }
@@ -1286,7 +1367,8 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	// Load to staging and set loading of mesh to device memory
 	for (auto& meshraw : sceneraw.meshList)
 	{
-		CRenderableMesh* mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform);
+		std::clog << "CScene::LoadDefaultScene: Loading Asset to GPU - " << meshraw.name << std::endl;
+		CRenderableMesh* mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform, &m_accStructInstances[m_meshes.size()]);
 		mesh->m_submeshes = meshraw.submeshes;
 
 		BVolume* bVol = new BBox(meshraw.bbox);
@@ -1297,7 +1379,20 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 			mesh->SetSubBoundingBox(bbox);
 		}
 
-		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr, meshraw.name, -1, true /*use for ray tracing*/));
+		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr, meshraw.name));
+
+		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(p_cmdBfr, true/*wait for finish*/));
+
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(m_cmdPool, &p_cmdBfr, ""));
+
+		// TODO: Insert a memory barrier here
+
+		RETURN_FALSE_IF_FALSE(mesh->CreateBuildBLAS(p_rhi, p_stgList, p_cmdBfr, meshraw.name + " BLAS"));
+
+		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(p_cmdBfr, true/*wait for finish*/));
+
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(m_cmdPool, &p_cmdBfr, ""));
+
 		m_meshes.push_back(mesh);
 	}
 	
@@ -1337,7 +1432,7 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 		RETURN_FALSE_IF_FALSE(p_rhi->UploadFromHostToDevice(matStg, m_material_storage, p_cmdBfr));
 	}
 
-	// Clear all loaded resources from system memroy
+	// Clear all loaded resources from system memory
 	// can binary dump in future to optimized format for faster binary loading
 	{		
 		sceneraw.meshList.clear();
@@ -1393,32 +1488,19 @@ bool CScene::LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 {
 	// Needs one TLAS, that will be updated every frame if we are moving
 	// objects
-	size_t meshCount = m_meshes.size() - (size_t)MeshType::mt_Scene;
+	size_t meshCount = m_meshes.size();
 
 	// TODO: As of now, I am only packing transform data
 	// of the meshes I am rendering. Once instancing is 
 	// implemented, it ll get valuable to implement TLASs
 	// that reflect the feature
-	std::vector<VkAccelerationStructureInstanceKHR> instances(meshCount);
-	for (size_t i = 0; i < meshCount; i++)
-	{
-		CRenderableMesh* mesh = m_meshes[i + MeshType::mt_Scene];
-		VkAccelerationStructureInstanceKHR& instance = instances[i];
-		instance.transform = m_meshes[i + MeshType::mt_Scene]->GetTransform().GetTransformAffine();
-		instance.instanceCustomIndex = 0;
-		instance.mask = 0xFF;
-		instance.instanceShaderBindingTableRecordOffset = 0;
-		instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-		instance.accelerationStructureReference = p_rhi->GetAccelerationStructureDeviceAddress(mesh->GetBLAS());
-	}
-
 	{
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeof(VkAccelerationStructureInstanceKHR) * meshCount, m_instanceBuffer,
 			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, 
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, "TLAS Instance Resource"));
 		
 
-		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)instances.data(), m_instanceBuffer));
+		RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)m_accStructInstances.data(), m_instanceBuffer));
 	}
 		
 	VkAccelerationStructureGeometryKHR geometry{};
@@ -1455,9 +1537,8 @@ bool CScene::LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 
 	// Create Acceleration Buffer
 	{
-		m_tlasBuffers = new CBuffers(1);
-		RETURN_FALSE_IF_FALSE(m_tlasBuffers->CreateBuffer(p_rhi, 0, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeInfo.accelerationStructureSize, "Primary TLAS"));
+		m_tlasBuffers = new CBuffers(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		(m_tlasBuffers->CreateBuffer(p_rhi, sizeInfo.accelerationStructureSize, "Primary TLAS"));
 	}
 
 	VkAccelerationStructureCreateInfoKHR accelerationStructureCreateInfo{};
@@ -1482,8 +1563,10 @@ bool CScene::LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList
 	return true;
 }
 
-void CScene::BuilTLAS(CVulkanRHI* p_rhi, CVulkanRHI::CommandBuffer& p_cmdBfr)
+bool CScene::UpdateTLAS(CVulkanRHI* p_rhi, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
+	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer((uint8_t*)m_accStructInstances.data(), m_instanceBuffer));
+
 	VkAccelerationStructureGeometryKHR geometry = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR };
 	geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
 	geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
@@ -1505,6 +1588,8 @@ void CScene::BuilTLAS(CVulkanRHI* p_rhi, CVulkanRHI::CommandBuffer& p_cmdBfr)
 	const VkAccelerationStructureBuildRangeInfoKHR* buildRangePtr = &buildRange;
 
 	p_rhi->BuildAccelerationStructure(p_cmdBfr, 1, &buildInfo, &buildRangePtr);	
+
+	return true;
 }
 
 bool CScene::CreateMeshUniformBuffer(CVulkanRHI* p_rhi)
@@ -1702,7 +1787,7 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 						// Load vertex and index buffers
 						for (auto& meshraw : sceneraw.meshList)
 						{
-							CRenderableMesh* mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform);
+							CRenderableMesh* mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform, &m_accStructInstances[m_meshes.size()]);
 							mesh->m_submeshes = meshraw.submeshes;
 
 							std::clog << "Setting Bounding Volume" << std::endl;
@@ -2016,7 +2101,8 @@ bool CLoadableAssets::Create(CVulkanRHI* p_rhi, const CFixedAssets& p_fixedAsset
 void CLoadableAssets::Destroy(CVulkanRHI* p_rhi)
 {
 	m_scene.Destroy(p_rhi);
-	m_ui.Destroy(p_rhi);
+	m_ui.DestroyRenderable(p_rhi);
+	m_ui.DestroyTextures(p_rhi);
 	m_readOnlyBuffers.Destroy(p_rhi);
 	m_readOnlyTextures.Destroy(p_rhi);
 }
@@ -2225,12 +2311,12 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 	VkMemoryPropertyFlags hv = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 
 
-	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_PrimaryUniform_0,		uniform,		hv_hc,	primaryUniformBufferSize, "primary_uniform_0"));
-	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_PrimaryUniform_1,		uniform,		hv_hc,	primaryUniformBufferSize, "primary_uniform_1"));
-	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_ObjectPickerRead,		dest,			hv,		objPickerBufferSize		, "pick_read"));
-	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_ObjectPickerWrite,		src_storage,	hv,		objPickerBufferSize		, "pick_write"));
-	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_DebugUniform_0,		uniform,		hv_hc,	debugDrawUniformSize	, "debug_uniform_0"));
-	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, fb_DebugUniform_1,		uniform,		hv_hc,	debugDrawUniformSize	, "debug_uniform_1"));
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, uniform,		hv_hc,	primaryUniformBufferSize, "primary_uniform_0",	fb_PrimaryUniform_0));
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, uniform,		hv_hc,	primaryUniformBufferSize, "primary_uniform_1",	fb_PrimaryUniform_1));
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, dest,			hv,		objPickerBufferSize		, "pick_read",			fb_ObjectPickerRead));
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, src_storage,	hv,		objPickerBufferSize		, "pick_write",			fb_ObjectPickerWrite));
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, uniform,		hv_hc,	debugDrawUniformSize	, "debug_uniform_0",	fb_DebugUniform_0));
+	RETURN_FALSE_IF_FALSE(CreateBuffer(p_rhi, uniform,		hv_hc,	debugDrawUniformSize	, "debug_uniform_1",	fb_DebugUniform_1));
 
 	return true;
 }
@@ -2496,7 +2582,7 @@ void CPrimaryDescriptors::Destroy(CVulkanRHI* p_rhi)
 
 CRenderableDebug::CRenderableDebug()
 	: CDescriptor(false/* is bindless */, FRAME_BUFFER_COUNT)
-	, CRenderable(0)
+	, CRenderable(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0)
 {
 }
 
@@ -2736,4 +2822,110 @@ bool CRenderableDebug::CreateBoxSphereBuffers(CVulkanRHI* p_rhi, CVulkanRHI::Buf
 	RETURN_FALSE_IF_FALSE(CreateVertexIndexBuffer(p_rhi, p_stgList, &debugMeshes, p_cmdBfr, "renderable_debug"));
 
 	return true;
+}
+
+CRayTracingRenderable::CRayTracingRenderable(VkAccelerationStructureInstanceKHR* p_accStructInstance)
+	: CRenderable(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0)
+	, m_accStructInstance(p_accStructInstance)
+	, m_blasBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0)
+	, m_BLAS(VK_NULL_HANDLE)
+{
+}
+
+void CRayTracingRenderable::DestroyRenderable(CVulkanRHI* p_rhi)
+{
+	m_blasBuffer.DestroyBuffers(p_rhi);
+	p_rhi->DestroyAccelerationStrucutre(m_BLAS);
+}
+
+bool CRayTracingRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index)
+{
+	RETURN_FALSE_IF_FALSE(CRenderable::CreateVertexIndexBuffer(p_rhi, p_stgList, p_meshRaw, p_cmdBfr, p_debugStr, index));
+
+	return true;
+}
+
+bool CRayTracingRenderable::CreateBuildBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr)
+{
+	VkDeviceAddress vbAddress = p_rhi->GetBufferDeviceAddress(GetVertexBuffer().descInfo.buffer);
+	VkDeviceAddress ibAddress = p_rhi->GetBufferDeviceAddress(GetIndexBuffer().descInfo.buffer);
+
+	// Providing the mesh vertex and index data and defining the geometry
+	VkAccelerationStructureGeometryKHR geometry{};
+	geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+	geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+	geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+	geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+	geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT; // refer vertex attribute defined for shadow pass and reused everywhere else
+	geometry.geometry.triangles.vertexStride = GetVertexStrideInBytes();
+	geometry.geometry.triangles.maxVertex = GetVertexCount();
+	geometry.geometry.triangles.vertexData.deviceAddress = vbAddress;
+	geometry.geometry.triangles.indexType = VK_INDEX_TYPE_UINT32;
+	geometry.geometry.triangles.indexData.deviceAddress = ibAddress;
+
+	// Might want to revisit this when using instancing
+	VkAccelerationStructureBuildGeometryInfoKHR buildInfo{};
+	buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+	buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+	buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+	buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;	// might want to use the update flag when add geometry at runtime?
+	buildInfo.geometryCount = 1;
+	buildInfo.pGeometries = &geometry; // as of now, I am using 1 geometry per Mesh (includes all its sub-meshes)
+
+	// Build type is device because we are choosing to create the resources on the device instead
+	// of host. The driver spawns a compute shader to build the acceleration structure
+
+	VkAccelerationStructureBuildSizesInfoKHR sizeInfo{};
+	p_rhi->GetAccelerationStructureBuildSize(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, GetPrimitiveCount(), &sizeInfo);
+
+	std::clog << "CRenderable::CreateBuildBLAS: Total Acceleration Structure Size: " << sizeInfo.accelerationStructureSize / 1048576.0f << " Mb." << std::endl;
+	std::clog << "CRenderable::CreateBuildBLAS: Total Scratch Size: " << sizeInfo.buildScratchSize / 1048576.0f << " Mb." << std::endl;
+
+	// Create Scratch Buffer
+	VkDeviceAddress scratchAddress;
+	{
+		CVulkanRHI::Buffer scratchBuffer;
+		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(sizeInfo.buildScratchSize, scratchBuffer,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, "BLAS Scratch"));
+
+		scratchAddress = p_rhi->GetBufferDeviceAddress(scratchBuffer.descInfo.buffer);
+
+		p_stgbufferList.push_back(scratchBuffer);
+	}
+
+	VkAccelerationStructureBuildRangeInfoKHR buildRanges{};
+	const VkAccelerationStructureBuildRangeInfoKHR* buildRangePtrs;
+
+	// Create Acceleration Buffer
+	RETURN_FALSE_IF_FALSE(m_blasBuffer.CreateBuffer(p_rhi, sizeInfo.accelerationStructureSize, p_debugStr));
+
+	VkAccelerationStructureCreateInfoKHR accelerationStructureCreateInfo{};
+	accelerationStructureCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+	accelerationStructureCreateInfo.buffer = m_blasBuffer.GetBuffer().descInfo.buffer;
+	accelerationStructureCreateInfo.offset = 0;
+	accelerationStructureCreateInfo.size = sizeInfo.accelerationStructureSize;
+	accelerationStructureCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+	RETURN_FALSE_IF_FALSE(p_rhi->CreateAccelerationStructure(&accelerationStructureCreateInfo, m_BLAS));
+	std::clog << "CRenderable::CreateBuildBLAS: Creating Bottom Acceleration Structure for " << p_debugStr << std::endl;
+
+	buildInfo.dstAccelerationStructure = m_BLAS;
+	buildInfo.scratchData.deviceAddress = scratchAddress;
+
+	buildRanges.primitiveCount = GetPrimitiveCount();
+	buildRangePtrs = &buildRanges;
+
+	p_rhi->BuildAccelerationStructure(p_cmdBfr, 1, &buildInfo, &buildRangePtrs);
+	std::clog << "CRenderable::CreateBuildBLAS: Building Acceleration Structures for " << p_debugStr << std::endl;
+
+	return true;
+}
+
+void CRayTracingRenderable::UpdateBLASInstance(CVulkanRHI* p_rhi, const nm::Transform& p_transform)
+{
+	m_accStructInstance->transform = p_transform.GetTransformAffine();
+	m_accStructInstance->instanceCustomIndex = 0;
+	m_accStructInstance->mask = 0xFF;
+	m_accStructInstance->instanceShaderBindingTableRecordOffset = 0;
+	m_accStructInstance->flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+	m_accStructInstance->accelerationStructureReference = p_rhi->GetAccelerationStructureDeviceAddress(m_BLAS);
 }

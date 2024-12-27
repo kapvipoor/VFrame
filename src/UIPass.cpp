@@ -127,10 +127,10 @@ bool CUIPass::Render(RenderData* p_renderData)
 		// Bind Vertex And Index Buffer:
 		if (drawData->TotalVtxCount > 0)
 		{
-			VkBuffer vrtxBfrs[1] = { ui->GetVertexBuffer(p_renderData->scIdx)->descInfo.buffer };
+			VkBuffer vrtxBfrs[1] = { ui->GetVertexBuffer(p_renderData->scIdx).descInfo.buffer };
 			VkDeviceSize vrtxOffset[1] = { 0 };
 			vkCmdBindVertexBuffers(cmdBfr, 0, 1, vrtxBfrs, vrtxOffset);
-			vkCmdBindIndexBuffer(cmdBfr, ui->GetIndexBuffer(p_renderData->scIdx)->descInfo.buffer, 0, sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
+			vkCmdBindIndexBuffer(cmdBfr, ui->GetIndexBuffer(p_renderData->scIdx).descInfo.buffer, 0, sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
 		}
 
 		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
@@ -308,8 +308,9 @@ bool CDebugDrawPass::Render(RenderData* p_renderData)
 			vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_DebugDisplay, 1, debugRender->GetDescriptorSet(), 0, nullptr);
 
 			VkDeviceSize offsets[1] = { 0 };
-			vkCmdBindVertexBuffers(cmdBfr, 0, 1, &debugRender->GetVertexBuffer(0)->descInfo.buffer, offsets);
-			vkCmdBindIndexBuffer(cmdBfr, debugRender->GetIndexBuffer(0)->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+			std::vector<VkBuffer> vtxBuffers{ debugRender->GetVertexBuffer().descInfo.buffer };
+			vkCmdBindVertexBuffers(cmdBfr, 0, (uint32_t)vtxBuffers.size(), vtxBuffers.data(), offsets);
+			vkCmdBindIndexBuffer(cmdBfr, debugRender->GetIndexBuffer().descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 			// Render bBoxes
 			{

@@ -130,14 +130,14 @@ bool CStaticShadowPrepass::Render(RenderData* p_renderData)
 
 		// Bind Index and Vertices buffers
 		VkDeviceSize offsets[1] = { 0 };
-		for (unsigned int i = CScene::MeshType::mt_Scene; i < scene->GetRenderableMeshCount(); i++)
+		for (unsigned int i = 0; i < scene->GetRenderableMeshCount(); i++)
 		{
 			const CRenderableMesh* mesh = scene->GetRenderableMesh(i);
-			const CVulkanRHI::Buffer* vertex = mesh->GetVertexBuffer();
-			const CVulkanRHI::Buffer* index = mesh->GetIndexBuffer();
+			const CVulkanRHI::Buffer vertex = mesh->GetVertexBuffer();
+			const CVulkanRHI::Buffer index = mesh->GetIndexBuffer();
 
-			vkCmdBindVertexBuffers(p_renderData->cmdBfr, 0, 1, &vertex->descInfo.buffer, offsets);
-			vkCmdBindIndexBuffer(p_renderData->cmdBfr, index->descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdBindVertexBuffers(p_renderData->cmdBfr, 0, 1, &vertex.descInfo.buffer, offsets);
+			vkCmdBindIndexBuffer(p_renderData->cmdBfr, index.descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 			for (uint32_t j = 0; j < mesh->GetSubmeshCount(); j++)
 			{

@@ -133,20 +133,43 @@ protected:
 class CBuffers
 {
 public:
-	// reserving a default size of 1 if the buffer list is expected to group at runtime
+	// Use this when creating buffers with assorted usage and memory properties
 	CBuffers(int p_maxSize = 0);
+
+	// Use this when creating buffers that all have the usage and memory properties
+	CBuffers(VkBufferUsageFlags, VkMemoryPropertyFlags, int p_maxSize = 0);
+
 	~CBuffers() {};
 
-	bool CreateBuffer(CVulkanRHI*, uint32_t p_id, VkBufferUsageFlags p_usage, VkMemoryPropertyFlags p_memProp, size_t, std::string p_debugName);
-	bool CreateBuffer(CVulkanRHI*, CVulkanRHI::Buffer& stg, void* p_data, size_t p_size, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, uint32_t p_id = -1);
-	
-	const CVulkanRHI::Buffer& GetBuffer(uint32_t p_id) { return m_buffers[p_id]; }
-	const CVulkanRHI::Buffer GetBuffer(uint32_t p_id) const { return m_buffers[p_id]; }
+	virtual void DestroyBuffers(CVulkanRHI*);
 
-	void DestroyBuffers(CVulkanRHI*);
+	// Use this to create buffers with assorted usage and memory properties
+	bool CreateBuffer(CVulkanRHI*, VkBufferUsageFlags, VkMemoryPropertyFlags, size_t, std::string p_debugName, int32_t p_id = -1);
+	
+	// Use this to create buffers on Host (Eg: Staging or Imgui buffers)
+	bool CreateBuffer(CVulkanRHI*, void* p_data, size_t p_size, std::string p_debugName, int32_t p_id = -1);
+
+	// Use this to create empty buffers on Host or Device
+	bool CreateBuffer(CVulkanRHI*, size_t p_size, std::string p_debugName, int32_t p_id = -1);
+
+	// Use this to create buffers on Device (Eg: All GPU resources like Vertex, Index, etc)
+	bool CreateBuffer(CVulkanRHI*, CVulkanRHI::Buffer& stg, void* p_data, size_t p_size, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugName, int32_t p_id = -1);
+
+	void DestroyBuffer(CVulkanRHI*, uint32_t p_idx);
+
+	//void AddUsageFlags(VkBufferUsageFlags);
+	//void AddMemPropFlags(VkMemoryPropertyFlags);
+
+	VkBufferUsageFlags GetUsage() { return m_usageFlags; }
+	VkMemoryPropertyFlags GetMemoryProperties() { return m_memPropFlags; }
+
+	const CVulkanRHI::Buffer& GetBuffer(uint32_t p_id = 0);
+	const CVulkanRHI::Buffer GetBuffer(uint32_t p_id = 0) const;
 
 protected:
 	CVulkanRHI::BufferList			m_buffers;
+	VkBufferUsageFlags				m_usageFlags;
+	VkMemoryPropertyFlags			m_memPropFlags;
 };
 
 class CTextures
@@ -232,7 +255,7 @@ public:
 	~CFixedBuffers();
 
 	bool Create(CVulkanRHI*);
-	void Destroy(CVulkanRHI*);
+	virtual void Destroy(CVulkanRHI*);
 
 	PrimaryUniformData* GetPrimaryUnifromData() { return &m_primaryUniformData; }
 
@@ -294,7 +317,19 @@ private:
 class CRenderable
 {
 public:
-	CRenderable(uint32_t p_BufferCount = 0);
+	struct InData
+	{
+		void* vertexBufferData;
+		size_t vertexBufferSize;
+
+		void* indexBufferData;
+		size_t indexBufferSize;
+	};
+
+	// Buffer count defaults to 0 so the size of
+	// the buffer list can grow dynamically
+	CRenderable(VkMemoryPropertyFlags p_memPropFlags, uint32_t p_BufferCount);
+	CRenderable(VkBufferUsageFlags p_usageFlags, VkMemoryPropertyFlags p_memPropFlags, uint32_t p_BufferCount);
 	~CRenderable() {};
 
 	// This is a clear operation performed between frames
@@ -302,43 +337,54 @@ public:
 	void Clear(CVulkanRHI* p_rhi, uint32_t p_idx);
 
 	// This is a clean up operation performed during shut down
-	void DestroyRenderable(CVulkanRHI*);
+	virtual void DestroyRenderable(CVulkanRHI*);
 
-	bool CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw,
-		CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index = -1, bool p_useForRaytracing = false);
+	virtual bool CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw,
+		CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index = -1);
 
-	void SetVertexBuffer(CVulkanRHI::Buffer p_vertBuf, uint32_t p_idx = 0) { m_vertexBuffers[p_idx] = p_vertBuf; }
-	void SetIndexBuffer(CVulkanRHI::Buffer p_indxBuf, uint32_t p_idx = 0) { m_indexBuffers[p_idx] = p_indxBuf; }
+	bool CreateVertexIndexBuffer(CVulkanRHI* p_rhi, const InData& p_inData, std::string p_debugStr, int32_t index = -1);
 
-	const CVulkanRHI::Buffer* GetVertexBuffer(uint32_t p_idx = 0) const { return &m_vertexBuffers[p_idx]; };
-	const CVulkanRHI::Buffer* GetIndexBuffer(uint32_t p_idx = 0) const { return &m_indexBuffers[p_idx]; };
+	const CVulkanRHI::Buffer GetVertexBuffer(uint32_t p_idx = 0) const;
+	const CVulkanRHI::Buffer GetIndexBuffer(uint32_t p_idx = 0) const;
 
 	uint32_t GetInstanceCount() { return m_instanceCount; }
 	uint32_t GetPrimitiveCount() { return m_primitiveCount; }
 	uint32_t GetVertexCount() { return m_vertexCount; }
 	size_t GetVertexStrideInBytes() { return m_vertexStrideInBytes; }
 
-	VkAccelerationStructureKHR GetBLAS() { return m_BLAS; }
-	const CBuffers* GetBLASBuffer() { return m_blasBuffer; }
-
 protected:
-	CVulkanRHI::BufferList			m_vertexBuffers;
-	CVulkanRHI::BufferList			m_indexBuffers;
-
-	//CBuffers						m_vertexBuffers;
-	//CBuffers						m_indexBuffers;
+	CBuffers						m_vertexBuffers;
+	CBuffers						m_indexBuffers;
 
 	uint32_t						m_instanceCount;
 
-	// for creating Acceleration Structure
 	uint32_t						m_primitiveCount;
 	uint32_t						m_vertexCount;
 	size_t							m_vertexStrideInBytes;
-	CBuffers*						m_blasBuffer;
-	VkAccelerationStructureKHR		m_BLAS;
+};
 
-private:
+class CRayTracingRenderable : public CRenderable
+{
+public:
+	CRayTracingRenderable(VkAccelerationStructureInstanceKHR* p_accStructInstance);
+	~CRayTracingRenderable() {};
+
+	virtual void DestroyRenderable(CVulkanRHI*) override;
+
+	bool CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw,
+		CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index = -1);
+
 	bool CreateBuildBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, std::string p_debugStr);
+
+	VkAccelerationStructureKHR GetBLAS() { return m_BLAS; }
+	const CVulkanRHI::Buffer GetBLASBuffer() { return m_blasBuffer.GetBuffer(0); }
+
+protected:
+	CBuffers							m_blasBuffer;
+	VkAccelerationStructureKHR			m_BLAS;
+	VkAccelerationStructureInstanceKHR* m_accStructInstance;
+
+	void UpdateBLASInstance(CVulkanRHI* p_rhi, const nm::Transform& p_transform);
 };
 
 class CRenderableUI : public CRenderable, public CTextures, public CDescriptor, public CUIParticipant, public CSelectionListener
@@ -371,7 +417,7 @@ public:
 	void virtual Show(CVulkanRHI* p_rhi) override;
 
 	bool Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool);
-	void Destroy(CVulkanRHI* p_rhi);
+	virtual void DestroyRenderable(CVulkanRHI* p_rhi) override;
 
 	bool Update(CVulkanRHI* p_rhi, const LoadedUpdateData&);
 	bool PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx);
@@ -388,11 +434,11 @@ private:
 	bool ShowGuizmo(CVulkanRHI* p_rhi, nm::float4x4 p_camView, nm::float4x4 p_camProjection);
 };
 
-class CRenderableMesh : public CRenderable, public CEntity
+class CRenderableMesh : public CRayTracingRenderable, public CEntity
 {
 	friend class CScene;
 public:
-	CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat);
+	CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat, VkAccelerationStructureInstanceKHR* p_accStructInstance);
 	~CRenderableMesh();
 	
 	virtual void Show(CVulkanRHI* p_rhi) override; //CUIParticipant virtual override
@@ -470,12 +516,6 @@ private:
 class CScene : public CDescriptor, public CUIParticipant, public CSelectionListener
 {
 public:
-	enum MeshType
-	{
-		  mt_Skybox					= 0
-		, mt_Scene
-	};
-
 	enum TextureType
 	{
 		  tt_default				= 0
@@ -497,7 +537,7 @@ public:
 	bool Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerList, const CVulkanRHI::CommandPool& p_cmdPool);
 	void Destroy(CVulkanRHI* p_rhi);
 
-	bool BuildTLAS(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool, uint32_t p_scId);
+	bool UpdateTLAS(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool, uint32_t p_scId);
 
 	virtual void Show(CVulkanRHI* p_rhi) override;
 
@@ -505,6 +545,7 @@ public:
 	void SetSelectedRenderableMesh(int p_id) { m_curSelecteRenderableMesh = p_id; }
 	uint32_t GetRenderableMeshCount() const { return (uint32_t)m_meshes.size(); }
 	const CRenderableMesh* GetRenderableMesh(uint32_t p_idx) const { return m_meshes[p_idx]; }
+	const CRenderable* GetSkyBoxMesh() const { return m_skyBox; }
 
 private:
 	enum AssetLoadingState
@@ -527,13 +568,22 @@ private:
 			, log("") {}
 	};
 
-	CSceneGraph*							m_sceneGraph;
+	VkCommandPool m_cmdPool;
+
+	CSceneGraph* m_sceneGraph;
+
+	// If needed, create another family of meshes that are not identified as 
+	// ray tracing resources but will be rendered in the frame.
+	CRenderable*							m_skyBox;
 	std::vector<CRenderableMesh*>			m_meshes;			// list of all meshes used by the scene
+		
 	CTextures*                              m_sceneTextures;	// list of all the textures used by the scene
-	CLights*								m_sceneLights;		// List of all the lights used by the scene
 	std::vector<Material>					m_materialsList;	// List of all the materials used by the scene
 	
+	CLights* m_sceneLights;		// List of all the lights used by the scene
+
 	// Used for Ray Tracing
+	std::vector<VkAccelerationStructureInstanceKHR> m_accStructInstances; // List of all BLAS instancing data used for creating TLAS
 	CBuffers*								m_tlasBuffers;
 	VkAccelerationStructureKHR				m_TLAS;
 	CVulkanRHI::Buffer						m_TLASscratchBuffer;
@@ -556,7 +606,7 @@ private:
 	bool LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
 	bool LoadLights(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, bool p_dumpBinaryToDisk = false);
 	bool LoadTLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&);
-	void BuilTLAS(CVulkanRHI* p_rhi, CVulkanRHI::CommandBuffer&);
+	bool UpdateTLAS(CVulkanRHI* p_rhi, CVulkanRHI::CommandBuffer&);
 
 	bool CreateMeshUniformBuffer(CVulkanRHI* p_rhi);
 	bool CreateSceneDescriptors(CVulkanRHI* p_rhi);
