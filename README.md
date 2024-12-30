@@ -1,7 +1,5 @@
-<img width="500" alt="DemoReel_03232024" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/demoreel.PNG">
-<img width="500" alt="FixedShadowSceneFitting_2" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/demoreel_2.PNG">
-<img width="500" alt="IBL" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/IBL.PNG">
-<img width="500" alt="SSR" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/SSR_2.PNG">
+<img width="500" alt="DemoReel_03232024" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/demoreel.PNG"> <img width="500" alt="FixedShadowSceneFitting_2" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/demoreel_2.PNG">
+<img width="500" alt="IBL" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/IBL.PNG"> <img width="500" alt="SSR" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/SSR_2.PNG">
 
 # VFrame
  A compilation of few rasterization and Hybrid Ray Tracing techniques using Vulkan API and C++
