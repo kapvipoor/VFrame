@@ -3,9 +3,9 @@
 <img width="1444" alt="FixedShadowSceneFitting_2" src="https://github.com/kapvipoor/VFrame/blob/main/notes/assets/demoreel_2.PNG">
 
 # VFrame
- A compilation of few rasterization techniques using Vulkan API and C++
+ A compilation of few rasterization and Hybrid Ray Tracing techniques using Vulkan API and C++
 
-External Tools/Packages Used
+## External Tools/Packages Used
 1. tinygltf (fork, module)
 2. NiceMath
 3. tiny_obj_loader
@@ -13,7 +13,7 @@ External Tools/Packages Used
 5. ImGuizmo (fork, module)
 6. Imimgui-filebrowser (fork, module)
 
-Feature Integrated
+## Features
 * [Array Of Textures, Non-Uniform Descriptor Indexing and Bindless](https://github.com/kapvipoor/VFrame/blob/main/notes/Bindless%20Descriptor%20and%20Material%20Management.md)
 * [Asset Loaders](https://github.com/kapvipoor/VFrame/blob/main/notes/Asset%20Loader%20Support.md)
 * [Asynchronous Asset Loading](https://github.com/kapvipoor/VFrame/blob/main/notes/Async%20Asset%20Loading.md)
