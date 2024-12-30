@@ -5,7 +5,7 @@
 # VFrame
  A compilation of few rasterization and Hybrid Ray Tracing techniques using Vulkan API and C++
 
-## External Tools/Packages Used
+## External Tools/Packages
 1. tinygltf (fork, module)
 2. NiceMath
 3. tiny_obj_loader
