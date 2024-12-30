@@ -15,6 +15,7 @@ External Tools/Packages Used
 
 Feature Integrated
 * [Array Of Textures, Non-Uniform Descriptor Indexing and Bindless](https://github.com/kapvipoor/VFrame/blob/main/notes/Bindless%20Descriptor%20and%20Material%20Management.md)
+* [Asset Loaders](https://github.com/kapvipoor/VFrame/blob/main/notes/Asset%20Loader%20Support.md)
 * [Asynchronous Asset Loading](https://github.com/kapvipoor/VFrame/blob/main/notes/Async%20Asset%20Loading.md)
 * [Forward and Deferred Rendering](https://github.com/kapvipoor/VFrame/blob/main/notes/Forward%20and%20Deferred%20Rendering.md)
 * [Screen Space Reflections](https://github.com/kapvipoor/VFrame/blob/main/notes/Screen%20Space%20Reflections.md)
@@ -42,11 +43,6 @@ Feature Integrated
 	- Algorithm Limitations:
 		1. Quality of SSAO is not great. Migh want to implement AMD SSAO for comparision
 	- Bugs:
-
-10.	Gltf loader with stb_image support
-	- Challanges Faced:	- 
-	- Algorithm Limitations: - 
-	- Bugs: - 
 
 11. Shader Compilation - GLSL to SPIRV
 	- Challanges Faced:	- 
