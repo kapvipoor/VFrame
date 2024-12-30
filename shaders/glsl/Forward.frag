@@ -121,9 +121,14 @@ void main()
 			lightColor						= lightColor * light.intensity;
 
 			// Compute Shadow if enabled
-			if(g_Info.enableShadow == 1.0)
+			int enableShadowRTPCF = int(g_Info.enable_Shadow_RT_PCF);
+			if((enableShadowRTPCF & ENABLE_SHADOW) == ENABLE_SHADOW)
 			{
-				shadow 								= CalculateDirectonalShadow(inPosinLightSpace, N, g_Info.enableShadowPCF);
+				if((enableShadowRTPCF & ENABLE_RT_SHADOW) != ENABLE_RT_SHADOW)
+				{
+					bool enablePCF = ((enableShadowRTPCF & ENABLE_PCF) == ENABLE_PCF);
+					shadow = CalculateDirectonalShadow(inPosinLightSpace, N, enablePCF);
+				}
 			}
 
 			// Compute directional light if IBL is disabled

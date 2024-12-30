@@ -522,7 +522,7 @@ void CRenderableUI::Show(CVulkanRHI* p_rhi)
 			}
 			char overlay[32];
 			sprintf_s(overlay, "avg %f", m_latestFPS.Average());
-			ImGui::PlotLines("cpu (ms)", data.data(), (int)data.size(), values_offset, overlay, 0.0f, 32.0f, ImVec2(0, 60.0f));
+			ImGui::PlotLines("CPU (ms)", data.data(), (int)data.size(), values_offset, overlay, 0.0f, 32.0f, ImVec2(0, 60.0f));
 		}
 	}
 	ImGui::Separator();
@@ -1473,7 +1473,7 @@ bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
 {
 	// We are allocating these descriptors from a bindless pool.
 	// This does not need demand we create valid buffers/textures or write-update these descriptors 
-	// at the time of their creation. All we need to ensure is that we dont access these "unbound resource"
+	// at the time of their creation. All we need to ensure is that we don't access these "unbound resource"
 	// descriptors at run-time. The strategy is to pre-allocate a large chunk of bindless-array of texture
 	// descriptors. Load few textures and provide their IDs to the material_storage buffer and access the 
 	// de-ref bindless array of textures to access the texture. When a new asset is added, its associated
@@ -1560,7 +1560,7 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 
 		if (!GetFileExtention(p_path, fileExtn))
 		{
-			std::cerr << "CScene::AddEntity Error: Failed to Get Extn - " << p_path << std::endl;
+			std::cerr << "CScene::AddEntity Error: Failed to Get Extension - " << p_path << std::endl;
 			return false;
 		}
 				
@@ -2096,8 +2096,8 @@ CFixedBuffers::CFixedBuffers()
 	m_primaryUniformData.ssaoKernelSize			= 64.0f;
 	m_primaryUniformData.ssaoNoiseScale         = nm::float2((float)RENDER_RESOLUTION_X / 4.0f, (float)RENDER_RESOLUTION_Y / 4.0f);
 	m_primaryUniformData.ssaoRadius				= 0.5f;
-	m_primaryUniformData.enableShadow			= 0;
-	m_primaryUniformData.enableShadowPCF		= 0;
+	m_primaryUniformData.enable_Shadow_RT_PCF	= 0;
+	m_primaryUniformData.UNASSIGNED_float0		= 0;
 	m_primaryUniformData.enableIBL				= 0;
 	m_primaryUniformData.pbrAmbientFactor		= 0.05f;
 	m_primaryUniformData.enableSSAO				= 1;
@@ -2124,25 +2124,23 @@ CFixedBuffers::~CFixedBuffers()
 bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 {
 	size_t primaryUniformBufferSize =
-		(sizeof(float) * 1)				// Tone Mapper Active
+		(sizeof(float) * 1)					// Tone Mapper Active							
 		+ (sizeof(float) * 3)				// camera look-from
 		+ (sizeof(float) * 16)				// camera view projection
 		+ (sizeof(float) * 16)				// camera view projection with Jitter
-		+ (sizeof(float) * 16)				// pre camera view projection
-		+ (sizeof(float) * 16)				// camera projection
-		+ (sizeof(float) * 16)				// camera view
-		+ (sizeof(float) * 16)				// inverse camera view
-		+ (sizeof(float) * 16)				// inverse camera projection
+		+ (sizeof(float) * 16)				// camera inv view projection matrix
+		+ (sizeof(float) * 16)				// camera pre view projection matrix
+		+ (sizeof(float) * 16)				// camera projection matrix
+		+ (sizeof(float) * 16)				// camera view matrix
+		+ (sizeof(float) * 16)				// camera inverse view matrix
+		+ (sizeof(float) * 16)				// camera inverse projection matrix
 		+ (sizeof(float) * 16)				// skybox model view
 		+ (sizeof(float) * 2)				// mouse position (x,y)
 		+ (sizeof(float) * 2)				// SSAO Noise Scale
 		+ (sizeof(float) * 1)				// SSAO Kernel Size
 		+ (sizeof(float) * 1)				// SSAO Radius
-		+ (sizeof(float) * 16)				// sun light View Projection
-		+ (sizeof(float) * 3)				// sun light direction in world space
-		+ (sizeof(int) * 1)					// enabled PCF for shadow
-		+ (sizeof(float) * 3)				// sun light direction in view space
-		+ (sizeof(float) * 1)				// sun intensity
+		+ (sizeof(uint32_t) * 1)			// Packed Enable Shadow << (RT vs Raster) << PCF
+		+ (sizeof(float) * 1)				// UNASSIGINED_Float_1
 		+ (sizeof(float) * 1)				// Enable IBL
 		+ (sizeof(float) * 1)				// PBR ambient Factor
 		+ (sizeof(int) * 1)					// enable SSAO
@@ -2155,7 +2153,7 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(float) * 1)				// TAA Resolve Weight
 		+ (sizeof(float) * 1)				// TAA Use Motion Vectors
 		+ (sizeof(float) * 1)				// TAA Flicker Correction Mode
-		+ (sizeof(float) * 1)				// TAA Reprojection Filter
+		+ (sizeof(float) * 1)				// TAA Re-projection Filter
 		+ (sizeof(float) * 1)				// Tone Mapping Exposure
 		+ (sizeof(float) * 1)				// UNASSIGINED_Float_1
 		+ (sizeof(float) * 1);				// UNASSIGINED_Float_2
@@ -2242,9 +2240,9 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[0]); uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[1]);			// SSAO noise scale
 	uniformValues.push_back((float)m_primaryUniformData.ssaoKernelSize);																					// SSAO kernel size
 	uniformValues.push_back((float)m_primaryUniformData.ssaoRadius);																						// SSAO radius
-	uniformValues.push_back((float)m_primaryUniformData.enableShadow);																						// enable Shadows
-	uniformValues.push_back((float)m_primaryUniformData.enableShadowPCF);																					// enable PCF for shadows
-	uniformValues.push_back((float)m_primaryUniformData.enableIBL);																								// enable IBL
+	uniformValues.push_back((float)m_primaryUniformData.enable_Shadow_RT_PCF);																				// Packed Enable Shadow << (RT vs Raster) << PCF
+	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float0);																					// UNASSIGINED_0
+	uniformValues.push_back((float)m_primaryUniformData.enableIBL);																							// enable IBL
 	uniformValues.push_back(m_primaryUniformData.pbrAmbientFactor);																							// PBR Ambient Factor
 	uniformValues.push_back((float)m_primaryUniformData.enableSSAO);																						// enable SSAO
 	uniformValues.push_back(m_primaryUniformData.biasSSAO);																									// SSAO Bias
@@ -2256,7 +2254,7 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	uniformValues.push_back(m_primaryUniformData.taaResolveWeight);																							// TAA Resolve Weight
 	uniformValues.push_back((float)m_primaryUniformData.taaUseMotionVectors);																				// TAA Use Motion Vector
 	uniformValues.push_back((float)m_primaryUniformData.taaFlickerCorectionMode);																			// TAA Flicker Correction Mode
-	uniformValues.push_back((float)m_primaryUniformData.taaReprojectionFilter);																				// TAA Reprojection Filter
+	uniformValues.push_back((float)m_primaryUniformData.taaReprojectionFilter);																				// TAA Re-projection Filter
 	uniformValues.push_back(m_primaryUniformData.toneMappingExposure);																						// Tone Mapping Exposure
 	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float1);																					// UNASSIGINED_1
 	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float2);																					// UNASSIGINED_2

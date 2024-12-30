@@ -82,3 +82,28 @@ public:
 private:
 
 };
+
+class CStaticShadowPrepass : public CStaticRenderPass, CUIParticipant
+{
+public:
+	CStaticShadowPrepass(CVulkanRHI*);
+	~CStaticShadowPrepass();
+
+	virtual bool CreateRenderpass(RenderData*) override;
+	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
+
+	virtual bool Update(UpdateData*) override;
+	virtual bool Render(RenderData*) override;
+
+	virtual void Show(CVulkanRHI* p_rhi) override;
+
+	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+
+	bool ReuseShadowMap() { return m_bReuseShadowMap; }
+	bool IsRTShadowEnabled() { return m_enableRayTracedShadow; }
+
+private:
+	bool m_enableRayTracedShadow;
+	bool m_enablePCF;
+	bool m_bReuseShadowMap;
+};

@@ -187,7 +187,6 @@
     <ClInclude Include="..\src\PostProcessingPasses.h" />
     <ClInclude Include="..\Src\RasterRender.h" />
     <ClInclude Include="..\src\ScreenSpacePass.h" />
-    <ClInclude Include="..\src\ShadowPass.h" />
     <ClInclude Include="..\src\UIPass.h" />
   </ItemGroup>
   <ItemGroup>
@@ -214,7 +213,6 @@
     <ClCompile Include="..\src\PostProcessingPasses.cpp" />
     <ClCompile Include="..\Src\RasterRender.cpp" />
     <ClCompile Include="..\src\ScreenSpacePass.cpp" />
-    <ClCompile Include="..\src\ShadowPass.cpp" />
     <ClCompile Include="..\src\UIPass.cpp" />
     <ClCompile Include="..\Src\wWinMain.cpp" />
   </ItemGroup>

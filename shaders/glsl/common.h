@@ -22,8 +22,8 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 	vec2	ssaoNoiseScale;
 	float	ssaoKernelSize;
 	float	ssaoRadius;
-	float	enableShadow;
-	bool	enableShadowPCF;
+	float	enable_Shadow_RT_PCF;
+	float	UNASSIGINED_Float0;
 	float 	enableIBL;
 	float 	pbrAmbientFactor;
 	float 	enabelSSAO;

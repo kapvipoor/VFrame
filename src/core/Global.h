@@ -62,6 +62,10 @@ extern std::filesystem::path g_AssetPath;
 #define STORE_PREV_PRIMARY_COLOR   		        9
 #define STORE_MAX_RENDER_TARGETS			    10
 
+// Shadow flags
+#define ENABLE_SHADOW							1
+#define ENABLE_RT_SHADOW						2
+#define ENABLE_PCF								4
 #define SHADOW_BIAS                             0.005
 
 #define DIRECTIONAL_LIGHT_TYPE                  0

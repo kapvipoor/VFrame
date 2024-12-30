@@ -7,7 +7,6 @@
 #include "core/SceneGraph.h"
 #include "core/Asset.h"
 
-#include "ShadowPass.h"
 #include "LightingPass.h"
 #include "ScreenSpacePass.h"
 #include "UIPass.h"

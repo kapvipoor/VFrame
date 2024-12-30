@@ -617,7 +617,7 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 	renderData.scIdx = m_swapchainIndex;
 	renderData.sceneGraph = m_sceneGraph;
 
-	if (m_staticShadowPass->IsEnabled())
+	if (m_staticShadowPass->IsEnabled() && !m_staticShadowPass->IsRTShadowEnabled())
 	{
 		//if (!m_staticShadowPass->ReuseShadowMap())
 		{

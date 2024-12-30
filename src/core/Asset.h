@@ -231,8 +231,8 @@ public:
 		nm::float2					ssaoNoiseScale;
 		float						ssaoKernelSize;
 		float						ssaoRadius;
-		int							enableShadow;
-		int							enableShadowPCF;
+		uint32_t					enable_Shadow_RT_PCF;
+		float						UNASSIGNED_float0;
 		int							enableIBL;
 		float						pbrAmbientFactor;
 		int							enableSSAO;

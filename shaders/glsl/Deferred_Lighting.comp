@@ -7,6 +7,7 @@
 
 #include "Common.h"
 #include "MeshCommon.h"
+#include "RayTracingCommon.h"
 
 #define DISPLAY_MOUSE_POINTER
 
@@ -32,24 +33,15 @@ float CalculateDirectonalShadow(vec4 L, vec3 N, bool applyPCF)
     	            shadowFactor 		= shadowFactor + (((lightPositionNDC.z) > sampledDepth) ? 1.0f : 0.0f);
     	        }
     	    }
-    	    return (shadowFactor / 9.0f);
+    	    return 1.0 - (shadowFactor / 9.0f);
     	}
     	else
     	{
     	    float sampledDepth 			= texture(sampler2D(g_RT_SampledImages[SAMPLE_DIRECTIONAL_SHADOW_DEPTH], g_LinearSampler), lightPositionUV.xy).r;
-    	    return ((lightPositionNDC.z) > sampledDepth) ? 1.0 : 0.0f;
+    	    return ((lightPositionNDC.z) > sampledDepth) ? 0.0 : 1.0f;
     	}
 	}
-	return 0.0f;
-}
-
-float TraceRay(vec3 origin, vec3 direction)
-{
-	rayQueryEXT rq;
-	rayQueryInitializeEXT(rq, g_TLAS, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullNoOpaqueEXT, 
-	0xff, origin, 1e-1, direction, 1e3);
-	rayQueryProceedEXT(rq);
-	return (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT) ? 0.0 : 1.0;
+	return 1.0f;
 }
 
 layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) in;
@@ -81,7 +73,7 @@ void main()
 
 	vec3 test = vec3(0.0);
 	
-	// Higher the value, lesser the contribution
+	// Higher the value, lower the contribution
 	float shadow = 1.0; 
 
 	// the the depth value of the fragment in NDC is calculated and checkd if it is within the far plane at 1.0
@@ -115,13 +107,23 @@ void main()
 			 	// this needs to be inverse transpose so as to negate the scaling in 
 			 	// the matrix before multipling with Light vector. But this isn't working
 			 	// and I do not know why!
-			 	L = normalize(g_Info.camView * vec4(light.vector3[0], light.vector3[1], light.vector3[2], 0.0f)).xyz;
+				vec4 lightDir = vec4(light.vector3[0], light.vector3[1], light.vector3[2], 0.0f);
+			 	L = normalize(g_Info.camView * lightDir).xyz;
 		 		
 				// Compute Shadow if enabled
-				if(g_Info.enableShadow == 1.0)
+				int enableShadowRTPCF = int(g_Info.enable_Shadow_RT_PCF);
+				if((enableShadowRTPCF & ENABLE_SHADOW) == ENABLE_SHADOW)
 				{
-			 		//shadow = CalculateDirectonalShadow(posInLightSpace, N, g_Info.enableShadowPCF);
-					shadow = TraceRay(posInWorldSpace.xyz, vec3(0.0f, 1.0f, 0.0f));	
+					if((enableShadowRTPCF & ENABLE_RT_SHADOW) == ENABLE_RT_SHADOW)
+					{
+						
+						shadow = TraceRay(posInWorldSpace.xyz, lightDir.xyz);	
+					}
+					else
+					{
+						bool enablePCF = ((enableShadowRTPCF & ENABLE_PCF) == ENABLE_PCF);
+						shadow = CalculateDirectonalShadow(posInLightSpace, N, enablePCF) ;				
+					}
 				}
 
 				// Compute directional light if IBL is disabled
@@ -186,7 +188,7 @@ void main()
 		{
 			vec3 ambient = vec3(1.0) /* * ambient occlusion */;	
 			// A pixel under shadow cannot participate in IBL
-			if(shadow != 1)
+			if(shadow == 0)
 			{
 				ambient *= g_Info.pbrAmbientFactor * albedo.xyz;
 			}
@@ -210,7 +212,7 @@ void main()
 				vec2 envBRDF = texture(sampler2D(g_brdf_lut, g_LinearSampler), vec2(max(dot(N, V), 0.0), roughMetal.x)).bg;
 				vec3 specular = preFilteredColor * (F * envBRDF.x + envBRDF.y);
 
-				ambient *= (Kd * diffuse + specular);
+				ambient *= (Kd * diffuse + specular) * shadow;
 			}
 			finalColor = vec4(ambient + Lo, 1.0);
 		}
