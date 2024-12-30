@@ -21,6 +21,7 @@ Feature Integrated
 * [Temporal Anti Aliasing](https://github.com/kapvipoor/VFrame/blob/main/notes/Temporal%20Anti-Aliasing.md)
 * [Tone Mapping](https://github.com/kapvipoor/VFrame/blob/main/notes/Tone%20Mapping.md)
 * [PBR and IBL](https://github.com/kapvipoor/VFrame/blob/main/notes/IBL.md)
+* [Rasterized and Ray Traced Shadows](https://github.com/kapvipoor/VFrame/blob/main/notes/Rasterized%20and%20Ray%20Traced%20Shadows.md)
 
 4.	Object Picker
 	- Challanges Faced:	- 
@@ -41,28 +42,6 @@ Feature Integrated
 	- Algorithm Limitations:
 		1. Quality of SSAO is not great. Migh want to implement AMD SSAO for comparision
 	- Bugs:
-
-8.	Shadow Maps (Orthographc Projection and Directonal Light)
-	- Features: 
-		1. Orthographic Shadow Maps implemented
-		2. Implemented PCF - Fixed buggy PCF in Forward
-		3. Used scene's bounding box to perfectly fit the directional light's shaodw camera for best shadow map results
-		4. Reuseing shadow map from previous frame if the scene has not changed
-	- Challanges Faced:
-		1. Wrong Orthgraphic Matrics were implemented. Ensure there is an implemtation for Right Hand, Zero to One Z value
-		2. Identifying Vulkan Vetex to Pixel pipeline - Z ranges [-1,1] and does not need to be normalised to [0,1]
-		3. X and Y also ranges [-1,1] and did need to be normalised to [0,1] for depth sampling
-		4. Y is inverted in Vulkan, so y = 1.0 - y for sampling the depth map
-		5. Some wrong self shadowing issues related to low Depth Precision - FIXED by increasing precision from 16 bits to 24 bits
-		6. Some other wrong self shadowing issues - FIXED by ensuring shadow is applied to (NdotL < 0)
-	- Algorithm Limitations:
-		1. Perspective shadow map needs linearization of depth values to work
-		2. High Perspective and Projection Aliasing
-	- Bugs:
-		1. PCF is not correct in the differed pass
-		2. Peter-Panning effect has not been addressed
-		3. Front face culling in shadow pass is producing buggy results
-		4. PCF Causing HAlo effect aroung intersecting geometry (Eg: Sponza and Suzzane)
 
 10.	Gltf loader with stb_image support
 	- Challanges Faced:	- 
