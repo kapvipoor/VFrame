@@ -1,18 +1,17 @@
-# Dynamic Shadows
-## Current State
+# Rasterized and Ray Traced Shadows
+## Dynamic Shadows
 * The scene graph flags its state to SceneMoved/BoundsChange if any entity moves around. This status helps identifying when to rebuild the shadow map (for Rasterization Pipeline) or rebuild the TLAS (for Ray tracing Pipeline)
 * When a new entity with a mesh is introduced to the scene graph at runtime, the same process applies and updates the shadow resources
 * Lights are entities in the scene graph, hence the primary directional light can be rotated, hence changing the direction of the shadow dynamically. 
 * A AABB scene fitting bounding box is computed and applied to the light camera to make sure the entire scene is with-in the light frustum, hence ensuring all the objects in the scene can participate for shadows (Rasterized). This is however not needed for the ray tracing pipeline. 
 
-# Rasterized Shadows using Shadow Maps (Directional Light)
-## Current State
+## Rasterized Shadows using Shadow Maps (Directional Light)
 * Currently implements directional light shadow using shadow map. The light perspective depth pre-pass is done before the primary g buffer pass
 * In forward pipeline, shadow depth comparison is done in the fragment shader of the gbuffer pass
 * In deferred pipeline, shadow depth comparison is done in the light computation compute shader post g buffer pass
 * Percentage Close Filtering (PCF) is applied by sampling 3x3 neighbors to give a blur to edges of the hard shadows
 
-# Ray Traced Shadows (Directional Light)
+## Ray Traced Shadows (Directional Light)
 * Entities with meshes that are loaded in the scene have their own BLAS. The entire scene builds its TLAS at loading time and updates every time there is any change to the BLAS transforms. This enables dynamic Ray Traced shadows
 * Ray tracing pipeline are not in use. To avoid that complexity, rayQueryEXT is used. Shadow is computed in the Differed Light Computation compute shader by collecting the view space positions from the rasterized position buffer.
 * Since the TLAS and BLAS are built using wold space positions, the positions are converted to world space and applied as origin to the ray.
