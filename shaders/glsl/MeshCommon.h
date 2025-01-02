@@ -105,3 +105,92 @@ vec3 GetEmissive(Material mat, vec2 uv)
 {
 	return mat.emissive * 3.0 *  texture(sampler2D(g_textures[mat.emissive_id], g_LinearSampler), uv).xyz;
 }
+
+float CalculateDirectonalShadow(vec4 L, vec3 N, bool applyPCF)
+{
+	vec3 lightPositionNDC 				= L.xyz/L.w;
+	vec2 shadowMapSize 					= textureSize(sampler2D(g_RT_SampledImages[SAMPLE_DIRECTIONAL_SHADOW_DEPTH], g_LinearSampler), 0);
+	// NDC ranges between -1 and 1; forcing values bewteen 0 and 1 for shadow map sampling
+	vec2 lightPositionUV 				= lightPositionNDC.xy * 0.5f + 0.5f;
+	if(lightPositionNDC.z > -1.0 && lightPositionNDC.z <= 1.0f)
+	{
+		float bias 						= max(0.05 * (1.0f - dot(N, L.xyz)), SHADOW_BIAS); 
+
+		if(applyPCF == true)
+    	{
+    	    float shadowFactor = 0.0f;
+    	    for(float dx = -1; dx <= 1; ++dx)
+    	    {
+    	        for(float dy = -1; dy <= 1; ++dy)
+    	        {
+    	            vec2 uv 			= lightPositionUV.xy + (vec2(dx, dy)/shadowMapSize);
+    	            float sampledDepth 	= texture(sampler2D(g_RT_SampledImages[SAMPLE_DIRECTIONAL_SHADOW_DEPTH], g_LinearSampler), uv).r;			
+    	            shadowFactor 		= shadowFactor + (((lightPositionNDC.z) > sampledDepth) ? 1.0f : 0.0f);
+    	        }
+    	    }
+    	    return 1.0 - (shadowFactor / 9.0f);
+    	}
+    	else
+    	{
+    	    float sampledDepth 			= texture(sampler2D(g_RT_SampledImages[SAMPLE_DIRECTIONAL_SHADOW_DEPTH], g_LinearSampler), lightPositionUV.xy).r;
+    	    return ((lightPositionNDC.z) > sampledDepth) ? 0.0 : 1.0f;
+    	}
+	}
+	return 1.0f;
+}
+
+vec3 CalculatePBRReflectance(vec3 radiance, vec3 F0, vec3 L, vec3 N, vec3 V, vec3 albedo, float roughness, float metal)
+{
+	// calculating half vector
+	vec3 H	= normalize(V+L);
+
+	// calculating fresnel value to get the reflection to refraction ratio
+	vec3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+
+	// calculating Geometry factor and Normal Distribution Function
+	float NDF = DistrubutionGGX(N, H, roughness);
+	float G = GeometrySmith(N, V, L, roughness);
+
+	vec3 numen = NDF * G * F;
+	 // adding 0.0001 to avoid division by 0
+	float denom	= 4.0 * max(dot(N, V), 0.0) * max(dot(L, N), 0.0) + 0.0001;
+	vec3 specular = numen/denom;
+
+	// Fresnel value directly corresponds to the reflection factor
+	vec3 Ks = F;
+				
+	// Energy conversation: Diffuse and Specular light cannot be over 1 unless the surface
+	// emits light. Until emissive surfaces are supported, we are strictly setting Kd + Ks = 1
+	vec3 Kd = 1.0 - Ks;
+	// As we know metals do not participate in diffuse
+	Kd = Kd * (1.0 - metal);
+
+	// calculating Lambertian diffuse
+	float NdotL	= max(dot(N, L), 0.0);
+				
+	// return outgoing radiance
+	return (Kd * albedo.xyz / PI + specular) * radiance * NdotL;
+}
+
+vec3 CalculateIBLAmbience(vec3 F0, vec3 N, vec3 V, vec3 albedo, float roughness, float metal)
+{
+	vec3 F = FresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+	vec3 Ks = F;
+	vec3 Kd = 1.0 - Ks;
+	Kd = Kd * (1.0 - metal);
+	
+	// We are sampling the irradiance at this given pixel position along the specified normal.
+	// This is computed by sampling all* possible directions of incoming light and averaging
+	// it. It is tonemapped because the flux at this point on the surface cannot be over 1 
+	// unless point is emitting light of its own
+	vec3 irradiance = texture(g_env_diffuse_Sampler, N).rgb;
+	vec3 diffuse = irradiance * albedo.xyz;
+
+	const float MAX_REFLECTION_LOD = 9.0;
+	vec3 R = reflect(-V, N);
+	vec3 preFilteredColor = textureLod(g_env_specular_Sampler, R, MAX_REFLECTION_LOD * roughness).xyz;
+	vec2 envBRDF = texture(sampler2D(g_brdf_lut, g_LinearSampler), vec2(max(dot(N, V), 0.0), roughness)).bg;
+	vec3 specular = preFilteredColor * (F * envBRDF.x + envBRDF.y);
+
+	return (Kd * diffuse + specular);
+}

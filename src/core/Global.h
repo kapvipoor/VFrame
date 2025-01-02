@@ -1,18 +1,16 @@
 #ifndef GPU
-
-#pragma once
-
-#include <string>
-#include <queue>
-#include <filesystem>
-
-#define RETURN_FALSE_IF_FALSE(v)	\
-{ if (!v) {	return false; } }		\
-
-extern std::filesystem::path g_DefaultPath;
-extern std::filesystem::path g_EnginePath;
-extern std::filesystem::path g_AssetPath;
-
+	#pragma once
+	
+	#include <string>
+	#include <queue>
+	#include <filesystem>
+	
+	#define RETURN_FALSE_IF_FALSE(v)	\
+	{ if (!v) {	return false; } }		\
+	
+	extern std::filesystem::path g_DefaultPath;
+	extern std::filesystem::path g_EnginePath;
+	extern std::filesystem::path g_AssetPath;
 #endif
 
 #define PI                                      3.14159265359

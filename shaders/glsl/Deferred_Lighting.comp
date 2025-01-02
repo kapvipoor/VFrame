@@ -11,99 +11,58 @@
 
 #define DISPLAY_MOUSE_POINTER
 
-float CalculateDirectonalShadow(vec4 L, vec3 N, bool applyPCF)
-{
-	vec3 lightPositionNDC 				= L.xyz/L.w;
-	vec2 shadowMapSize 					= textureSize(sampler2D(g_RT_SampledImages[SAMPLE_DIRECTIONAL_SHADOW_DEPTH], g_LinearSampler), 0);
-	// NDC ranges between -1 and 1; forcing values bewteen 0 and 1 for shadow map sampling
-	vec2 lightPositionUV 				= lightPositionNDC.xy * 0.5f + 0.5f;
-	if(lightPositionNDC.z > -1.0 && lightPositionNDC.z <= 1.0f)
-	{
-		float bias 						= max(0.05 * (1.0f - dot(N, L.xyz)), SHADOW_BIAS); 
-
-		if(applyPCF == true)
-    	{
-    	    float shadowFactor = 0.0f;
-    	    for(float dx = -1; dx <= 1; ++dx)
-    	    {
-    	        for(float dy = -1; dy <= 1; ++dy)
-    	        {
-    	            vec2 uv 			= lightPositionUV.xy + (vec2(dx, dy)/shadowMapSize);
-    	            float sampledDepth 	= texture(sampler2D(g_RT_SampledImages[SAMPLE_DIRECTIONAL_SHADOW_DEPTH], g_LinearSampler), uv).r;			
-    	            shadowFactor 		= shadowFactor + (((lightPositionNDC.z) > sampledDepth) ? 1.0f : 0.0f);
-    	        }
-    	    }
-    	    return 1.0 - (shadowFactor / 9.0f);
-    	}
-    	else
-    	{
-    	    float sampledDepth 			= texture(sampler2D(g_RT_SampledImages[SAMPLE_DIRECTIONAL_SHADOW_DEPTH], g_LinearSampler), lightPositionUV.xy).r;
-    	    return ((lightPositionNDC.z) > sampledDepth) ? 0.0 : 1.0f;
-    	}
-	}
-	return 1.0f;
-}
-
 layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) in;
 void main()
 {
     ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
 
     // these resources are in view space
-	vec4 skyboxColor = imageLoad(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy).xyzw;                                              
-    vec3 camerPosition = vec3(0.0f);                                                                       
-	
+	vec4 sky = imageLoad(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy).xyzw;       
+	vec4 finalColor = sky;
+
+    vec3 camPos = vec3(0.0f);                                                                       
 	vec4 fragPos = imageLoad(g_RT_StorageImages[STORE_POSITION], xy).xyzw;                
 	vec4 posInWorldSpace = g_Info.invCamView * fragPos;                              
     
-	vec3 V = normalize(camerPosition - fragPos.xyz);                                                                                 
-    vec3 N = normalize(imageLoad(g_RT_StorageImages[STORE_NORMAL], xy).xyz);                                                         
-    vec3 albedo = imageLoad(g_RT_StorageImages[STORE_ALBEDO], xy).xyz;
-    
+	vec3 V = normalize(camPos - fragPos.xyz);                                                                                 
+    vec3 N = normalize(imageLoad(g_RT_StorageImages[STORE_NORMAL], xy).xyz);     
+
+    vec3 albedo = imageLoad(g_RT_StorageImages[STORE_ALBEDO], xy).xyz;    
 	vec2 roughMetal = imageLoad(g_RT_StorageImages[STORE_ROUGH_METAL], xy).xy;
 
+	// Surface reflectance at zero incidence
 	// For non-metallic surfaces, use a constant
 	// For metals, use albedo as metals have color to their
-	// specular
-	vec3 F0 = vec3(0.04);
-	F0 = mix(F0, albedo.xyz, roughMetal.y);
+	// specular.
+	vec3 F0 = mix(vec3(0.04), albedo.xyz, roughMetal.y);
 				
+	// Irradiance at the current position
     vec3 Lo = vec3(0.0);
-	vec4 finalColor = skyboxColor;
 
-	vec3 test = vec3(0.0);
-	
 	// Higher the value, lower the contribution
 	float shadow = 1.0; 
 
-	// the the depth value of the fragment in NDC is calculated and checkd if it is within the far plane at 1.0
-	// if it is, compute the lighting, else the skybox is the final deciding color
+	// the the depth value of the fragment in NDC is calculated and checked if it is within the far plane at 1.0
+	// if it is, compute the lighting, else the sky is the final deciding color
 	vec4 fragPosInClipSpace	= g_Info.camProj * fragPos;
 	float fragDepthInClipSpace = fragPosInClipSpace.z / fragPosInClipSpace.w;
 	float fragDepthInNDC = fragDepthInClipSpace * 0.5 + 0.5;
+
 	if(fragDepthInNDC < 1.0)
 	{			
 		// for each light source
 		for(int i = 0; i < g_lights.count; i++)
 		{	
 			vec3 radiance = vec3(0.0f);
-			float attenuation = 1.0;
-
 			Light light = g_lights.lights[i];
 			uint lightType = light.type_castShadow >> 16;
 
 			// As light color is over 1, the result will be over 1, hence will need tone mapping
-			vec3 lightColor	= vec3(light.color[0], light.color[1], light.color[2]) * light.intensity;
-			vec3 L = vec3(0.0f, 0.0f, 0.0f);     
+			vec3 lightColor	= vec3(light.color[0], light.color[1], light.color[2]);
+			vec3 L = vec3(0.0f);     
 			 if(lightType == DIRECTIONAL_LIGHT_TYPE)
 			 {
-			 	// calculating current position in world space to Light's view space
-			 	vec4 v0 = vec4(light.viewProj[0], light.viewProj[1], light.viewProj[2], light.viewProj[3]);
-			 	vec4 v1 = vec4(light.viewProj[4], light.viewProj[5], light.viewProj[6], light.viewProj[7]);
-			 	vec4 v2 = vec4(light.viewProj[8], light.viewProj[9], light.viewProj[10], light.viewProj[11]);
-			 	vec4 v3 = vec4(light.viewProj[12], light.viewProj[13], light.viewProj[14], light.viewProj[15]);
-			 	vec4 posInLightSpace = mat4(v0, v1, v2, v3) * posInWorldSpace;
-		 		// L in View Space
+			 	// L in View Space
 			 	// this needs to be inverse transpose so as to negate the scaling in 
 			 	// the matrix before multipling with Light vector. But this isn't working
 			 	// and I do not know why!
@@ -115,12 +74,18 @@ void main()
 				if((enableShadowRTPCF & ENABLE_SHADOW) == ENABLE_SHADOW)
 				{
 					if((enableShadowRTPCF & ENABLE_RT_SHADOW) == ENABLE_RT_SHADOW)
-					{
-						
+					{						
 						shadow = TraceRay(posInWorldSpace.xyz, lightDir.xyz);	
 					}
 					else
 					{
+						// calculating current position in world space to Light's view space
+			 			vec4 v0 = vec4(light.viewProj[0], light.viewProj[1], light.viewProj[2], light.viewProj[3]);
+			 			vec4 v1 = vec4(light.viewProj[4], light.viewProj[5], light.viewProj[6], light.viewProj[7]);
+			 			vec4 v2 = vec4(light.viewProj[8], light.viewProj[9], light.viewProj[10], light.viewProj[11]);
+			 			vec4 v3 = vec4(light.viewProj[12], light.viewProj[13], light.viewProj[14], light.viewProj[15]);
+			 			vec4 posInLightSpace = mat4(v0, v1, v2, v3) * posInWorldSpace;
+
 						bool enablePCF = ((enableShadowRTPCF & ENABLE_PCF) == ENABLE_PCF);
 						shadow = CalculateDirectonalShadow(posInLightSpace, N, enablePCF) ;				
 					}
@@ -132,6 +97,7 @@ void main()
 				if(g_Info.enableIBL == 0)
 				{
 		 			// There is no attenuation for directional light
+					float attenuation = 1.0;
 			 		radiance = lightColor * light.intensity * attenuation * shadow;
 				}
 			 }
@@ -141,46 +107,16 @@ void main()
 				// the light vector is going to be fragPos - (view matrix * light position)
 				// L in View Space
 				L = ((g_Info.camView * vec4(light.vector3[0], light.vector3[1], light.vector3[2], 1.0f)) - fragPos).xyz;
-
 				float distance = length(L);
-				attenuation = max(0.0f, light.intensity - distance);
-
 				L = normalize(L);
-
-				// There is no attenuation for directional light
+				float attenuation = max(0.0f, light.intensity - distance);
 				radiance = lightColor * light.intensity * attenuation;
 			}
 
-			vec3 H	= normalize(V+L);
-
-			if(any(greaterThan(lightColor, vec3(0.0f))))
+			if(any(greaterThan(radiance, vec3(0.0f))))
 			{
-				// calculating fresnel value to get the reflection to refraction ratio
-				vec3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
-
-				// calculating Geometry factor and Normal Distribution Function
-				float NDF = DistrubutionGGX(N, H, roughMetal.x);
-				float G = GeometrySmith(N, V, L, roughMetal.x);
-
-				vec3 numen = NDF * G * F;
-				 // adding 0.0001 to avoid division by 0
-				float denom	= 4.0 * max(dot(N, V), 0.0) * max(dot(L, N), 0.0) + 0.0001;
-				vec3 specular = numen/denom;
-
-				// Fresnel value directly corresponds to the reflection factor
-				vec3 Ks = F;
-				
-				// Energy conversation: Diffuse and Specular light cannot be over 1 unless the surface
-				// emits light. Until emissive surfaces are supported, we are strictly setting Kd + Ks = 1
-				vec3 Kd = 1.0 - Ks;
-				// As we know metals do not participate in diffuse
-				Kd = Kd * (1.0 - roughMetal.y);
-
-				// calculating Lambertian diffuse
-				float NdotL	= max(dot(N, L), 0.0);
-				
 				// Add all outgoing radiance
-				Lo += (Kd * albedo.xyz / PI + specular) * radiance * NdotL;
+				Lo += CalculatePBRReflectance(radiance, F0, L, N, V, albedo, roughMetal.x, roughMetal.y);
 			}
 		}
 
@@ -194,25 +130,7 @@ void main()
 			}
 			else
 			{
-				// Ambient lighting to use IBL
-				vec3 F = FresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughMetal.x);
-				vec3 Ks = F;
-				vec3 Kd = 1.0 - Ks;
-				Kd = Kd * (1.0 - roughMetal.y);
-				// We are sampling the irradiance at this given pixel position along the specified normal.
-				// This is computed by sampling all* possible directions of incoming light and averaging
-				// it. It is tonemapped because the flux at this point on the surface cannot be over 1 
-				// unless point is emitting light of its own
-				vec3 irradiance = texture(g_env_diffuse_Sampler, N).rgb;
-				vec3 diffuse = irradiance * albedo.xyz;
-
-				const float MAX_REFLECTION_LOD = 9.0;
-				vec3 R = reflect(-V, N);
-				vec3 preFilteredColor = textureLod(g_env_specular_Sampler, R, MAX_REFLECTION_LOD * roughMetal.x).xyz;
-				vec2 envBRDF = texture(sampler2D(g_brdf_lut, g_LinearSampler), vec2(max(dot(N, V), 0.0), roughMetal.x)).bg;
-				vec3 specular = preFilteredColor * (F * envBRDF.x + envBRDF.y);
-
-				ambient *= (Kd * diffuse + specular) * shadow;
+				ambient *= CalculateIBLAmbience(F0, N, V, albedo, roughMetal.x, roughMetal.y) * shadow;
 			}
 			finalColor = vec4(ambient + Lo, 1.0);
 		}
@@ -222,5 +140,6 @@ void main()
 			finalColor = vec4(ambient + Lo, 1.0);
 		}
 	}
+
 	imageStore(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy, finalColor); 
 }	
