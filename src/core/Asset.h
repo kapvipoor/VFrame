@@ -232,7 +232,7 @@ public:
 		float						ssaoKernelSize;
 		float						ssaoRadius;
 		uint32_t					enable_Shadow_RT_PCF;
-		float						UNASSIGNED_float0;
+		uint32_t					frameCount;
 		int							enableIBL;
 		float						pbrAmbientFactor;
 		int							enableSSAO;
@@ -277,18 +277,19 @@ class CRenderTargets : public CTextures, public CUIParticipant
 public:
 	enum RenderTargetId
 	{
-		  rt_PrimaryDepth			= 0
-		, rt_Position				= 1
-		, rt_Normal					= 2
-		, rt_Albedo					= 3
-		, rt_SSAO_Blur				= 4
-		, rt_DirectionalShadowDepth	= 5
-		, rt_PrimaryColor			= 6
-		, rt_RoughMetal				= 7
-		, rt_Motion					= 8
-		, rt_SSReflection			= 9
-		, rt_SSRBlur				= 10
-		, rt_Prev_PrimaryColor		= 11
+		  rt_PrimaryDepth			= 0		// This frame's depth target
+		, rt_Position				= 1		// Position in view space
+		, rt_Normal					= 2		// Normal in view space
+		, rt_Albedo					= 3		// Albedo
+		, rt_SSAO_Blur				= 4		// SSAO and Blur 
+		, rt_DirectionalShadowDepth	= 5		// Directional shadow depth
+		, rt_PrimaryColor			= 6		// This frame's color target, copies to swap chain by eof
+		, rt_RoughMetal				= 7		// Roughness and Metal
+		, rt_Motion					= 8		// Motion vectors
+		, rt_SSReflection			= 9		// Screen Space Reflection (RGB)
+		, rt_SSRBlur				= 10	// Blurred Screen Space Reflection (for rough surfaces)
+		, rt_Prev_PrimaryColor		= 11	// Previous frame's color target (done post tone mapping)
+		, rt_RTShadowTemporalAcc	= 12	// Temporal Accumulated ray traced shadows (4 count - 1 directional + 3 point)
 		, rt_max
 	};
 

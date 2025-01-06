@@ -92,10 +92,10 @@ void main()
     if(g_Info.ssrEnabled == 1)
     {
         vec4 reflectedColor = texture(sampler2D(g_RT_SampledImages[SAMPLE_SS_REFLECTION], g_LinearSampler), inUV).xyzw;
-        if(reflectedColor.w < 0.8)
-        {
-            reflectedColor.xyz = texture(sampler2D(g_RT_SampledImages[SAMPLE_SSR_BLUR], g_LinearSampler), inUV).xyz;
-        }
+        //if(reflectedColor.w < 0.8)
+        //{
+        //    reflectedColor.xyz = texture(sampler2D(g_RT_SampledImages[SAMPLE_SSR_BLUR], g_LinearSampler), inUV).xyz;
+        //}
         
         color += mix(vec3(0.0), reflectedColor.xyz, reflectedColor.w);
     }

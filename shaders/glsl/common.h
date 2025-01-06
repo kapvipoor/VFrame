@@ -23,7 +23,7 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 	float	ssaoKernelSize;
 	float	ssaoRadius;
 	float	enable_Shadow_RT_PCF;
-	float	UNASSIGINED_Float0;
+	uint	frameCount;
 	float 	enableIBL;
 	float 	pbrAmbientFactor;
 	float 	enabelSSAO;
@@ -67,6 +67,18 @@ vec2 XY2UV(in vec2 xy, in vec2 resolution)
 vec2 UV2XY(in vec2 uv, in vec2 resolution)
 {
 	return vec2(uv.x * resolution.x, uv.y * resolution.y);
+}
+
+// returns Position in View Space
+vec4 GetPositionfromDepth(vec2 sampleUV, float sampleDepth)
+{	
+    vec4 samplePosInCS = vec4((sampleUV * 2.0f) - 1.0f, sampleDepth, 1.0f);  
+    samplePosInCS.y *= -1;  // flipping y
+
+    vec4 samplePositionInVS = g_Info.invCamProj * samplePosInCS;
+    samplePositionInVS /= samplePositionInVS.w;
+
+    return samplePositionInVS;
 }
 
 // Trowbridge-Reitz GGX normal distribution function

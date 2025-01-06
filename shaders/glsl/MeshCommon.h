@@ -41,6 +41,7 @@ struct Light
 	float intensity;
 	float vector3[3];
 	float viewProj[16];
+	float coneAngle;
 };
 
 layout(set = 1, binding = 5) buffer Light_Storage
@@ -178,7 +179,7 @@ vec3 CalculateIBLAmbience(vec3 F0, vec3 N, vec3 V, vec3 albedo, float roughness,
 	vec3 Ks = F;
 	vec3 Kd = 1.0 - Ks;
 	Kd = Kd * (1.0 - metal);
-	
+
 	// We are sampling the irradiance at this given pixel position along the specified normal.
 	// This is computed by sampling all* possible directions of incoming light and averaging
 	// it. It is tonemapped because the flux at this point on the surface cannot be over 1 

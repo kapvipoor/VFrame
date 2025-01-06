@@ -466,7 +466,6 @@ bool CDeferredLightingPass::Dispatch(RenderData* p_renderData)
 	uint32_t dispatchDim_x										= m_rhi->GetRenderWidth() / THREAD_GROUP_SIZE_X;
 	uint32_t dispatchDim_y										= m_rhi->GetRenderHeight() / THREAD_GROUP_SIZE_Y;
 
-	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Compute Deferred Lighting"));
 	{
 		// issue a layout barrier on Primary Depth to set as Shader Read so it can be used in this compute shader
 		//CVulkanRHI::Image primaryDepthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
@@ -479,7 +478,6 @@ bool CDeferredLightingPass::Dispatch(RenderData* p_renderData)
 
 		vkCmdDispatch(cmdBfr, dispatchDim_x, dispatchDim_y, 1);
 	}
-	//m_rhi->EndCommandBuffer(cmdBfr);
 
 	return true;
 }
@@ -586,9 +584,41 @@ void CSkyboxDeferredPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_ve
 	p_vertexBinding.bindingDescription = m_pipeline.vertexInBinding;
 }
 
-CStaticShadowPrepass::CStaticShadowPrepass(CVulkanRHI* p_rhi)
+CShadowPass::CShadowPass(CVulkanRHI* p_rhi)
+	: CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
+{
+	m_staticShadowPass = new CShadowPass::CStaticShadowPrepass(p_rhi);
+	m_rayTraceShadowpass = new CShadowPass::CRayTraceShadowPass(p_rhi);
+}
+
+CShadowPass::~CShadowPass()
+{
+	delete m_rayTraceShadowpass;
+	delete m_staticShadowPass;
+}
+
+void CShadowPass::Show(CVulkanRHI* p_rhi)
+{
+	ImGui::Checkbox(std::to_string(m_staticShadowPass->m_passIndex).c_str(), &m_staticShadowPass->m_isEnabled);
+	ImGui::SameLine(40);
+	bool shadowNode = ImGui::TreeNode("Shadow");
+	if (shadowNode)
+	{
+		const char* items[] = { "Rasterized", "Ray Traced" };
+		int featureState = (int)m_staticShadowPass->m_enableRayTracedShadow;
+		ImGui::ListBox("Feature ", &featureState, items, IM_ARRAYSIZE(items), 2);
+		m_staticShadowPass->m_enableRayTracedShadow = (bool)featureState;
+
+		// This is a rasterized shadow map feature
+		if (!m_staticShadowPass->m_enableRayTracedShadow)
+			ImGui::Checkbox("Rasterized PCF", &m_staticShadowPass->m_enablePCF);
+
+		ImGui::TreePop();
+	}
+}
+
+CShadowPass::CStaticShadowPrepass::CStaticShadowPrepass(CVulkanRHI* p_rhi)
 	: CStaticRenderPass(p_rhi)
-	, CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
 	, m_enablePCF(false)
 	, m_enableRayTracedShadow(false)
 {
@@ -596,11 +626,11 @@ CStaticShadowPrepass::CStaticShadowPrepass(CVulkanRHI* p_rhi)
 	m_bReuseShadowMap = false;
 }
 
-CStaticShadowPrepass::~CStaticShadowPrepass()
+CShadowPass::CStaticShadowPrepass::~CStaticShadowPrepass()
 {
 }
 
-bool CStaticShadowPrepass::CreateRenderpass(RenderData* p_renderData)
+bool CShadowPass::CStaticShadowPrepass::CreateRenderpass(RenderData* p_renderData)
 {
 	CVulkanRHI::Image renderTarget = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_DirectionalShadowDepth);
 	CVulkanRHI::Renderpass* renderpass = &m_pipeline.renderpassData;
@@ -620,7 +650,7 @@ bool CStaticShadowPrepass::CreateRenderpass(RenderData* p_renderData)
 	return true;
 }
 
-bool CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
+bool CShadowPass::CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 {
 	uint32_t offset = 0;
 
@@ -683,7 +713,7 @@ bool CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 	return true;
 }
 
-bool CStaticShadowPrepass::Update(UpdateData* p_updateData)
+bool CShadowPass::CStaticShadowPrepass::Update(UpdateData* p_updateData)
 {
 	uint32_t enable_Shadow_RT_PCF = 0;
 	enable_Shadow_RT_PCF |= (m_isEnabled * ENABLE_SHADOW);
@@ -697,7 +727,7 @@ bool CStaticShadowPrepass::Update(UpdateData* p_updateData)
 	return true;
 }
 
-bool CStaticShadowPrepass::Render(RenderData* p_renderData)
+bool CShadowPass::CStaticShadowPrepass::Render(RenderData* p_renderData)
 {
 	uint32_t scId = p_renderData->scIdx;
 	CVulkanRHI::CommandBuffer cmdBfr = p_renderData->cmdBfr;
@@ -747,28 +777,55 @@ bool CStaticShadowPrepass::Render(RenderData* p_renderData)
 	return true;
 }
 
-void CStaticShadowPrepass::Show(CVulkanRHI* p_rhi)
-{
-	ImGui::Checkbox(std::to_string(m_passIndex).c_str(), &m_isEnabled);
-	ImGui::SameLine(40);
-	bool shadowNode = ImGui::TreeNode("Shadow");
-	if (shadowNode)
-	{
-		const char* items[] = { "Rasterized", "Ray Traced" };
-		int featureState = (int)m_enableRayTracedShadow;
-		ImGui::ListBox("Feature ", &featureState, items, IM_ARRAYSIZE(items), 2);
-		m_enableRayTracedShadow = (bool)featureState;
-
-		// This is a rasterized shadow map feature
-		if(!m_enableRayTracedShadow)
-			ImGui::Checkbox("Rasterized PCF", &m_enablePCF);
-
-		ImGui::TreePop();
-	}
-}
-
-void CStaticShadowPrepass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
+void CShadowPass::CStaticShadowPrepass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
 {
 	p_vertexBinding.attributeDescription = m_pipeline.vertexAttributeDesc;
 	p_vertexBinding.bindingDescription = m_pipeline.vertexInBinding;
+}
+
+CShadowPass::CRayTraceShadowPass::CRayTraceShadowPass(CVulkanRHI* p_rhi)
+	: CComputePass(p_rhi)
+{
+}
+
+CShadowPass::CRayTraceShadowPass::~CRayTraceShadowPass()
+{
+}
+
+bool CShadowPass::CRayTraceShadowPass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
+{
+	CVulkanRHI::ShaderPaths dfrdLightingShaderpaths{};
+	dfrdLightingShaderpaths.shaderpath_compute = g_EnginePath / "shaders/spirv/RayTraceShadows.comp.spv";
+	m_pipeline.pipeLayout = p_pipeline.pipeLayout;
+
+	RETURN_FALSE_IF_FALSE(m_rhi->CreateComputePipeline(dfrdLightingShaderpaths, m_pipeline, "RayTracedShadowComputePipeline"));
+
+	return true;
+}
+
+bool CShadowPass::CRayTraceShadowPass::Update(UpdateData*)
+{
+	return true;
+}
+
+bool CShadowPass::CRayTraceShadowPass::Dispatch(RenderData* p_renderData)
+{
+	uint32_t scId = p_renderData->scIdx;
+	CVulkanRHI::CommandBuffer cmdBfr = p_renderData->cmdBfr;
+	const CPrimaryDescriptors* primaryDesc = p_renderData->primaryDescriptors;
+	const CScene* scene = p_renderData->loadedAssets->GetScene();
+
+	uint32_t dispatchDim_x = m_rhi->GetRenderWidth() / THREAD_GROUP_SIZE_X;
+	uint32_t dispatchDim_y = m_rhi->GetRenderHeight() / THREAD_GROUP_SIZE_Y;
+
+	{
+		vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeline);
+
+		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
+
+		vkCmdDispatch(cmdBfr, dispatchDim_x, dispatchDim_y, 1);
+	}
+
+	return true;
 }

@@ -46,7 +46,8 @@
 #define SAMPLE_SS_REFLECTION    		        9
 #define SAMPLE_SSR_BLUR						    10
 #define SAMPLE_PREV_PRIMARY_COLOR    		    11
-#define SAMPLE_MAX_RENDER_TARGETS			    12
+#define SAMPLE_RT_SHADOW_DENOISE				12
+#define SAMPLE_MAX_RENDER_TARGETS			    13
 
 #define STORE_POSITION					        0
 #define STORE_NORMAL						    1
@@ -58,7 +59,8 @@
 #define STORE_SS_REFLECTION     		        7
 #define STORE_SSR_BLUR					        8
 #define STORE_PREV_PRIMARY_COLOR   		        9
-#define STORE_MAX_RENDER_TARGETS			    10
+#define STORE_RT_SHADOW_TEMPORAL_ACC			10
+#define STORE_MAX_RENDER_TARGETS			    11
 
 // Shadow flags
 #define ENABLE_SHADOW							1

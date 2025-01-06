@@ -4,9 +4,6 @@
 #include "RasterRender.h"
 #include <assert.h>
 
-//float g_sunDistanceFromOrigin = 50.0f;
-//nm::float4 g_sunDirection = nm::float4(0.0f, 1.0f, 0.0f, 0.0f);// -93.83f);
-
 CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_height_, int window_scale)
 	: CWinCore(name, screen_width_, screen_height_, window_scale)
 	, m_pickObject(false)
@@ -16,17 +13,14 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 
 {			
 	m_rhi					= new CVulkanRHI(name, RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
-
 	m_primaryCamera			= new CPerspectiveCamera();
-	//m_sunLight				= new CDirectionaLight("Sunlight", true, nm::float3(0.0f, 1.0f, 0.0f));
-
 	m_sceneGraph			= new CSceneGraph(m_primaryCamera);
 
 	m_fixedAssets			= new CFixedAssets();
 	m_loadableAssets		= new CLoadableAssets(m_sceneGraph);
 	m_primaryDescriptors	= new CPrimaryDescriptors();
 
-	m_staticShadowPass		= new CStaticShadowPrepass(m_rhi);
+	m_shadowPass			= new CShadowPass(m_rhi);
 	m_skyboxForwardPass		= new CSkyboxPass(m_rhi);
 	m_skyboxDeferredPass	= new CSkyboxDeferredPass(m_rhi);
 	m_forwardPass			= new CForwardPass(m_rhi);
@@ -44,7 +38,7 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 
 	m_cmdBufferNames[0][cb_TAA]					= "TAA_0";
 	m_cmdBufferNames[0][cb_SSR]					= "SSR_0";
-	m_cmdBufferNames[0][cb_ShadowMap]			= "ShadowMap_0";
+	m_cmdBufferNames[0][cb_Shadows]				= "Shadows_0";
 	m_cmdBufferNames[0][cb_SSAO]				= "SSAO_0";
 	m_cmdBufferNames[0][cb_Forward]				= "Forward_0";
 	m_cmdBufferNames[0][cb_Deferred_GBuf]		= "Deferred_GBuf_0";
@@ -57,7 +51,7 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 
 	m_cmdBufferNames[1][cb_TAA]					= "TAA_1";
 	m_cmdBufferNames[1][cb_SSR]					= "SSR_1";
-	m_cmdBufferNames[1][cb_ShadowMap]			= "ShadowMap_1";
+	m_cmdBufferNames[1][cb_Shadows]				= "Shadows_1";
 	m_cmdBufferNames[1][cb_SSAO]				= "SSAO_1";
 	m_cmdBufferNames[1][cb_Forward]				= "Forward_1";
 	m_cmdBufferNames[1][cb_Deferred_GBuf]		= "Deferred_GBuf_1";
@@ -91,7 +85,7 @@ CRasterRender::~CRasterRender()
 	delete m_forwardPass;
 	delete m_skyboxDeferredPass;
 	delete m_skyboxForwardPass;
-	delete m_staticShadowPass;
+	delete m_shadowPass;
 
 	delete m_primaryDescriptors;
 	delete m_loadableAssets;
@@ -116,7 +110,8 @@ void CRasterRender::on_destroy()
 	m_forwardPass->Destroy();
 	m_skyboxDeferredPass->Destroy();
 	m_skyboxForwardPass->Destroy();
-	m_staticShadowPass->Destroy();
+	m_shadowPass->GetStaticShadowPrePass()->Destroy();
+	m_shadowPass->GetRayTraceShadowPass()->Destroy();
 
 	m_primaryDescriptors->Destroy(m_rhi);
 	m_loadableAssets->Destroy(m_rhi);
@@ -185,7 +180,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 	RETURN_FALSE_IF_FALSE(InitCamera());
 
 	m_rhi->SetRenderType(CVulkanRHI::RendererType::Deferred);
-	m_staticShadowPass->Enable(false);
+	m_shadowPass->GetStaticShadowPrePass()->Enable(false);
 	m_ssrComputePass->Enable(false);
 	m_taaComputePass->Enable(false);
 
@@ -238,12 +233,13 @@ bool CRasterRender::on_update(float delta)
 		uniformData->cameraPreViewProj				= m_primaryCamera->GetPreViewProj();
 		uniformData->mousePos						= nm::float2((float)mousepos_x, (float)mousepos_y);
 		uniformData->skyboxModelView				= m_primaryCamera->GetView();
+		uniformData->frameCount						= m_frameCount;
 
 		CPass::UpdateData updateData{};
 		updateData.sceneGraph						= m_sceneGraph;
 		updateData.uniformData						= uniformData;
 
-		m_staticShadowPass->Update(&updateData);
+		m_shadowPass->GetStaticShadowPrePass()->Update(&updateData);
 		m_skyboxForwardPass->Update(&updateData);
 		m_skyboxDeferredPass->Update(&updateData);
 		m_ssaoComputePass->Update(&updateData);
@@ -252,6 +248,7 @@ bool CRasterRender::on_update(float delta)
 		m_ssrBlurPass->Update(&updateData);
 		m_forwardPass->Update(&updateData);
 		m_deferredPass->Update(&updateData);
+		m_shadowPass->GetRayTraceShadowPass()->Update(&updateData);
 		m_deferredLightPass->Update(&updateData);
 		m_debugDrawPass->Update(&updateData);
 		m_toneMapPass->Update(&updateData);
@@ -448,9 +445,9 @@ bool CRasterRender::CreatePasses()
 	pipeline.cullMode						= VK_CULL_MODE_BACK_BIT;		// to fix peter-panning issue
 	pipeline.enableDepthTest				= true;
 	pipeline.enableDepthWrite				= true;
-	RETURN_FALSE_IF_FALSE(m_staticShadowPass->Initalize(&renderData, pipeline));
+	RETURN_FALSE_IF_FALSE(m_shadowPass->GetStaticShadowPrePass()->Initalize(&renderData, pipeline));
 	CVulkanRHI::VertexBinding vertexBindinginUse;
-	m_staticShadowPass->GetVertexBindingInUse(vertexBindinginUse);
+	m_shadowPass->GetStaticShadowPrePass()->GetVertexBindingInUse(vertexBindinginUse);
 
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= primaryAndSceneLayout;
@@ -486,6 +483,7 @@ bool CRasterRender::CreatePasses()
 	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Initalize(pipeline));
 	RETURN_FALSE_IF_FALSE(m_ssrComputePass->Initalize(pipeline));
 	RETURN_FALSE_IF_FALSE(m_ssrBlurPass->Initalize(pipeline));
+	RETURN_FALSE_IF_FALSE(m_shadowPass->GetRayTraceShadowPass()->Initalize(pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= debugLayout;
@@ -617,12 +615,12 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 	renderData.scIdx = m_swapchainIndex;
 	renderData.sceneGraph = m_sceneGraph;
 
-	if (m_staticShadowPass->IsEnabled() && !m_staticShadowPass->IsRTShadowEnabled())
+	if (m_shadowPass->GetStaticShadowPrePass()->IsEnabled() && !m_shadowPass->GetStaticShadowPrePass()->IsRTShadowEnabled())
 	{
 		//if (!m_staticShadowPass->ReuseShadowMap())
 		{
-			renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_ShadowMap];
-			RETURN_FALSE_IF_FALSE(m_staticShadowPass->Render(&renderData));
+			renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Shadows];
+			RETURN_FALSE_IF_FALSE(m_shadowPass->GetStaticShadowPrePass()->Render(&renderData));
 			m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 		}
 	}
@@ -645,6 +643,13 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 
 		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Deferred_GBuf];
 		RETURN_FALSE_IF_FALSE(m_deferredPass->Render(&renderData));
+		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
+	}
+
+	if (m_shadowPass->GetStaticShadowPrePass()->IsRTShadowEnabled())
+	{
+		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Shadows];
+		RETURN_FALSE_IF_FALSE(m_shadowPass->GetRayTraceShadowPass()->Dispatch(&renderData));
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 	}
 
@@ -716,7 +721,7 @@ When Scene bounds dont change
 	1. If the transform has been changed, it is labled as dirty
 	2. Update look from, yaw and pitch from trnsform
 	3. Recalculate the view and projection matrix
-	4. Eecalculate the Up vector
+	4. Calculate the Up vector
 
 When Scene bounds change
 	1. The camera is re-initialized with new scene bounding metrics. Their view and projection matrices are recalculated

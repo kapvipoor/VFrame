@@ -27,13 +27,15 @@ void main()
     float thickness = g_Info.ssrThickness;
 
     vec2 texSize = vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
-    vec2 texCoord = vec2(gl_GlobalInvocationID.xy)/texSize;
+    vec2 texCoord = vec2(gl_GlobalInvocationID.xy + 0.5)/texSize;
 
     vec3 uv = vec3(0.0);
 
     // This is the primary position from where a reflected ray is going to be launched off
     // This is in view space
-    vec4 positionFrom = texture(sampler2D(g_RT_SampledImages[SAMPLE_POSITION], g_LinearSampler), texCoord);
+    //vec4 positionFrom = texture(sampler2D(g_RT_SampledImages[SAMPLE_POSITION], g_LinearSampler), texCoord);
+    float sampleDepth = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), texCoord).x;
+	vec4 positionFrom = GetPositionfromDepth(texCoord, sampleDepth);
     
     // We are sampling the roughness map to not run SSR for pixels with max roughness values
     float roughness = imageLoad(g_RT_StorageImages[STORE_ROUGH_METAL], ivec2(gl_GlobalInvocationID.xy)).x;
@@ -105,7 +107,8 @@ void main()
         // At any given point, frag + increment can be out of [0, res]
         frag += increment;
         uv.xy = frag/texSize; // this is uv of the next position along the reflection line
-        positionTo = texture(sampler2D(g_RT_SampledImages[SAMPLE_POSITION], g_LinearSampler), uv.xy); // we have sampled the next position along the reflection line
+        float sampleDepth = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), uv.xy).x;
+	    positionTo = GetPositionfromDepth(uv.xy, sampleDepth);
 
         // since search 1 holds the value between start and end, we update search 1 to hold the pixels jumped
         // divided by total number of pixels to jump
@@ -157,7 +160,8 @@ void main()
         // and exactly between previous miss and current hit
         frag = mix(startFrag.xy, endFrag.xy, search1);
         uv.xy = frag/texSize;
-        positionTo = texture(sampler2D(g_RT_SampledImages[SAMPLE_POSITION], g_LinearSampler), uv.xy);
+        float sampleDepth = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_LinearSampler), uv.xy).x;
+	    positionTo = GetPositionfromDepth(uv.xy, sampleDepth);
         
         // Remember perspective magic to calculate the distance from the camera to the new point
         // However this magic isnt working? It is creating sme ghosting artifacts

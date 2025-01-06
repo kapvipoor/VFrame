@@ -1,11 +1,12 @@
 #include "Light.h"
 
-CLight::CLight(std::string p_name, Type p_type, float p_intensity, bool p_castShadow)
+CLight::CLight(std::string p_name, Type p_type, float p_intensity, bool p_castShadow, float p_coneAngle)
 	:CEntity(p_name)
 	, m_type(p_type)
 	, m_castShadow(p_castShadow)
 	, m_intensity(p_intensity)
 	, m_color(nm::float3(1.0f))
+	, m_coneAngle(p_coneAngle)
 {
 	m_transform.SetScale(nm::float3(m_intensity));
 }
@@ -20,16 +21,24 @@ void CLight::Show(CVulkanRHI* p_rhi)
 {
 	CEntity::Show(p_rhi);
 
+	float oldConeAngle = m_coneAngle;
+
 	ImGui::Indent();
 	ImGui::Text("Light Type: %s", (m_type == Type::Directional ? "Directional" : "Point"));
 	ImGui::Text("Cast Shadow: %s", (m_castShadow == true ? "true" : "false"));
 	ImGui::SliderFloat("Intensity", &m_intensity, 0.0f, 20.0f);
 	ImGui::InputFloat3("Color ", &m_color[0]);
+	ImGui::SliderFloat("Cone Angle", &m_coneAngle, 0.0f, (float)PI/8.0f);
 	ImGui::Unindent();
+
+	if (oldConeAngle != m_coneAngle)
+	{
+		CEntity::m_dirty = true;
+	}
 }
 
-CDirectionaLight::CDirectionaLight(std::string p_name, bool p_castShadow, nm::float3 p_direction, float p_intensity, nm::float3 color)
-	:CLight(p_name, Type::Directional, p_intensity, p_castShadow)
+CDirectionaLight::CDirectionaLight(std::string p_name, bool p_castShadow, nm::float3 p_direction, float p_intensity, nm::float3 color, float p_coneAngle)
+	:CLight(p_name, Type::Directional, p_intensity, p_castShadow, p_coneAngle)
 	, m_direction(p_direction)
 {
 	m_color = color;
@@ -153,8 +162,8 @@ Update - Guizmo interaction with Directional Light
 3. Apply transform to shadow camera
 */
 
-CPointLight::CPointLight(std::string p_name, bool p_castShadow, nm::float3 p_position, float intensity, nm::float3 color)
-	: CLight(p_name, Type::Point, intensity, p_castShadow)
+CPointLight::CPointLight(std::string p_name, bool p_castShadow, nm::float3 p_position, float intensity, nm::float3 color, float p_coneAngle)
+	: CLight(p_name, Type::Point, intensity, p_castShadow, p_coneAngle)
 	, m_position(p_position)
 {
 	CEntity::m_transform.SetTranslate(nm::float4(p_position, 1.0f));
@@ -223,10 +232,10 @@ void CPointLight::Show(CVulkanRHI* p_rhi)
 CLights::CLights()
 	: m_isDirty(false)
 {
-	CreateLight(CLight::Type::Directional, "Sunlight", true, nm::float3(1.0f, 1.0f, 0.99f), 10.0f, nm::float3(0.0f, 1.0f, 0.0f));
-	CreateLight(CLight::Type::Point, "PointLight_A", false, nm::float3(1.0f, 1.0f, 0.0f), 1.0f, nm::float3(0.0f, 0.0f, 0.0f));
-	CreateLight(CLight::Type::Point, "PointLight_B", false, nm::float3(0.0f, 1.0f, 1.0f), 1.0f, nm::float3(1.0f, 0.0f, 0.0f));
-	CreateLight(CLight::Type::Point, "PointLight_C", false, nm::float3(1.0f, 0.0f, 1.0f), 1.0f, nm::float3(0.0f, 0.0f, 1.0f));
+	CreateLight(CLight::Type::Directional, "Sunlight", true, nm::float3(1.0f, 1.0f, 0.99f), 10.0f, nm::float3(0.0f, 1.0f, 0.0f), 0.0f);
+	CreateLight(CLight::Type::Point, "PointLight_A", true, nm::float3(1.0f, 1.0f, 0.0f), 1.0f, nm::float3(0.0f, 0.0f, 0.0f), 0.0f);
+	CreateLight(CLight::Type::Point, "PointLight_B", true, nm::float3(0.0f, 1.0f, 1.0f), 1.0f, nm::float3(1.0f, 0.0f, 0.0f), 0.0f);
+	CreateLight(CLight::Type::Point, "PointLight_C", true, nm::float3(1.0f, 0.0f, 1.0f), 1.0f, nm::float3(0.0f, 0.0f, 1.0f), 0.0f);
 }
 
 CLights::~CLights()
@@ -248,6 +257,7 @@ void CLights::Update(const CCamera::UpdateData& p_updateData, const CSceneGraph*
 				static_cast<CDirectionaLight*>(light)->GetDirection() :
 				static_cast<CPointLight*>(light)->GetPosition();
 
+			m_rawGPUData[i].coneAngle = light->GetConeAngle();
 			m_rawGPUData[i].intensity = light->GetIntensity();
 			std::copy(std::begin(vector3.data), std::end(vector3.data), std::begin(m_rawGPUData[i].vector3));
 
@@ -266,7 +276,8 @@ void CLights::Update(const CCamera::UpdateData& p_updateData, const CSceneGraph*
 	}
 }
 
-void CLights::CreateLight(CLight::Type p_type, const char* p_name, bool p_castShadow, nm::float3 p_color, float p_intensity, nm::float3 p_vector3)
+void CLights::CreateLight(CLight::Type p_type, const char* p_name, bool p_castShadow, 
+	nm::float3 p_color, float p_intensity, nm::float3 p_vector3, float p_coneAngle)
 {
 	CLight* light = nullptr;
 	COrthoCamera::OrthInitdData oData{};
@@ -275,12 +286,12 @@ void CLights::CreateLight(CLight::Type p_type, const char* p_name, bool p_castSh
 	switch (p_type)
 	{
 	case CLight::Type::Directional:
-		light = new CDirectionaLight(p_name, p_castShadow, p_vector3 /*direction*/, p_intensity, p_color);
+		light = new CDirectionaLight(p_name, p_castShadow, p_vector3 /*direction*/, p_intensity, p_color, p_coneAngle);
 		light->Init(oData);
 		break;
 
 	case CLight::Type::Point:
-		light = new CPointLight(p_name, p_castShadow, p_vector3 /*position*/, p_intensity, p_color);
+		light = new CPointLight(p_name, p_castShadow, p_vector3 /*position*/, p_intensity, p_color, p_coneAngle);
 		light->Init(pData);
 		break;
 
@@ -297,6 +308,7 @@ void CLights::CreateLight(CLight::Type p_type, const char* p_name, bool p_castSh
 	LightGPUData gpuData{};
 	gpuData.type_castShadow = ((uint32_t)light->GetType() << 16) | (uint32_t)(light->IsCastsShadow());
 	gpuData.intensity = p_intensity;
+	gpuData.coneAngle = light->GetConeAngle();
 	std::copy(std::begin(p_color.data), std::end(p_color.data), std::begin(gpuData.color));
 	std::copy(std::begin(p_vector3.data), &p_vector3[3], std::begin(gpuData.vector3));
 	std::copy(&identity[0], &identity[16], std::begin(gpuData.viewProj));

@@ -28,7 +28,7 @@ public:
 private:
 	enum CommandBufferId
 	{
-		  cb_ShadowMap				= 0
+		  cb_Shadows				= 0
 		, cb_SSAO					= 1
 		, cb_Forward				= 2
 		, cb_Deferred_GBuf			= 3
@@ -51,7 +51,7 @@ private:
 	};
 
 	uint32_t							m_swapchainIndex;
-	uint64_t							m_frameCount;
+	uint32_t							m_frameCount;
 
 	VkSemaphore							m_activeAcquireSemaphore;
 	VkSemaphore							m_vkswapchainAcquireSemaphore[FRAME_BUFFER_COUNT];
@@ -75,7 +75,7 @@ private:
 	CPrimaryDescriptors*				m_primaryDescriptors;
 	CSceneGraph*						m_sceneGraph;
 
-	CStaticShadowPrepass*				m_staticShadowPass;
+	CShadowPass*						m_shadowPass;
 	CSkyboxPass*						m_skyboxForwardPass;
 	CSkyboxDeferredPass*				m_skyboxDeferredPass;
 	CForwardPass*						m_forwardPass;

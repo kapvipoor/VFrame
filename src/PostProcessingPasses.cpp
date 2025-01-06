@@ -259,7 +259,7 @@ CTAAComputePass::CJitterHelper::CJitterHelper(JitterMode p_jitterMode)
 {
 }
 
-nm::float4x4 CTAAComputePass::CJitterHelper::ComputeJitter(const uint64_t p_frameCount)
+nm::float4x4 CTAAComputePass::CJitterHelper::ComputeJitter(const uint32_t p_frameCount)
 {
     if (m_jitterMode == JitterMode::None)
     {
@@ -272,17 +272,17 @@ nm::float4x4 CTAAComputePass::CJitterHelper::ComputeJitter(const uint64_t p_fram
     }
     else if (m_jitterMode == JitterMode::Hammersley4x)
     {
-        uint64_t idx = p_frameCount % 4;
+        uint32_t idx = p_frameCount % 4;
         m_jitterOffset = Hammersley2D(idx, 4) * 2.0f - nm::float2(1.0f);
     }
     else if (m_jitterMode == JitterMode::Hammersley8x)
     {
-        uint64_t idx = p_frameCount % 8;
+        uint32_t idx = p_frameCount % 8;
         m_jitterOffset = Hammersley2D(idx, 8) * 2.0f - nm::float2(1.0f);
     }
     else if (m_jitterMode == JitterMode::Hammersley16x)
     {
-        uint64_t idx = p_frameCount % 16;
+        uint32_t idx = p_frameCount % 16;
         m_jitterOffset = Hammersley2D(idx, 16) * 2.0f - nm::float2(1.0f);
     }
 
@@ -300,7 +300,7 @@ nm::float4x4 CTAAComputePass::CJitterHelper::ComputeJitter(const uint64_t p_fram
     return jitterMat.GetTransform();
 }
 
-inline nm::float2 CTAAComputePass::CJitterHelper::Hammersley2D(uint64_t p_sampleIdx, uint64_t p_numSamples)
+inline nm::float2 CTAAComputePass::CJitterHelper::Hammersley2D(uint32_t p_sampleIdx, uint32_t p_numSamples)
 {
     return nm::float2(float(p_sampleIdx) / float(p_numSamples), RadicalInverseBase2(uint32_t(p_sampleIdx)));
 }

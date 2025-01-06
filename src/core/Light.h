@@ -53,7 +53,7 @@ public:
 		, Point
 	};
 
-	CLight(std::string p_name, Type p_type, float p_intensity, bool p_castShadow);
+	CLight(std::string p_name, Type p_type, float p_intensity, bool p_castShadow, float p_coneAngle);
 	~CLight() {};
 
 	virtual bool Init(const CCamera::InitData&) = 0;
@@ -66,6 +66,7 @@ public:
 	bool IsCastsShadow() { return m_castShadow; }
 	nm::float3 GetColor() { return m_color; }
 	float GetIntensity() { return m_intensity; }
+	float GetConeAngle() { return m_coneAngle; }
 
 	void SetId(uint32_t id) { m_id = id; }
 	uint32_t GetId() { return m_id; }
@@ -76,12 +77,13 @@ protected:
 	bool m_castShadow;
 	nm::float3 m_color;
 	float m_intensity;
+	float m_coneAngle;	// If cone angle is 0, the light source will not have penumbra
 };
 
 class CDirectionaLight : public CLight
 {
 public:
-	CDirectionaLight(std::string p_name, bool p_castShadow, nm::float3 p_direction, float intensity, nm::float3 color);
+	CDirectionaLight(std::string p_name, bool p_castShadow, nm::float3 p_direction, float intensity, nm::float3 color, float p_coneAngle);
 	~CDirectionaLight();
 
 	virtual bool Init(const CCamera::InitData&) override;
@@ -101,7 +103,7 @@ private:
 class CPointLight : public CLight
 {
 public:
-	CPointLight(std::string p_name, bool p_castShadow, nm::float3 p_position, float intensity, nm::float3 color);
+	CPointLight(std::string p_name, bool p_castShadow, nm::float3 p_position, float intensity, nm::float3 color, float p_coneAngle);
 	~CPointLight();
 
 	virtual bool Init(const CCamera::InitData&) override;
@@ -114,7 +116,6 @@ public:
 	nm::float3 GetPosition() { return m_position; }
 
 private:
-	//CPerspectiveCamera m_camera[6];
 	nm::float3 m_position;
 };
 
@@ -128,13 +129,15 @@ public:
 		float intensity;
 		float vector3[3];
 		float viewProj[16];
+		float coneAngle;
 	};
 
 	CLights();
 	~CLights();
 
 	void Update(const CCamera::UpdateData& p_updateData, const CSceneGraph*);
-	void CreateLight(CLight::Type p_type, const char* p_name, bool p_castShadow, nm::float3 p_color, float p_intensity, nm::float3 p_position);
+	void CreateLight(CLight::Type p_type, const char* p_name, bool p_castShadow, 
+		nm::float3 p_color, float p_intensity, nm::float3 p_position, float p_coneAngle);
 	void DestroyLights();
 
 	bool IsDirty() { return m_isDirty; }

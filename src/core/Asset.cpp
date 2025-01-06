@@ -2015,6 +2015,7 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"ss_reflection",		sample_storage_color_dest));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSRBlur,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"ssr_blur",				sample_storage_color_src_dest));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Prev_PrimaryColor,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"prev_primary_color",	sample_storage_color_dest));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RTShadowTemporalAcc,		VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"rt_shadow_denoise",	sample_storage_color));
 
 	return true;
 }
@@ -2070,11 +2071,11 @@ std::string CRenderTargets::GetRenderTargetIDinString(RenderTargetId p_id)
 	else if (p_id == CRenderTargets::RenderTargetId::rt_Albedo)
 		return "Albedo";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_SSAO_Blur)
-		return "SSAO_Motion";
+		return "SSAO and Blur";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_DirectionalShadowDepth)
-		return "DirectionalShadowDepth";
+		return "Directional Shadow Depth";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_PrimaryColor)
-		return "PrimaryColor";
+		return "Primary Color";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_RoughMetal)
 		return "Rough Metal";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_Motion)
@@ -2085,6 +2086,8 @@ std::string CRenderTargets::GetRenderTargetIDinString(RenderTargetId p_id)
 		return "Previous Color (Temporal)";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_SSRBlur)
 		return "SSR Blur";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_RTShadowTemporalAcc)
+		return "RT Shadows Temporal Accumulation";
 	else
 		return "Error Render Target";
 }
@@ -2097,7 +2100,7 @@ CFixedBuffers::CFixedBuffers()
 	m_primaryUniformData.ssaoNoiseScale         = nm::float2((float)RENDER_RESOLUTION_X / 4.0f, (float)RENDER_RESOLUTION_Y / 4.0f);
 	m_primaryUniformData.ssaoRadius				= 0.5f;
 	m_primaryUniformData.enable_Shadow_RT_PCF	= 0;
-	m_primaryUniformData.UNASSIGNED_float0		= 0;
+	m_primaryUniformData.frameCount				= 0;
 	m_primaryUniformData.enableIBL				= 0;
 	m_primaryUniformData.pbrAmbientFactor		= 0.05f;
 	m_primaryUniformData.enableSSAO				= 1;
@@ -2241,7 +2244,7 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	uniformValues.push_back((float)m_primaryUniformData.ssaoKernelSize);																					// SSAO kernel size
 	uniformValues.push_back((float)m_primaryUniformData.ssaoRadius);																						// SSAO radius
 	uniformValues.push_back((float)m_primaryUniformData.enable_Shadow_RT_PCF);																				// Packed Enable Shadow << (RT vs Raster) << PCF
-	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float0);																					// UNASSIGINED_0
+	uniformValues.push_back((float)m_primaryUniformData.frameCount);																						// Frame Count
 	uniformValues.push_back((float)m_primaryUniformData.enableIBL);																							// enable IBL
 	uniformValues.push_back(m_primaryUniformData.pbrAmbientFactor);																							// PBR Ambient Factor
 	uniformValues.push_back((float)m_primaryUniformData.enableSSAO);																						// enable SSAO
@@ -2374,6 +2377,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 		storeRenderTargetsDesInfoList[STORE_SS_REFLECTION]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSReflection).descInfo;
 		storeRenderTargetsDesInfoList[STORE_SSR_BLUR]				= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSRBlur).descInfo;
 		storeRenderTargetsDesInfoList[STORE_PREV_PRIMARY_COLOR]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Prev_PrimaryColor).descInfo;
+		storeRenderTargetsDesInfoList[STORE_RT_SHADOW_TEMPORAL_ACC]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_RTShadowTemporalAcc).descInfo;
 	}
 
 	// read only texture desc info

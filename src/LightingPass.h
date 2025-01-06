@@ -83,27 +83,56 @@ private:
 
 };
 
-class CStaticShadowPrepass : public CStaticRenderPass, CUIParticipant
+class CShadowPass : public CUIParticipant
 {
 public:
-	CStaticShadowPrepass(CVulkanRHI*);
-	~CStaticShadowPrepass();
+	class CStaticShadowPrepass : public CStaticRenderPass
+	{
+		friend CShadowPass;
+	public:
+		CStaticShadowPrepass(CVulkanRHI*);
+		~CStaticShadowPrepass();
 
-	virtual bool CreateRenderpass(RenderData*) override;
-	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
+		virtual bool CreateRenderpass(RenderData*) override;
+		virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
 
-	virtual bool Update(UpdateData*) override;
-	virtual bool Render(RenderData*) override;
+		virtual bool Update(UpdateData*) override;
+		virtual bool Render(RenderData*) override;
+
+		virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+
+		bool ReuseShadowMap() { return m_bReuseShadowMap; }
+		bool IsRTShadowEnabled() { return m_enableRayTracedShadow; }
+
+	private:
+		bool m_enableRayTracedShadow;
+		bool m_enablePCF;
+		bool m_bReuseShadowMap;
+	};
+
+	class CRayTraceShadowPass : public CComputePass
+	{
+		friend CShadowPass;
+	public:
+		CRayTraceShadowPass(CVulkanRHI*);
+		~CRayTraceShadowPass();
+
+		virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
+
+		virtual bool Update(UpdateData*) override;
+		virtual bool Dispatch(RenderData*) override;
+	private:
+	};
+
+	CShadowPass(CVulkanRHI*);
+	~CShadowPass();
 
 	virtual void Show(CVulkanRHI* p_rhi) override;
 
-	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
-
-	bool ReuseShadowMap() { return m_bReuseShadowMap; }
-	bool IsRTShadowEnabled() { return m_enableRayTracedShadow; }
+	CStaticShadowPrepass* GetStaticShadowPrePass() { return m_staticShadowPass; }
+	CRayTraceShadowPass* GetRayTraceShadowPass() { return m_rayTraceShadowpass; }
 
 private:
-	bool m_enableRayTracedShadow;
-	bool m_enablePCF;
-	bool m_bReuseShadowMap;
+	CStaticShadowPrepass* m_staticShadowPass;
+	CRayTraceShadowPass* m_rayTraceShadowpass;
 };
