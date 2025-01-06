@@ -121,7 +121,9 @@ public:
 
 		virtual bool Update(UpdateData*) override;
 		virtual bool Dispatch(RenderData*) override;
+		
 	private:
+		float m_temporalAccumWeight;
 	};
 
 	CShadowPass(CVulkanRHI*);

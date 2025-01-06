@@ -608,10 +608,15 @@ void CShadowPass::Show(CVulkanRHI* p_rhi)
 		int featureState = (int)m_staticShadowPass->m_enableRayTracedShadow;
 		ImGui::ListBox("Feature ", &featureState, items, IM_ARRAYSIZE(items), 2);
 		m_staticShadowPass->m_enableRayTracedShadow = (bool)featureState;
-
-		// This is a rasterized shadow map feature
-		if (!m_staticShadowPass->m_enableRayTracedShadow)
+				
+		if (m_staticShadowPass->m_enableRayTracedShadow)
+		{
+			ImGui::SliderFloat("Temporal Accumulation Weight", &m_rayTraceShadowpass->m_temporalAccumWeight, 0.0f, 1.0f);
+		}
+		else // This is a rasterized shadow map feature
+		{
 			ImGui::Checkbox("Rasterized PCF", &m_staticShadowPass->m_enablePCF);
+		}
 
 		ImGui::TreePop();
 	}
@@ -785,6 +790,7 @@ void CShadowPass::CStaticShadowPrepass::GetVertexBindingInUse(CVulkanCore::Verte
 
 CShadowPass::CRayTraceShadowPass::CRayTraceShadowPass(CVulkanRHI* p_rhi)
 	: CComputePass(p_rhi)
+	, m_temporalAccumWeight(0.3f)
 {
 }
 
@@ -803,8 +809,9 @@ bool CShadowPass::CRayTraceShadowPass::CreatePipeline(CVulkanRHI::Pipeline p_pip
 	return true;
 }
 
-bool CShadowPass::CRayTraceShadowPass::Update(UpdateData*)
+bool CShadowPass::CRayTraceShadowPass::Update(UpdateData* p_updateData)
 {
+	p_updateData->uniformData->shadowTemporalAccumWeight = m_temporalAccumWeight;
 	return true;
 }
 

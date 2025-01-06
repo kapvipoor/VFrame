@@ -23,6 +23,7 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 	float	ssaoKernelSize;
 	float	ssaoRadius;
 	float	enable_Shadow_RT_PCF;
+	float	shadowTempAccumWeight;
 	uint	frameCount;
 	float 	enableIBL;
 	float 	pbrAmbientFactor;

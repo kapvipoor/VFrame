@@ -232,6 +232,7 @@ public:
 		float						ssaoKernelSize;
 		float						ssaoRadius;
 		uint32_t					enable_Shadow_RT_PCF;
+		float						shadowTemporalAccumWeight;
 		uint32_t					frameCount;
 		int							enableIBL;
 		float						pbrAmbientFactor;
@@ -247,7 +248,6 @@ public:
 		float						taaFlickerCorectionMode;
 		float						taaReprojectionFilter;
 		float						toneMappingExposure;
-		float						UNASSIGNED_float1;
 		float						UNASSIGNED_float2;
 	};
 

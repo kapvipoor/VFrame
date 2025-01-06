@@ -17,9 +17,6 @@
 layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) in;
 void main()
 {
-	// Temporal Accumulation Weight
-	float alpha = 0.3;
-
 	// the the depth value of the fragment in NDC is calculated and 
 	// checked if it is within the far plane at 1.0. If it is, compute 
 	// the shadow
@@ -80,7 +77,7 @@ void main()
 					curShadow = 1.0 - TraceRay(fragPosWS.xyz, LDirWS.xyz, distWS);	
 				}
 			}
-			shadowsOut[i] = mix(shadowsOut[i], curShadow, alpha);
+			shadowsOut[i] = mix(shadowsOut[i], curShadow, g_Info.shadowTempAccumWeight);
 		}
 	}
 	

@@ -2116,7 +2116,7 @@ CFixedBuffers::CFixedBuffers()
 	m_primaryUniformData.taaReprojectionFilter	= 0;		// Standard
 	m_primaryUniformData.toneMappingSelection	= 0.0f;
 	m_primaryUniformData.toneMappingExposure	= 1.0f;
-	m_primaryUniformData.UNASSIGNED_float1		= 0.0f;
+	m_primaryUniformData.shadowTemporalAccumWeight = 0.0f;
 	m_primaryUniformData.UNASSIGNED_float2		= 0.0f;
 }
 
@@ -2143,7 +2143,8 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(float) * 1)				// SSAO Kernel Size
 		+ (sizeof(float) * 1)				// SSAO Radius
 		+ (sizeof(uint32_t) * 1)			// Packed Enable Shadow << (RT vs Raster) << PCF
-		+ (sizeof(float) * 1)				// UNASSIGINED_Float_1
+		+ (sizeof(float) * 1)				// Ray traced Shadows Temporal Accumulation Weight
+		+ (sizeof(float) * 1)				// Frame Count
 		+ (sizeof(float) * 1)				// Enable IBL
 		+ (sizeof(float) * 1)				// PBR ambient Factor
 		+ (sizeof(int) * 1)					// enable SSAO
@@ -2158,7 +2159,6 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(float) * 1)				// TAA Flicker Correction Mode
 		+ (sizeof(float) * 1)				// TAA Re-projection Filter
 		+ (sizeof(float) * 1)				// Tone Mapping Exposure
-		+ (sizeof(float) * 1)				// UNASSIGINED_Float_1
 		+ (sizeof(float) * 1);				// UNASSIGINED_Float_2
 		
 
@@ -2244,6 +2244,7 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	uniformValues.push_back((float)m_primaryUniformData.ssaoKernelSize);																					// SSAO kernel size
 	uniformValues.push_back((float)m_primaryUniformData.ssaoRadius);																						// SSAO radius
 	uniformValues.push_back((float)m_primaryUniformData.enable_Shadow_RT_PCF);																				// Packed Enable Shadow << (RT vs Raster) << PCF
+	uniformValues.push_back((float)m_primaryUniformData.shadowTemporalAccumWeight);																			// Packed Enable Shadow << (RT vs Raster) << PCF	
 	uniformValues.push_back((float)m_primaryUniformData.frameCount);																						// Frame Count
 	uniformValues.push_back((float)m_primaryUniformData.enableIBL);																							// enable IBL
 	uniformValues.push_back(m_primaryUniformData.pbrAmbientFactor);																							// PBR Ambient Factor
@@ -2259,7 +2260,6 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	uniformValues.push_back((float)m_primaryUniformData.taaFlickerCorectionMode);																			// TAA Flicker Correction Mode
 	uniformValues.push_back((float)m_primaryUniformData.taaReprojectionFilter);																				// TAA Re-projection Filter
 	uniformValues.push_back(m_primaryUniformData.toneMappingExposure);																						// Tone Mapping Exposure
-	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float1);																					// UNASSIGINED_1
 	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float2);																					// UNASSIGINED_2
 	
 	uint8_t* data							= (uint8_t*)(uniformValues.data());
