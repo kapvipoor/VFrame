@@ -190,7 +190,8 @@ public:
 
 	void DestroyTextures(CVulkanRHI* p_rhi);
 
-	void IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id, int p_mipLevel = -1);
+	void IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, const CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id, int p_mipLevel = -1);
+	void IssueMemoryBarrier(CVulkanRHI* p_rhi, VkAccessFlags p_srcAcc, VkAccessFlags p_dstAcc, VkPipelineStageFlags p_scrStg, VkPipelineStageFlags p_destStg, const CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id);
 
 	const CVulkanRHI::Image& GetTexture(uint32_t p_id) { return m_textures[p_id]; }
 	const CVulkanRHI::Image GetTexture(uint32_t p_id) const { return m_textures[p_id]; }
@@ -290,6 +291,7 @@ public:
 		, rt_SSRBlur				= 10	// Blurred Screen Space Reflection (for rough surfaces)
 		, rt_Prev_PrimaryColor		= 11	// Previous frame's color target (done post tone mapping)
 		, rt_RTShadowTemporalAcc	= 12	// Temporal Accumulated ray traced shadows (4 count - 1 directional + 3 point)
+		, rt_RTShadowDenoise		= 13	// Denoised ray traces shadows (4 count - 1 directional + 3 point)
 		, rt_max
 	};
 

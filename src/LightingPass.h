@@ -126,6 +126,21 @@ public:
 		float m_temporalAccumWeight;
 	};
 
+	class CShadowDenoisePass : public CComputePass
+	{
+		friend CShadowPass;
+	public:
+		CShadowDenoisePass(CVulkanRHI*);
+		~CShadowDenoisePass();
+
+		virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
+
+		virtual bool Update(UpdateData*) override;
+		virtual bool Dispatch(RenderData*) override;
+
+	private:
+	};
+
 	CShadowPass(CVulkanRHI*);
 	~CShadowPass();
 
@@ -133,8 +148,10 @@ public:
 
 	CStaticShadowPrepass* GetStaticShadowPrePass() { return m_staticShadowPass; }
 	CRayTraceShadowPass* GetRayTraceShadowPass() { return m_rayTraceShadowpass; }
+	CShadowDenoisePass* GetShadowDenoisePass() { return m_shadowDenoisePass; }
 
 private:
 	CStaticShadowPrepass* m_staticShadowPass;
 	CRayTraceShadowPass* m_rayTraceShadowpass;
+	CShadowDenoisePass* m_shadowDenoisePass;
 };

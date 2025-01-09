@@ -39,7 +39,6 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 	float	taaFlickerCorrectionMode;
 	float	taaReprojectionFilter;
 	float	toneMappingExposure;
-	float	UNASSIGINED_Float1;
 	float	UNASSIGINED_Float2;
 } g_Info;
 

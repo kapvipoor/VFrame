@@ -112,6 +112,7 @@ void CRasterRender::on_destroy()
 	m_skyboxForwardPass->Destroy();
 	m_shadowPass->GetStaticShadowPrePass()->Destroy();
 	m_shadowPass->GetRayTraceShadowPass()->Destroy();
+	m_shadowPass->GetShadowDenoisePass()->Destroy();
 
 	m_primaryDescriptors->Destroy(m_rhi);
 	m_loadableAssets->Destroy(m_rhi);
@@ -167,6 +168,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSReflection);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Prev_PrimaryColor);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSRBlur);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_RTShadowDenoise);
 		
 		RETURN_FALSE_IF_FALSE(m_rhi->EndCommandBuffer(m_vkCmdBfr[0][0]));
 
@@ -249,6 +251,7 @@ bool CRasterRender::on_update(float delta)
 		m_forwardPass->Update(&updateData);
 		m_deferredPass->Update(&updateData);
 		m_shadowPass->GetRayTraceShadowPass()->Update(&updateData);
+		m_shadowPass->GetShadowDenoisePass()->Update(&updateData);
 		m_deferredLightPass->Update(&updateData);
 		m_debugDrawPass->Update(&updateData);
 		m_toneMapPass->Update(&updateData);
@@ -492,6 +495,7 @@ bool CRasterRender::CreatePasses()
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= primaryLayout;
 	RETURN_FALSE_IF_FALSE(m_toneMapPass->Initalize(&renderData, pipeline));
+	RETURN_FALSE_IF_FALSE(m_shadowPass->GetShadowDenoisePass()->Initalize(pipeline));	
 
 	pipeline = CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout = primaryLayout;
@@ -650,6 +654,9 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 	{
 		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Shadows];
 		RETURN_FALSE_IF_FALSE(m_shadowPass->GetRayTraceShadowPass()->Dispatch(&renderData));
+		
+		renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_Shadows];
+		RETURN_FALSE_IF_FALSE(m_shadowPass->GetShadowDenoisePass()->Dispatch(&renderData));
 		m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 	}
 

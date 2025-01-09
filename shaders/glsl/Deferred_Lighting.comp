@@ -56,7 +56,7 @@ void main()
 		// As light color is over 1, the result will be over 1, hence will need tone mapping
 		vec3 lightColor	= vec3(light.color[0], light.color[1], light.color[2]);
 		vec3 L = vec3(0.0f);    
-		vec4 sampleShadow = imageLoad(g_RT_StorageImages[STORE_RT_SHADOW_TEMPORAL_ACC], xy).xyzw;
+		vec4 sampleShadow = imageLoad(g_RT_StorageImages[STORE_RT_SHADOW_DENOISE], xy).xyzw;
 		 if(lightType == DIRECTIONAL_LIGHT_TYPE)
 		 {
 		 	// L in View Space

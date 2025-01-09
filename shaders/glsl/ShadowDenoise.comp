@@ -1,0 +1,23 @@
+#version 460
+
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_ARB_shading_language_420pack : enable
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_nonuniform_qualifier : require
+
+#include "Common.h"
+#include "DenoiseCommon.h"
+
+layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) in;
+void main()
+{
+	ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
+	vec2 uv = xy/vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
+	float shouldDenoise = imageLoad(g_RT_StorageImages[STORE_RT_SHADOW_DENOISE], xy).x;
+	vec4 outColor = texture(sampler2D(g_RT_SampledImages[SAMPLE_RT_SHADOW_TEMPORAL_ACC], g_NearestSampler), uv).rgba;
+	if(shouldDenoise == 1.0)
+	{
+		outColor = BilateralFilter(g_RT_SampledImages[SAMPLE_RT_SHADOW_TEMPORAL_ACC], g_NearestSampler, xy, outColor);
+	}
+	imageStore(g_RT_StorageImages[STORE_RT_SHADOW_DENOISE], xy, outColor); 
+}

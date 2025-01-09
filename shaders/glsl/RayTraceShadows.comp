@@ -21,6 +21,7 @@ void main()
 	// checked if it is within the far plane at 1.0. If it is, compute 
 	// the shadow
 	vec4 shadowsOut = vec4(0);
+	int shoudlDenoise = 0;
 
 	ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
 	vec2 sampleUV = vec2(gl_GlobalInvocationID.xy + 0.5) / vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
@@ -40,9 +41,9 @@ void main()
 		Light light = g_lights.lights[i];
 		uint lightType = light.type_castShadow >> 16;
 		uint castShadow = light.type_castShadow - (lightType << 16);
-			if(castShadow == 1)
+		if(castShadow == 1)
 		{
-			float curShadow = 0.0;				
+			int curShadow = 0;				
 			if(lightType == DIRECTIONAL_LIGHT_TYPE)
 			{
 				vec4 LDirWS = vec4(light.vector3[0], light.vector3[1], light.vector3[2], 0.0f);
@@ -50,7 +51,7 @@ void main()
 				{
 					LDirWS.xyz = getConeSample(seed, LDirWS.xyz, light.coneAngle);
 				}					
-				curShadow = 1.0 - TraceRay(fragPosWS.xyz, LDirWS.xyz, 1e3);
+				curShadow = TraceRay(fragPosWS.xyz, LDirWS.xyz, 1e3);
 			}
 			else if (lightType == POINT_LIGHT_TYPE)
 			{
@@ -74,12 +75,14 @@ void main()
 					{
 						LDirWS.xyz = getConeSample(seed, LDirWS.xyz, light.coneAngle);
 					}						
-					curShadow = 1.0 - TraceRay(fragPosWS.xyz, LDirWS.xyz, distWS);	
+					curShadow = TraceRay(fragPosWS.xyz, LDirWS.xyz, distWS);	
 				}
 			}
-			shadowsOut[i] = mix(shadowsOut[i], curShadow, g_Info.shadowTempAccumWeight);
+			shadowsOut[i] = mix(curShadow, shadowsOut[i], g_Info.shadowTempAccumWeight);
+			shoudlDenoise += ((shadowsOut[i] < (999*1e-3) && shadowsOut[i] > (1e-6)) ? 1 : 0) * int(pow(2, i));
 		}
 	}
 	
    	imageStore(g_RT_StorageImages[STORE_RT_SHADOW_TEMPORAL_ACC], xy, shadowsOut); 
+	imageStore(g_RT_StorageImages[STORE_RT_SHADOW_DENOISE], xy, vec4(shoudlDenoise, 0, 0, 1.0)); 
 }	

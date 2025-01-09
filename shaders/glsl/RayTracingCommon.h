@@ -7,13 +7,13 @@
 // shader that might* indirectly include RayTracingCommon.h
 layout(set = 1, binding = 6) uniform accelerationStructureEXT g_TLAS;
 
-float TraceRay(vec3 origin, vec3 direction, float rayLength)
+int TraceRay(vec3 origin, vec3 direction, float rayLength)
 {
 	rayQueryEXT rq;
 	rayQueryInitializeEXT(rq, g_TLAS, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullNoOpaqueEXT, 
 	0xff, origin, 1e-1, direction, rayLength);
 	rayQueryProceedEXT(rq);
-	return (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT) ? 0.0 : 1.0;
+	return (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT) ? 1 : 0;
 }
 
 // Generates a seed for a random number generator from 2 inputs plus a backoff

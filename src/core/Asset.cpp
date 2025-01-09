@@ -437,9 +437,17 @@ bool CTextures::CreateCubemap(CVulkanRHI* p_rhi, CVulkanRHI::Buffer& p_stg, Imag
 	return true;
 }
 
-void CTextures::IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id, int p_mipLevel)
+void CTextures::IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, const CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id, int p_mipLevel)
 {
 	p_rhi->IssueLayoutBarrier(p_imageLayout, m_textures[p_id], p_cmdBfr, p_mipLevel);
+}
+
+void CTextures::IssueMemoryBarrier(CVulkanRHI* p_rhi, 
+	VkAccessFlags p_srcAcc, VkAccessFlags p_dstAcc, 
+	VkPipelineStageFlags p_scrStg, VkPipelineStageFlags p_destStg, 
+	const CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id)
+{
+	p_rhi->IssueMemoryBarrier(p_srcAcc, p_dstAcc, p_scrStg, p_destStg, m_textures[p_id], p_cmdBfr);
 }
 
 void CTextures::PushBackPreLoadedTexture(uint32_t p_texIndex)
@@ -2015,7 +2023,8 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"ss_reflection",		sample_storage_color_dest));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSRBlur,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"ssr_blur",				sample_storage_color_src_dest));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Prev_PrimaryColor,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"prev_primary_color",	sample_storage_color_dest));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RTShadowTemporalAcc,		VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"rt_shadow_denoise",	sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RTShadowTemporalAcc,		VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"rt_shadow_temp_acc",	sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RTShadowDenoise,			VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"rt_shadow_denoise",	sample_storage_color));
 
 	return true;
 }
@@ -2088,6 +2097,8 @@ std::string CRenderTargets::GetRenderTargetIDinString(RenderTargetId p_id)
 		return "SSR Blur";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_RTShadowTemporalAcc)
 		return "RT Shadows Temporal Accumulation";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_RTShadowDenoise)
+		return "RT Shadows Denoise";
 	else
 		return "Error Render Target";
 }
@@ -2378,6 +2389,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 		storeRenderTargetsDesInfoList[STORE_SSR_BLUR]				= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSRBlur).descInfo;
 		storeRenderTargetsDesInfoList[STORE_PREV_PRIMARY_COLOR]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Prev_PrimaryColor).descInfo;
 		storeRenderTargetsDesInfoList[STORE_RT_SHADOW_TEMPORAL_ACC]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_RTShadowTemporalAcc).descInfo;
+		storeRenderTargetsDesInfoList[STORE_RT_SHADOW_DENOISE]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_RTShadowDenoise).descInfo;
 	}
 
 	// read only texture desc info

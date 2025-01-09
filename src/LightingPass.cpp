@@ -586,13 +586,18 @@ void CSkyboxDeferredPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_ve
 
 CShadowPass::CShadowPass(CVulkanRHI* p_rhi)
 	: CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
+	, m_shadowDenoisePass(nullptr)
+	, m_rayTraceShadowpass(nullptr)
+	, m_staticShadowPass(nullptr)
 {
 	m_staticShadowPass = new CShadowPass::CStaticShadowPrepass(p_rhi);
 	m_rayTraceShadowpass = new CShadowPass::CRayTraceShadowPass(p_rhi);
+	m_shadowDenoisePass = new CShadowPass::CShadowDenoisePass(p_rhi);
 }
 
 CShadowPass::~CShadowPass()
 {
+	delete m_shadowDenoisePass;
 	delete m_rayTraceShadowpass;
 	delete m_staticShadowPass;
 }
@@ -831,6 +836,58 @@ bool CShadowPass::CRayTraceShadowPass::Dispatch(RenderData* p_renderData)
 		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
 		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
 
+		vkCmdDispatch(cmdBfr, dispatchDim_x, dispatchDim_y, 1);
+	}
+
+	return true;
+}
+
+CShadowPass::CShadowDenoisePass::CShadowDenoisePass(CVulkanRHI* p_rhi)
+	: CComputePass(p_rhi)
+{
+}
+
+CShadowPass::CShadowDenoisePass::~CShadowDenoisePass()
+{
+}
+
+bool CShadowPass::CShadowDenoisePass::CreatePipeline(CVulkanRHI::Pipeline p_pipeline)
+{
+	CVulkanRHI::ShaderPaths shaderpaths{};
+	shaderpaths.shaderpath_compute = g_EnginePath / "shaders/spirv/ShadowDenoise.comp.spv";
+	m_pipeline.pipeLayout = p_pipeline.pipeLayout;
+	
+	RETURN_FALSE_IF_FALSE(m_rhi->CreateComputePipeline(shaderpaths, m_pipeline, "ShadowDenoiseComputePipeline"));
+
+	return true;
+}
+
+bool CShadowPass::CShadowDenoisePass::Update(UpdateData*)
+{
+	return false;
+}
+
+bool CShadowPass::CShadowDenoisePass::Dispatch(RenderData* p_renderData)
+{
+	uint32_t scId = p_renderData->scIdx;
+	CVulkanRHI::CommandBuffer cmdBfr = p_renderData->cmdBfr;
+	const CPrimaryDescriptors* primaryDesc = p_renderData->primaryDescriptors;
+	const CScene* scene = p_renderData->loadedAssets->GetScene();
+	
+	uint32_t dispatchDim_x = m_rhi->GetRenderWidth() / THREAD_GROUP_SIZE_X;
+	uint32_t dispatchDim_y = m_rhi->GetRenderHeight() / THREAD_GROUP_SIZE_Y;
+	
+	{
+		// Issue a memory barrier for the shadow RT pass to finish before the denoise pass can begin
+		p_renderData->fixedAssets->GetRenderTargets()->IssueMemoryBarrier(m_rhi,
+			VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			cmdBfr, CRenderTargets::rt_RTShadowDenoise);
+
+		vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeline);
+	
+		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+		
 		vkCmdDispatch(cmdBfr, dispatchDim_x, dispatchDim_y, 1);
 	}
 

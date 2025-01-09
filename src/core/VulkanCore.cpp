@@ -1499,6 +1499,34 @@ void CVulkanCore::IssueImageLayoutBarrier(	VkImageLayout p_old, VkImageLayout p_
 		1, &imgMemBarrier);
 }
 
+void CVulkanCore::IssueMemoryBarrier(
+	VkAccessFlags p_srcAcc, VkAccessFlags p_dstAcc, 
+	VkPipelineStageFlags p_srcStg, VkPipelineStageFlags p_dstStg, 
+	Image& p_image, VkCommandBuffer p_cmdBfr)
+{
+	VkImageMemoryBarrier imgMemBarrier{};
+	imgMemBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	imgMemBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	imgMemBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	imgMemBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	imgMemBarrier.subresourceRange.baseArrayLayer = 0;
+	imgMemBarrier.subresourceRange.levelCount = 1;
+	imgMemBarrier.subresourceRange.layerCount = 1;
+	imgMemBarrier.subresourceRange.baseMipLevel = 0;
+	imgMemBarrier.srcAccessMask = p_srcAcc;
+	imgMemBarrier.dstAccessMask = p_dstAcc;
+	imgMemBarrier.image = p_image.image;
+	imgMemBarrier.oldLayout = p_image.curLayout[0];
+	imgMemBarrier.newLayout = p_image.curLayout[0];
+
+	vkCmdPipelineBarrier(
+		p_cmdBfr,
+		p_srcStg, p_dstStg,
+		0, 0, nullptr,
+		0, nullptr,
+		1, &imgMemBarrier);
+}
+
 void CVulkanCore::IssueBufferBarrier(
 	VkAccessFlags p_srcAcc, VkAccessFlags p_dstAcc, 
 	VkPipelineStageFlags p_srcStg, VkPipelineStageFlags p_dstStg, 
