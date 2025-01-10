@@ -9,6 +9,73 @@
 #include "MeshCommon.h"
 #include "RayTracingCommon.h"
 
+int CastPointLightShadow(Light light, vec3 fragPosVS, vec3 fragPosWS)
+{
+	// The light position is stored in World space
+	// The light intensity is in View Space. Hence we 
+	// compute the distance between the light and position
+	// in view space and ensure it is less than the light's
+	// intensity.
+	float rayDist = 0;
+	vec4 LPosWS = vec4(light.vector3[0], light.vector3[1], light.vector3[2], 1.0f);
+	vec3 LDirVS = ((g_Info.camView * LPosWS) - vec4(fragPosVS, 1.0)).xyz;
+	float distVS = length(LDirVS);
+	float attenuation = max(0.0f, light.intensity - distVS);
+	// The ray tracing needs to happen in world space since
+	// the BVH is built in world space.
+	vec3 LDirWS = LPosWS.xyz - fragPosWS;
+	rayDist = length(LDirWS);
+	LDirWS = normalize(LDirWS);
+	if(attenuation > 0.0)
+	{
+		if(light.coneAngle > 0.0)
+		{
+			uint seed = genSeed(uint(gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupID.x), g_Info.frameCount, 16);
+			LDirWS.xyz = getConeSample(seed, LDirWS.xyz, light.coneAngle);
+		}						
+		return TraceRay(fragPosWS, LDirWS.xyz, rayDist);	
+	}
+	return 0;
+}
+
+int CastDirectionalShadow(Light light, vec3 fragPosWS)
+{
+	float rayDist = 1e3;
+	vec3 LDirWS = vec3(light.vector3[0], light.vector3[1], light.vector3[2]);
+	if(light.coneAngle > 0.0)
+	{
+		uint seed = genSeed(uint(gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupID.x), g_Info.frameCount, 16);
+		LDirWS = getConeSample(seed, LDirWS, light.coneAngle);
+	}					
+	return TraceRay(fragPosWS.xyz, LDirWS, rayDist);
+}
+
+int CastShadow(Light light, vec3 fragPosVS, vec3 fragPosWS)
+{
+	// get light type
+	uint lightType = light.type_castShadow >> 16;
+
+	// check if we want this light o cast shadow
+	uint castShadow = light.type_castShadow - (lightType << 16);
+	if(castShadow == 1)
+	{
+		if(lightType == DIRECTIONAL_LIGHT_TYPE)
+		{
+			return CastDirectionalShadow(light, fragPosWS);
+		}
+		else if (lightType == POINT_LIGHT_TYPE)
+		{
+			return CastPointLightShadow(light, fragPosVS, fragPosWS);
+		}
+	}
+	return 0;	// no shadow
+}
+
+float TemporalAccumulateShadow(float curShadow, float preShadow)
+{
+	return mix(curShadow, preShadow, g_Info.shadowTempAccumWeight);
+}
+
 // Format is R16G16B16A16. Hence 16 bits per channel to represent per light's
 // shadow. At the moment, the only supported light count that contribute to
 // shadows is 4. We might later optimize this by reducing the precision and
@@ -21,68 +88,31 @@ void main()
 	// checked if it is within the far plane at 1.0. If it is, compute 
 	// the shadow
 	vec4 shadowsOut = vec4(0);
-	int shoudlDenoise = 0;
+	int shouldDenoise = 0;
 
-	ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
-	vec2 sampleUV = vec2(gl_GlobalInvocationID.xy + 0.5) / vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
-	float sampleDepth = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), sampleUV).x;
-	vec4 fragPosVS = GetPositionfromDepth(sampleUV, sampleDepth);
+	ivec2 xy 			= ivec2(gl_GlobalInvocationID.xy);
+	vec2 sampleUV 		= vec2(gl_GlobalInvocationID.xy + 0.5) / vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
+	float sampleDepth 	= texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), sampleUV).x;
+			
+	if(sampleDepth < 1.0)
+	{
+		vec4 fragPosVS 	= GetPositionfromDepth(sampleUV, sampleDepth);
+		vec4 fragPosWS 	= g_Info.invCamView * fragPosVS;
+
+		// Sampling previous frame's shadow values for this position
+		// Since we are accumulating the shadows over frame, we do
+		// not maintain a previous shadow buffer, instead read and
+		// update the Shadow Texture
+		shadowsOut 		= imageLoad(g_RT_StorageImages[STORE_RT_SHADOW_TEMPORAL_ACC], xy).xyzw;    
 		
-	uint seed = genSeed(uint(gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupID.x), g_Info.frameCount, 16);
-	
-	// Sampling previous frame's shadow values for this position
-	// Since we are accumulating the shadows over frame, we do
-	// not maintain a previous shadow buffer, instead read and
-	// update the Shadow Texture
-	shadowsOut = imageLoad(g_RT_StorageImages[STORE_RT_SHADOW_TEMPORAL_ACC], xy).xyzw;    
-	vec4 fragPosWS = g_Info.invCamView * fragPosVS;
-	for(uint i = 0; i < g_lights.count; i++)
-	{	
-		Light light = g_lights.lights[i];
-		uint lightType = light.type_castShadow >> 16;
-		uint castShadow = light.type_castShadow - (lightType << 16);
-		if(castShadow == 1)
-		{
-			int curShadow = 0;				
-			if(lightType == DIRECTIONAL_LIGHT_TYPE)
-			{
-				vec4 LDirWS = vec4(light.vector3[0], light.vector3[1], light.vector3[2], 0.0f);
-				if(light.coneAngle > 0.0)
-				{
-					LDirWS.xyz = getConeSample(seed, LDirWS.xyz, light.coneAngle);
-				}					
-				curShadow = TraceRay(fragPosWS.xyz, LDirWS.xyz, 1e3);
-			}
-			else if (lightType == POINT_LIGHT_TYPE)
-			{
-				// The light position is stored in World space
-				// The light intensity is in View Space. Hence we 
-				// compute the distance between the light and position
-				// in view space and ensure it is less than the light's
-				// intensity.
-				vec4 LPosWS = vec4(light.vector3[0], light.vector3[1], light.vector3[2], 1.0f);
-				vec3 LDirVS = ((g_Info.camView * LPosWS) - fragPosVS).xyz;
-				float distVS = length(LDirVS);
-				float attenuation = max(0.0f, light.intensity - distVS);
-				// The ray tracing needs to happen in world space since
-				// the BVH is built in world space.
-				vec3 LDirWS = LPosWS.xyz - fragPosWS.xyz;
-				float distWS = length(LDirWS);
-				LDirWS = normalize(LDirWS);
-				if(attenuation > 0.0)
-				{
-					if(light.coneAngle > 0.0)
-					{
-						LDirWS.xyz = getConeSample(seed, LDirWS.xyz, light.coneAngle);
-					}						
-					curShadow = TraceRay(fragPosWS.xyz, LDirWS.xyz, distWS);	
-				}
-			}
-			shadowsOut[i] = mix(curShadow, shadowsOut[i], g_Info.shadowTempAccumWeight);
-			shoudlDenoise += ((shadowsOut[i] < (999*1e-3) && shadowsOut[i] > (1e-6)) ? 1 : 0) * int(pow(2, i));
+		for(uint i = 0; i < g_lights.count; i++)
+		{	
+			int curShadow = CastShadow(g_lights.lights[i], fragPosVS.xyz, fragPosWS.xyz);
+			shadowsOut[i] = TemporalAccumulateShadow(curShadow, shadowsOut[i]);
+			shouldDenoise += ((shadowsOut[i] < (999*1e-3) && shadowsOut[i] > (1e-6)) ? 1 : 0) * int(pow(2, i));
 		}
 	}
 	
    	imageStore(g_RT_StorageImages[STORE_RT_SHADOW_TEMPORAL_ACC], xy, shadowsOut); 
-	imageStore(g_RT_StorageImages[STORE_RT_SHADOW_DENOISE], xy, vec4(shoudlDenoise, 0, 0, 1.0)); 
+	imageStore(g_RT_StorageImages[STORE_RT_SHADOW_DENOISE], xy, vec4(shouldDenoise, 0, 0, 1.0)); 
 }	
