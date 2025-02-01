@@ -16,37 +16,57 @@ public:
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 private:
-
+	enum AttachId
+	{
+		Posiiton = 0
+		, Normal
+		, Color
+		, RoughMetal
+		, Motion
+		, max
+	};
 };
 
-class CSkyboxPass : public CStaticRenderPass
+class CSkyboxPass : public CDynamicRenderingPass
 {
 public:
 	CSkyboxPass(CVulkanRHI*);
 	~CSkyboxPass();
 
-	virtual bool CreateRenderpass(RenderData* p_renderData) override;
+	virtual bool CreateRenderingInfo(RenderData* p_renderData) override;
 	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
 
 	virtual bool Update(UpdateData*) override;
 	virtual bool Render(RenderData*) override;
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+private:
+	enum AttachId
+	{
+		  Color = 0
+		, max
+	};
 };
 
-class CSkyboxDeferredPass : public CStaticRenderPass
+class CSkyboxDeferredPass : public CDynamicRenderingPass
 {
 public:
 	CSkyboxDeferredPass(CVulkanRHI*);
 	~CSkyboxDeferredPass();
 
-	virtual bool CreateRenderpass(RenderData* p_renderData) override;
+	virtual bool CreateRenderingInfo(RenderData* p_renderData) override;
 	virtual bool CreatePipeline(CVulkanRHI::Pipeline) override;
 
 	virtual bool Update(UpdateData*) override;
 	virtual bool Render(RenderData*) override;
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
+private:
+	enum AttachId
+	{
+		Color = 0
+		, max
+	};
 };
 
 class CDeferredPass : public CDynamicRenderingPass, CUIParticipant
@@ -64,7 +84,20 @@ public:
 
 	virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 
+	float GetAmbientFactor() { return m_ambientFactor; }
+	void SetAmbientFactor(float p_factor) { m_ambientFactor = p_factor; }
+
 private:
+	enum AttachId
+	{
+		  Posiiton		= 0
+		, Normal		= 1
+		, Albedo		= 2
+		, RoughMetal	= 3
+		, Motion		= 4
+		, max			= 5
+	};
+
 	bool m_enableIBL;
 	float m_ambientFactor;
 };
@@ -103,6 +136,7 @@ public:
 
 		bool ReuseShadowMap() { return m_bReuseShadowMap; }
 		bool IsRTShadowEnabled() { return m_enableRayTracedShadow; }
+		void EnableRTShadow(bool p_enable) { m_enableRayTracedShadow = p_enable; }
 
 	private:
 		bool m_enableRayTracedShadow;

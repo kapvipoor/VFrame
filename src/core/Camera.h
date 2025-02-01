@@ -61,6 +61,8 @@ public:
     virtual bool Init(InitData*);
     virtual void Update(UpdateData data);
 
+    void Look(float p_yaw, float p_pitch, nm::float4 p_lookFrom);
+
     const nm::float4x4 GetViewProj() const { return m_viewProj; }
     const nm::float4x4 GetJitteredViewProj() const { return m_jitteredViewProj; }
     const nm::float4x4 GetPreViewProj() const { return m_preViewProj; }

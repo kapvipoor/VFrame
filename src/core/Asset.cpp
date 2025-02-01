@@ -2011,9 +2011,11 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 
 	//uint32_t maxMip = static_cast<uint32_t>(std::floor(std::log2(max(fullResWidth, fullResHeight)) + 1));
 
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryDepth,			VK_FORMAT_D32_SFLOAT,			fullResWidth, fullResHeight, 1,			shaderRead,	"primary_depth",		sample_depth));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Position,				VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"position",				sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Normal,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"normal",				sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PingPong_Depth_0,		VK_FORMAT_D32_SFLOAT,			fullResWidth, fullResHeight, 1,			shaderRead,	"primary_depth",		sample_depth));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PingPong_Depth_1,		VK_FORMAT_D32_SFLOAT,			fullResWidth, fullResHeight, 1,			shaderRead,	"primary_depth",		sample_depth));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Position,				VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"pingpong_position_0",	sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PingPong_Normal_0,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"pingpong_normal_0",	sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PingPong_Normal_1,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"pingpong_normal_1",	sample_storage_color));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Albedo,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"albedo",				sample_storage_color));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAO_Blur,				VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1,			general,	"ssao_and_blur",		sample_storage_color));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,  VK_FORMAT_D32_SFLOAT,			4096, 4096,					 1,			shaderRead,	"directional_shadow",	sample_depth));
@@ -2022,9 +2024,9 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Motion,					VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1,			general,	"Motion",				sample_storage_color));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"ss_reflection",		sample_storage_color_dest));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSRBlur,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"ssr_blur",				sample_storage_color_src_dest));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Prev_PrimaryColor,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"prev_primary_color",	sample_storage_color_dest));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_History_PrimaryColor,	VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"history_primary_color",sample_storage_color_dest));
 	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RTShadowTemporalAcc,		VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"rt_shadow_temp_acc",	sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RTShadowDenoise,			VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"rt_shadow_denoise",	sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RTShadowDenoise,			VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"rt_shadow_denoise",	sample_storage_color_dest));
 
 	return true;
 }
@@ -2071,12 +2073,16 @@ void CRenderTargets::SetLayout(RenderTargetId p_id, VkImageLayout p_layout)
 
 std::string CRenderTargets::GetRenderTargetIDinString(RenderTargetId p_id)
 {
-	if (p_id == CRenderTargets::RenderTargetId::rt_PrimaryDepth)
-		return "PrimaryDepth";
+	if (p_id == CRenderTargets::RenderTargetId::rt_PingPong_Depth_0)
+		return "Ping-pong Depth 0";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_PingPong_Depth_1)
+		return "Ping-pong Depth 1";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_Position)
 		return "Position";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_Normal)
-		return "Normal";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_PingPong_Normal_0)
+		return "Ping-pong Normal 0";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_PingPong_Normal_1)
+		return "Ping-pong Normal 1";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_Albedo)
 		return "Albedo";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_SSAO_Blur)
@@ -2091,8 +2097,8 @@ std::string CRenderTargets::GetRenderTargetIDinString(RenderTargetId p_id)
 		return "Motion";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_SSReflection)
 		return "Screen Space Reflection (UVs)";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_Prev_PrimaryColor)
-		return "Previous Color (Temporal)";
+	else if (p_id == CRenderTargets::RenderTargetId::rt_History_PrimaryColor)
+		return "History Primary Color";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_SSRBlur)
 		return "SSR Blur";
 	else if (p_id == CRenderTargets::RenderTargetId::rt_RTShadowTemporalAcc)
@@ -2128,7 +2134,7 @@ CFixedBuffers::CFixedBuffers()
 	m_primaryUniformData.toneMappingSelection	= 0.0f;
 	m_primaryUniformData.toneMappingExposure	= 1.0f;
 	m_primaryUniformData.shadowTemporalAccumWeight = 0.0f;
-	m_primaryUniformData.UNASSIGNED_float2		= 0.0f;
+	m_primaryUniformData.pingPongIndex			= 0;
 }
 
 CFixedBuffers::~CFixedBuffers()
@@ -2138,7 +2144,7 @@ CFixedBuffers::~CFixedBuffers()
 bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 {
 	size_t primaryUniformBufferSize =
-		(sizeof(float) * 1)					// Tone Mapper Active							
+		  (sizeof(float) * 1)				// Ping Pong Index					
 		+ (sizeof(float) * 3)				// camera look-from
 		+ (sizeof(float) * 16)				// camera view projection
 		+ (sizeof(float) * 16)				// camera view projection with Jitter
@@ -2170,7 +2176,7 @@ bool CFixedBuffers::Create(CVulkanRHI* p_rhi)
 		+ (sizeof(float) * 1)				// TAA Flicker Correction Mode
 		+ (sizeof(float) * 1)				// TAA Re-projection Filter
 		+ (sizeof(float) * 1)				// Tone Mapping Exposure
-		+ (sizeof(float) * 1);				// UNASSIGINED_Float_2
+		+ (sizeof(float) * 1);				// Tone Mapper Active
 		
 
 	size_t objPickerBufferSize = sizeof(uint32_t) * 1; // selected mesh ID
@@ -2239,7 +2245,7 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	skyboxModelView[15]						= 1.0;
 
 	std::vector<float> uniformValues;
-	uniformValues.push_back((float)m_primaryUniformData.toneMappingSelection);																				// Tone Mapping Selection
+	uniformValues.push_back((float)m_primaryUniformData.pingPongIndex);																						// Ping Pong Index
 	std::copy(&m_primaryUniformData.cameraLookFrom[0], &m_primaryUniformData.cameraLookFrom[3], std::back_inserter(uniformValues));							// camera look from x, y, z
 	std::copy(&cameraViewProj[0], &cameraViewProj[16], std::back_inserter(uniformValues));																	// camera view projection matrix
 	std::copy(&cameraJitteredViewProj[0], &cameraJitteredViewProj[16], std::back_inserter(uniformValues));													// camera jittered view projection matrix
@@ -2271,7 +2277,7 @@ bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
 	uniformValues.push_back((float)m_primaryUniformData.taaFlickerCorectionMode);																			// TAA Flicker Correction Mode
 	uniformValues.push_back((float)m_primaryUniformData.taaReprojectionFilter);																				// TAA Re-projection Filter
 	uniformValues.push_back(m_primaryUniformData.toneMappingExposure);																						// Tone Mapping Exposure
-	uniformValues.push_back((float)m_primaryUniformData.UNASSIGNED_float2);																					// UNASSIGINED_2
+	uniformValues.push_back((float)m_primaryUniformData.toneMappingSelection);																				// Tone Mapping Selection
 	
 	uint8_t* data							= (uint8_t*)(uniformValues.data());
 	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, m_buffers[p_scId], false));
@@ -2379,7 +2385,8 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 	std::vector<VkDescriptorImageInfo> storeRenderTargetsDesInfoList(STORE_MAX_RENDER_TARGETS, VkDescriptorImageInfo{});
 	{
 		storeRenderTargetsDesInfoList[STORE_POSITION]				= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Position).descInfo;
-		storeRenderTargetsDesInfoList[STORE_NORMAL]					= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Normal).descInfo;
+		storeRenderTargetsDesInfoList[STORE_PINGPONG_NORMAL_0]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_PingPong_Normal_0).descInfo;
+		storeRenderTargetsDesInfoList[STORE_PINGPONG_NORMAL_1]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_PingPong_Normal_1).descInfo;
 		storeRenderTargetsDesInfoList[STORE_ALBEDO]					= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Albedo).descInfo;
 		storeRenderTargetsDesInfoList[STORE_SSAO_AND_BLUR]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSAO_Blur).descInfo;
 		storeRenderTargetsDesInfoList[STORE_PRIMARY_COLOR]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_PrimaryColor).descInfo;
@@ -2387,8 +2394,8 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 		storeRenderTargetsDesInfoList[STORE_MOTION]					= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Motion).descInfo;
 		storeRenderTargetsDesInfoList[STORE_SS_REFLECTION]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSReflection).descInfo;
 		storeRenderTargetsDesInfoList[STORE_SSR_BLUR]				= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSRBlur).descInfo;
-		storeRenderTargetsDesInfoList[STORE_PREV_PRIMARY_COLOR]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Prev_PrimaryColor).descInfo;
-		storeRenderTargetsDesInfoList[STORE_RT_SHADOW_TEMPORAL_ACC]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_RTShadowTemporalAcc).descInfo;
+		storeRenderTargetsDesInfoList[STORE_HISTORY_PRIMARY_COLOR]	= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_History_PrimaryColor).descInfo;
+		storeRenderTargetsDesInfoList[STORE_RT_SHADOW_TEMPORAL_ACC]	= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_RTShadowTemporalAcc).descInfo;
 		storeRenderTargetsDesInfoList[STORE_RT_SHADOW_DENOISE]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_RTShadowDenoise).descInfo;
 	}
 

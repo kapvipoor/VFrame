@@ -5,6 +5,7 @@
 #extension GL_GOOGLE_include_directive : enable
 
 #include "Common.h"
+#include "ReprojectionHelper.h"
 
 layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) in;
 void main()
@@ -34,7 +35,7 @@ void main()
     // This is the primary position from where a reflected ray is going to be launched off
     // This is in view space
     //vec4 positionFrom = texture(sampler2D(g_RT_SampledImages[SAMPLE_POSITION], g_LinearSampler), texCoord);
-    float sampleDepth = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), texCoord).x;
+    float sampleDepth = texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.pingPongIndex)], g_NearestSampler), texCoord).x;
 	vec4 positionFrom = GetPositionfromDepth(texCoord, sampleDepth);
     
     // We are sampling the roughness map to not run SSR for pixels with max roughness values
@@ -46,7 +47,7 @@ void main()
     }
 
     vec3 unitPositionFrom = normalize(positionFrom.xyz);
-    vec3 normal = normalize(texture(sampler2D(g_RT_SampledImages[SAMPLE_NORMAL], g_LinearSampler), texCoord).xyz);
+    vec3 normal = normalize(texture(sampler2D(g_RT_SampledImages[GetNormalTextureID(g_Info.pingPongIndex)], g_LinearSampler), texCoord).xyz);
     vec3 pivot = normalize(reflect(unitPositionFrom.xyz, normal));
 
     // Before the ray marching begins, the tracking of end is at the beginning point
@@ -107,7 +108,7 @@ void main()
         // At any given point, frag + increment can be out of [0, res]
         frag += increment;
         uv.xy = frag/texSize; // this is uv of the next position along the reflection line
-        float sampleDepth = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), uv.xy).x;
+        float sampleDepth = texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.pingPongIndex)], g_NearestSampler), uv.xy).x;
 	    positionTo = GetPositionfromDepth(uv.xy, sampleDepth);
 
         // since search 1 holds the value between start and end, we update search 1 to hold the pixels jumped
@@ -160,7 +161,7 @@ void main()
         // and exactly between previous miss and current hit
         frag = mix(startFrag.xy, endFrag.xy, search1);
         uv.xy = frag/texSize;
-        float sampleDepth = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_LinearSampler), uv.xy).x;
+        float sampleDepth = texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.pingPongIndex)], g_LinearSampler), uv.xy).x;
 	    positionTo = GetPositionfromDepth(uv.xy, sampleDepth);
         
         // Remember perspective magic to calculate the distance from the camera to the new point

@@ -232,7 +232,7 @@ void CPointLight::Show(CVulkanRHI* p_rhi)
 CLights::CLights()
 	: m_isDirty(false)
 {
-	CreateLight(CLight::Type::Directional, "Sunlight", true, nm::float3(1.0f, 1.0f, 0.99f), 10.0f, nm::float3(0.0f, 1.0f, 0.0f), 0.0f);
+	CreateLight(CLight::Type::Directional, "Sunlight", true, nm::float3(1.0f, 1.0f, 0.99f), 1.0f, nm::float3(0.0f, 1.0f, 0.0f), 0.0f);
 	CreateLight(CLight::Type::Point, "PointLight_A", true, nm::float3(1.0f, 1.0f, 0.0f), 1.0f, nm::float3(0.0f, 0.0f, 0.0f), 0.0f);
 	CreateLight(CLight::Type::Point, "PointLight_B", true, nm::float3(0.0f, 1.0f, 1.0f), 1.0f, nm::float3(1.0f, 0.0f, 0.0f), 0.0f);
 	CreateLight(CLight::Type::Point, "PointLight_C", true, nm::float3(1.0f, 0.0f, 1.0f), 1.0f, nm::float3(0.0f, 0.0f, 1.0f), 0.0f);

@@ -1661,6 +1661,13 @@ namespace nm {
              Decompose2Scaling(scale, scaleVec);
          }
 
+         static Transform Translate(nm::float4 p_translate)
+         {
+             nm::Transform transform;
+             transform.SetTranslate(p_translate);
+             return transform;
+         }
+
          // This is a hack and should only be used for visualizing the bounding
          // limits of directional lights only. DO NOT USE FOR ANY OTHER PURPOSE.
          Transform(nm::float4x4 p_transform)

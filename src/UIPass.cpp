@@ -111,7 +111,6 @@ bool CUIPass::Render(RenderData* p_renderData)
 	int fbWidth									= (int)(drawData->DisplaySize.x * drawData->FramebufferScale.x);
 	int fbHeight								= (int)(drawData->DisplaySize.y * drawData->FramebufferScale.y);
 
-	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "UI"));
 	{
 		// issue a layout barrier on Primary Depth to set as Depth Stencil Target so it can be used in this Fragment Shader
 		//CVulkanRHI::Image primaryDepthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
@@ -189,7 +188,6 @@ bool CUIPass::Render(RenderData* p_renderData)
 
 		m_rhi->EndRenderPass(cmdBfr);
 	}
-	//m_rhi->EndCommandBuffer(cmdBfr);
 
 	return true;
 }
@@ -201,34 +199,44 @@ void CUIPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBinding)
 }
 
 CDebugDrawPass::CDebugDrawPass(CVulkanRHI* p_rhi)
-	: CStaticRenderPass(p_rhi)
+	: CDynamicRenderingPass(p_rhi)
 {
-	m_frameBuffer.resize(1);
 }
 
 CDebugDrawPass::~CDebugDrawPass()
 {
 }
 
-bool CDebugDrawPass::CreateRenderpass(RenderData* p_renderData)
+bool CDebugDrawPass::CreateRenderingInfo(RenderData* p_renderData)
 {
-	CVulkanRHI::Renderpass* renderPass						= &m_pipeline.renderpassData;
-	CVulkanRHI::Image primaryColorRT						= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
-	CVulkanRHI::Image primaryDepthRT						= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
+	std::vector<VkFormat> colorAttachFormats(AttachId::max, VkFormat::VK_FORMAT_UNDEFINED);
+	m_colorAttachInfos = std::vector<VkRenderingAttachmentInfo>(AttachId::max, CVulkanCore::RenderingAttachinfo());
+	// Color
+	{
+		CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
+		colorAttachFormats[AttachId::Color]					= colorRT.format;
+		m_colorAttachInfos[AttachId::Color].imageView		= colorRT.descInfo.imageView;
+		m_colorAttachInfos[AttachId::Color].clearValue		= VkClearValue{ 0.0, 0.0, 0.0, 0.0 };
+	}
+	m_pipeline.colorAttachFormats = colorAttachFormats;
 
-	renderPass->AttachColor(primaryColorRT.format,	VK_ATTACHMENT_LOAD_OP_LOAD,VK_ATTACHMENT_STORE_OP_STORE,	VK_IMAGE_LAYOUT_GENERAL,							VK_IMAGE_LAYOUT_GENERAL,					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachDepth(primaryDepthRT.format,	VK_ATTACHMENT_LOAD_OP_LOAD,VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	// Primary Depth
+	{
+		CVulkanRHI::Image depthRT							= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PingPong_Depth_0);
+		m_pipeline.depthAttachFormat						= depthRT.format;
 
-	if (!m_rhi->CreateRenderpass(*renderPass))
-		return false;
-		
-	renderPass->framebufferWidth							= primaryDepthRT.width;
-	renderPass->framebufferHeight							= primaryDepthRT.height;
+		m_depthAttachInfo									= CVulkanCore::RenderingAttachinfo();
+		m_depthAttachInfo.imageView							= depthRT.descInfo.imageView;
+		m_depthAttachInfo.imageLayout						= VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+		m_depthAttachInfo.clearValue						= VkClearValue{ 1.0, 0 };
+	}
 
-	std::vector<VkImageView> attachments(2, VkImageView{});
-	attachments[0]											= primaryColorRT.descInfo.imageView;
-	attachments[1]											= primaryDepthRT.descInfo.imageView;
-	RETURN_FALSE_IF_FALSE(m_rhi->CreateFramebuffer(renderPass->renderpass, m_frameBuffer[0], attachments.data(), (uint32_t)attachments.size(), renderPass->framebufferWidth, renderPass->framebufferHeight));
+	m_renderingInfo = CVulkanCore::RenderingInfo();
+	m_renderingInfo.renderArea.extent.width					= m_rhi->GetRenderWidth();
+	m_renderingInfo.renderArea.extent.height				= m_rhi->GetRenderHeight();
+	m_renderingInfo.colorAttachmentCount					= (uint32_t)m_colorAttachInfos.size();
+	m_renderingInfo.pColorAttachments						= m_colorAttachInfos.data();
+	m_renderingInfo.pDepthAttachment						= &m_depthAttachInfo;
 
 	return true;
 }
@@ -291,16 +299,21 @@ bool CDebugDrawPass::Render(RenderData* p_renderData)
 	CVulkanRHI::Renderpass renderPass							= m_pipeline.renderpassData;
 	CRenderableDebug* debugRender								= p_renderData->fixedAssets->GetDebugRenderer();
 	const CPrimaryDescriptors* primaryDesc						= p_renderData->primaryDescriptors;
+	CFixedBuffers::PrimaryUniformData* primaryData				= p_renderData->fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
 
 	// instanced indexed draw
 	RETURN_FALSE_IF_FALSE(debugRender->PreDrawInstanced(m_rhi, scId, p_renderData->fixedAssets->GetFixedBuffers(), p_renderData->sceneGraph, cmdBfr));
 	
-	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Debug Draw Instanced"));
+	// Ping pong the depth
 	{
-		m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
-		{
+		CVulkanRHI::Image depthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(GetDepthTextureID(primaryData->pingPongIndex));
+		m_depthAttachInfo.imageView = depthRT.descInfo.imageView;
+	}
 
-			m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
+	{
+		vkCmdBeginRendering(cmdBfr, &m_renderingInfo);
+		{
+			m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)m_rhi->GetRenderWidth(), -(float)m_rhi->GetRenderHeight());
 			m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
 
 			vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
@@ -328,9 +341,8 @@ bool CDebugDrawPass::Render(RenderData* p_renderData)
 				vkCmdDrawIndexed(cmdBfr, (uint32_t)drawDetails.indexCount, drawDetails.instanceCount, drawDetails.indexOffset, drawDetails.vertexOffset, drawDetails.instanceOffset);
 			}
 		}
-		m_rhi->EndRenderPass(cmdBfr);
+		vkCmdEndRendering(cmdBfr);
 	}
-	//m_rhi->EndCommandBuffer(cmdBfr);
 	
 	return true;
 }

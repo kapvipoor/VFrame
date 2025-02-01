@@ -11,16 +11,6 @@ CForwardPass::~CForwardPass()
 
 bool CForwardPass::CreateRenderingInfo(RenderData* p_renderData)
 {
-	enum AttachId
-	{
-		  Posiiton = 0
-		, Normal
-		, PrimaryColor
-		, RoughMetal
-		, Motion
-		, max
-	};
-
 	std::vector<VkFormat> colorAttachFormats(AttachId::max, VkFormat::VK_FORMAT_UNDEFINED);	
 	m_colorAttachInfos = std::vector<VkRenderingAttachmentInfo>(AttachId::max, CVulkanCore::RenderingAttachinfo());
 	// Position
@@ -31,16 +21,16 @@ bool CForwardPass::CreateRenderingInfo(RenderData* p_renderData)
 	}
 	// Normal
 	{
-		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Normal);
+		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PingPong_Normal_0);
 		colorAttachFormats[AttachId::Normal]				= normalRT.format;
 		m_colorAttachInfos[AttachId::Normal].imageView		= normalRT.descInfo.imageView;
 	}
 	// Primary Color
 	{
 		CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
-		colorAttachFormats[AttachId::PrimaryColor]				= colorRT.format;
-		m_colorAttachInfos[AttachId::PrimaryColor].imageView	= colorRT.descInfo.imageView;
-		m_colorAttachInfos[AttachId::PrimaryColor].loadOp		= VK_ATTACHMENT_LOAD_OP_LOAD;
+		colorAttachFormats[AttachId::Color]					= colorRT.format;
+		m_colorAttachInfos[AttachId::Color].imageView		= colorRT.descInfo.imageView;
+		m_colorAttachInfos[AttachId::Color].loadOp			= VK_ATTACHMENT_LOAD_OP_LOAD;
 	}
 	// Rough Metal
 	{
@@ -59,21 +49,21 @@ bool CForwardPass::CreateRenderingInfo(RenderData* p_renderData)
 	m_pipeline.colorAttachFormats = colorAttachFormats;
 	// Primary Depth
 	{
-		CVulkanRHI::Image depthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
-		m_pipeline.depthAttachFormat			= depthRT.format;
+		CVulkanRHI::Image depthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PingPong_Depth_0);
+		m_pipeline.depthAttachFormat						= depthRT.format;
 
-		m_depthAttachInfo						= CVulkanCore::RenderingAttachinfo();
-		m_depthAttachInfo.imageView				= depthRT.descInfo.imageView;
-		m_depthAttachInfo.imageLayout			= VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-		m_depthAttachInfo.clearValue			= VkClearValue{ 1.0, 0 };
+		m_depthAttachInfo									= CVulkanCore::RenderingAttachinfo();
+		m_depthAttachInfo.imageView							= depthRT.descInfo.imageView;
+		m_depthAttachInfo.imageLayout						= VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+		m_depthAttachInfo.clearValue						= VkClearValue{ 1.0, 0 };
 	}
 	
-	m_renderingInfo								= CVulkanCore::RenderingInfo();
-	m_renderingInfo.renderArea.extent.width		= m_rhi->GetRenderWidth();
-	m_renderingInfo.renderArea.extent.height	= m_rhi->GetRenderHeight();
-	m_renderingInfo.colorAttachmentCount		= (uint32_t)m_colorAttachInfos.size();
-	m_renderingInfo.pColorAttachments			= m_colorAttachInfos.data();
-	m_renderingInfo.pDepthAttachment			= &m_depthAttachInfo;
+	m_renderingInfo											= CVulkanCore::RenderingInfo();
+	m_renderingInfo.renderArea.extent.width					= m_rhi->GetRenderWidth();
+	m_renderingInfo.renderArea.extent.height				= m_rhi->GetRenderHeight();
+	m_renderingInfo.colorAttachmentCount					= (uint32_t)m_colorAttachInfos.size();
+	m_renderingInfo.pColorAttachments						= m_colorAttachInfos.data();
+	m_renderingInfo.pDepthAttachment						= &m_depthAttachInfo;
 
 	return true;
 }
@@ -110,8 +100,17 @@ bool CForwardPass::Render(RenderData* p_renderData)
 	CVulkanRHI::CommandBuffer cmdBfr						= p_renderData->cmdBfr;
 	const CScene* scene										= p_renderData->loadedAssets->GetScene();
 	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
+	CFixedBuffers::PrimaryUniformData* primaryData			= p_renderData->fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
 
-	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Forward"));
+	// Ping pong the depth and normal render targets
+	{
+		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(GetNormalTextureID(primaryData->pingPongIndex));		
+		m_colorAttachInfos[AttachId::Normal].imageView = normalRT.descInfo.imageView;
+
+		CVulkanRHI::Image depthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(GetDepthTextureID(primaryData->pingPongIndex));
+		m_depthAttachInfo.imageView = depthRT.descInfo.imageView;
+	}
+
 	{
 		vkCmdBeginRendering(cmdBfr, &m_renderingInfo);
 		{
@@ -146,7 +145,6 @@ bool CForwardPass::Render(RenderData* p_renderData)
 		}
 		vkCmdEndRendering(cmdBfr);
 	}
-	//m_rhi->EndCommandBuffer(cmdBfr);
 	
 	return true;
 }
@@ -158,35 +156,45 @@ void CForwardPass::GetVertexBindingInUse(CVulkanCore::VertexBinding& p_vertexBin
 }
 
 CSkyboxPass::CSkyboxPass(CVulkanRHI* p_rhi)
-	: CStaticRenderPass(p_rhi)
+	: CDynamicRenderingPass(p_rhi)
 {
-	m_frameBuffer.resize(1);
 }
 
 CSkyboxPass::~CSkyboxPass()
 {
 }
 
-bool CSkyboxPass::CreateRenderpass(RenderData* p_renderData)
+bool CSkyboxPass::CreateRenderingInfo(RenderData* p_renderData)
 {
-	CVulkanRHI::Renderpass* renderPass				= &m_pipeline.renderpassData;
-	CVulkanRHI::Image primaryColorRT				= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
-	CVulkanRHI::Image primaryDepthRT				= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
+	std::vector<VkFormat> colorAttachFormats(AttachId::max, VkFormat::VK_FORMAT_UNDEFINED);
+	m_colorAttachInfos = std::vector<VkRenderingAttachmentInfo>(AttachId::max, CVulkanCore::RenderingAttachinfo());
 
-	renderPass->AttachColor(primaryColorRT.format, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachDepth(primaryDepthRT.format, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	// Color
+	{
+		CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
+		colorAttachFormats[AttachId::Color]					= colorRT.format;
+		m_colorAttachInfos[AttachId::Color].imageView		= colorRT.descInfo.imageView;
+		m_colorAttachInfos[AttachId::Color].clearValue		= VkClearValue{ 0.0, 0.0, 0.0, 0.0 };
+	}
+	m_pipeline.colorAttachFormats = colorAttachFormats;
+	// Primary Depth
+	{
+		CVulkanRHI::Image depthRT							= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PingPong_Depth_0);
+		m_pipeline.depthAttachFormat						= depthRT.format;
 
-	if (!m_rhi->CreateRenderpass(*renderPass))
-		return false;
+		m_depthAttachInfo									= CVulkanCore::RenderingAttachinfo();
+		m_depthAttachInfo.imageView							= depthRT.descInfo.imageView;
+		m_depthAttachInfo.imageLayout						= VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+		m_depthAttachInfo.clearValue						= VkClearValue{ 1.0, 0 };
+	}
 
-	renderPass->framebufferWidth					= primaryDepthRT.width;
-	renderPass->framebufferHeight					= primaryDepthRT.height;
+	m_renderingInfo = CVulkanCore::RenderingInfo();
+	m_renderingInfo.renderArea.extent.width					= m_rhi->GetRenderWidth();
+	m_renderingInfo.renderArea.extent.height				= m_rhi->GetRenderHeight();
+	m_renderingInfo.colorAttachmentCount					= (uint32_t)m_colorAttachInfos.size();
+	m_renderingInfo.pColorAttachments						= m_colorAttachInfos.data();
+	m_renderingInfo.pDepthAttachment						= &m_depthAttachInfo;
 
-	std::vector<VkImageView> attachments(2, VkImageView{});
-	attachments[0]									= primaryColorRT.descInfo.imageView;
-	attachments[1]									= primaryDepthRT.descInfo.imageView;
-	RETURN_FALSE_IF_FALSE(m_rhi->CreateFramebuffer(renderPass->renderpass, m_frameBuffer[0], attachments.data(), (uint32_t)attachments.size(), renderPass->framebufferWidth, renderPass->framebufferHeight));
-	
 	return true;
 }
 
@@ -222,35 +230,38 @@ bool CSkyboxPass::Render(RenderData* p_renderData)
 	const CScene* scene										= p_renderData->loadedAssets->GetScene();
 	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
 	CVulkanRHI::Renderpass renderPass						= m_pipeline.renderpassData;
+	CFixedBuffers::PrimaryUniformData* primaryData			= p_renderData->fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
 
-	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Skybox for Forward"));
+	// Ping pong the depth
 	{
-		m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
-
-		//InsertMarker(m_vkCmdBfr[p_swapchainIndex], "Skybox");
-
-		m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
-		m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
-
-		vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
-
-		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
-
-		VkDeviceSize offsets[1] = { 0 };
-		const CRenderable* mesh = scene->GetSkyBoxMesh();
-		
-		std::vector<VkBuffer> vtxBuffers{ mesh->GetVertexBuffer().descInfo.buffer };
-		vkCmdBindVertexBuffers(cmdBfr, 0, (uint32_t)vtxBuffers.size(), vtxBuffers.data(), offsets); 
-		vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer().descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-		uint32_t count = (uint32_t)mesh->GetIndexBuffer().descInfo.range / sizeof(uint32_t);
-		vkCmdDrawIndexed(cmdBfr, count, 1, 0, 0, 1);
-
-		m_rhi->EndRenderPass(cmdBfr);
+		CVulkanRHI::Image depthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(GetDepthTextureID(primaryData->pingPongIndex));
+		m_depthAttachInfo.imageView = depthRT.descInfo.imageView;
 	}
-	//m_rhi->EndCommandBuffer(cmdBfr);
 
+	{
+		vkCmdBeginRendering(cmdBfr, &m_renderingInfo);
+		{
+			m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)m_rhi->GetRenderWidth(), -(float)m_rhi->GetRenderHeight());
+			m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
+
+			vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
+
+			vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+			vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
+
+			VkDeviceSize offsets[1] = { 0 };
+			const CRenderable* mesh = scene->GetSkyBoxMesh();
+
+			std::vector<VkBuffer> vtxBuffers{ mesh->GetVertexBuffer().descInfo.buffer };
+			vkCmdBindVertexBuffers(cmdBfr, 0, (uint32_t)vtxBuffers.size(), vtxBuffers.data(), offsets);
+			vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer().descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+			uint32_t count = (uint32_t)mesh->GetIndexBuffer().descInfo.range / sizeof(uint32_t);
+			vkCmdDrawIndexed(cmdBfr, count, 1, 0, 0, 1);
+		}
+		vkCmdEndRendering(cmdBfr);
+	}
+	
 	return true;
 }
  
@@ -273,16 +284,6 @@ CDeferredPass::~CDeferredPass()
 
 bool CDeferredPass::CreateRenderingInfo(RenderData* p_renderData)
 {
-	enum AttachId
-	{
-		Posiiton = 0
-		, Normal
-		, Albedo
-		, RoughMetal
-		, Motion
-		, max
-	};
-
 	std::vector<VkFormat> colorAttachFormats(AttachId::max, VkFormat::VK_FORMAT_UNDEFINED);
 	m_colorAttachInfos = std::vector<VkRenderingAttachmentInfo>(AttachId::max, CVulkanCore::RenderingAttachinfo());
 	// Position
@@ -293,15 +294,15 @@ bool CDeferredPass::CreateRenderingInfo(RenderData* p_renderData)
 	}
 	// Normal
 	{
-		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Normal);
+		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PingPong_Normal_0);
 		colorAttachFormats[AttachId::Normal]				= normalRT.format;
 		m_colorAttachInfos[AttachId::Normal].imageView		= normalRT.descInfo.imageView;
 	}
 	// Primary Color
 	{
 		CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Albedo);
-		colorAttachFormats[AttachId::Albedo]			= colorRT.format;
-		m_colorAttachInfos[AttachId::Albedo].imageView	= colorRT.descInfo.imageView;
+		colorAttachFormats[AttachId::Albedo]				= colorRT.format;
+		m_colorAttachInfos[AttachId::Albedo].imageView		= colorRT.descInfo.imageView;
 	}
 	// Rough Metal
 	{
@@ -318,21 +319,21 @@ bool CDeferredPass::CreateRenderingInfo(RenderData* p_renderData)
 	m_pipeline.colorAttachFormats = colorAttachFormats;
 	// Primary Depth
 	{
-		CVulkanRHI::Image depthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
-		m_pipeline.depthAttachFormat			= depthRT.format;
+		CVulkanRHI::Image depthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PingPong_Depth_0);
+		m_pipeline.depthAttachFormat						= depthRT.format;
 
-		m_depthAttachInfo						= CVulkanCore::RenderingAttachinfo();
-		m_depthAttachInfo.imageView				= depthRT.descInfo.imageView;
-		m_depthAttachInfo.imageLayout			= VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-		m_depthAttachInfo.clearValue			= VkClearValue{ 1.0, 0 };
+		m_depthAttachInfo									= CVulkanCore::RenderingAttachinfo();
+		m_depthAttachInfo.imageView							= depthRT.descInfo.imageView;
+		m_depthAttachInfo.imageLayout						= VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+		m_depthAttachInfo.clearValue						= VkClearValue{ 1.0, 0 };
 	}
 	
-	m_renderingInfo								= CVulkanCore::RenderingInfo();
-	m_renderingInfo.renderArea.extent.width		= m_rhi->GetRenderWidth();
-	m_renderingInfo.renderArea.extent.height	= m_rhi->GetRenderHeight();
-	m_renderingInfo.colorAttachmentCount		= (uint32_t)m_colorAttachInfos.size();
-	m_renderingInfo.pColorAttachments			= m_colorAttachInfos.data();
-	m_renderingInfo.pDepthAttachment			= &m_depthAttachInfo;
+	m_renderingInfo											= CVulkanCore::RenderingInfo();
+	m_renderingInfo.renderArea.extent.width					= m_rhi->GetRenderWidth();
+	m_renderingInfo.renderArea.extent.height				= m_rhi->GetRenderHeight();
+	m_renderingInfo.colorAttachmentCount					= (uint32_t)m_colorAttachInfos.size();
+	m_renderingInfo.pColorAttachments						= m_colorAttachInfos.data();
+	m_renderingInfo.pDepthAttachment						= &m_depthAttachInfo;
 
 	return true;
 }
@@ -368,10 +369,20 @@ bool CDeferredPass::Update(UpdateData* p_updateData)
 
 bool CDeferredPass::Render(RenderData* p_renderData)
 {
-	uint32_t scId												= p_renderData->scIdx;
-	CVulkanRHI::CommandBuffer cmdBfr							= p_renderData->cmdBfr;
+	uint32_t scId											= p_renderData->scIdx;
+	CVulkanRHI::CommandBuffer cmdBfr						= p_renderData->cmdBfr;
 	CScene* scene											= p_renderData->loadedAssets->GetScene();
-	const CPrimaryDescriptors* primaryDesc						= p_renderData->primaryDescriptors;
+	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
+	CFixedBuffers::PrimaryUniformData* primaryData			= p_renderData->fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
+
+	// Ping pong the depth and normal render targets
+	{
+		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(GetNormalTextureID(primaryData->pingPongIndex));
+		m_colorAttachInfos[AttachId::Normal].imageView = normalRT.descInfo.imageView;
+
+		CVulkanRHI::Image depthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(GetDepthTextureID(primaryData->pingPongIndex));
+		m_depthAttachInfo.imageView = depthRT.descInfo.imageView;
+	}
 
 	{
 		vkCmdBeginRendering(cmdBfr, &m_renderingInfo);
@@ -483,35 +494,45 @@ bool CDeferredLightingPass::Dispatch(RenderData* p_renderData)
 }
 
 CSkyboxDeferredPass::CSkyboxDeferredPass(CVulkanRHI* p_rhi)
-	: CStaticRenderPass(p_rhi)
+	: CDynamicRenderingPass(p_rhi)
 {
-	m_frameBuffer.resize(1);
 }
 
 CSkyboxDeferredPass::~CSkyboxDeferredPass()
 {
 }
 
-bool CSkyboxDeferredPass::CreateRenderpass(RenderData* p_renderData)
+bool CSkyboxDeferredPass::CreateRenderingInfo(RenderData* p_renderData)
 {
-	CVulkanRHI::Renderpass* renderPass				= &m_pipeline.renderpassData;
-	CVulkanRHI::Image primaryColorRT				= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
-	CVulkanRHI::Image primaryDepthRT				= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryDepth);
+	std::vector<VkFormat> colorAttachFormats(AttachId::max, VkFormat::VK_FORMAT_UNDEFINED);
+	m_colorAttachInfos = std::vector<VkRenderingAttachmentInfo>(AttachId::max, CVulkanCore::RenderingAttachinfo());
 
-	renderPass->AttachColor(primaryColorRT.format, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	renderPass->AttachDepth(primaryDepthRT.format, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-	
-	if (!m_rhi->CreateRenderpass(*renderPass))
-		return false;
+	// Color
+	{
+		CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
+		colorAttachFormats[AttachId::Color]				= colorRT.format;
+		m_colorAttachInfos[AttachId::Color].imageView	= colorRT.descInfo.imageView;
+		m_colorAttachInfos[AttachId::Color].clearValue	= VkClearValue{ 0.0, 0.0, 0.0, 0.0 };
+	}
+	m_pipeline.colorAttachFormats = colorAttachFormats;
+	// Primary Depth
+	{
+		CVulkanRHI::Image depthRT						= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PingPong_Depth_0);
+		m_pipeline.depthAttachFormat					= depthRT.format;
 
-	renderPass->framebufferWidth					= primaryDepthRT.width;
-	renderPass->framebufferHeight					= primaryDepthRT.height;
+		m_depthAttachInfo								= CVulkanCore::RenderingAttachinfo();
+		m_depthAttachInfo.imageView						= depthRT.descInfo.imageView;
+		m_depthAttachInfo.imageLayout					= VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+		m_depthAttachInfo.clearValue					= VkClearValue{ 1.0, 0 };
+	}
 
-	std::vector<VkImageView> attachments(2, VkImageView{});
-	attachments[0]									= primaryColorRT.descInfo.imageView;
-	attachments[1]									= primaryDepthRT.descInfo.imageView;
-	RETURN_FALSE_IF_FALSE(m_rhi->CreateFramebuffer(renderPass->renderpass, m_frameBuffer[0], attachments.data(), (uint32_t)attachments.size(), renderPass->framebufferWidth, renderPass->framebufferHeight));
-	
+	m_renderingInfo = CVulkanCore::RenderingInfo();
+	m_renderingInfo.renderArea.extent.width				= m_rhi->GetRenderWidth();
+	m_renderingInfo.renderArea.extent.height			= m_rhi->GetRenderHeight();
+	m_renderingInfo.colorAttachmentCount				= (uint32_t)m_colorAttachInfos.size();
+	m_renderingInfo.pColorAttachments					= m_colorAttachInfos.data();
+	m_renderingInfo.pDepthAttachment					= &m_depthAttachInfo;
+
 	return true;
 }
 
@@ -544,37 +565,40 @@ bool CSkyboxDeferredPass::Render(RenderData* p_renderData)
 {
 	uint32_t scId											= p_renderData->scIdx;
 	CVulkanRHI::CommandBuffer cmdBfr						= p_renderData->cmdBfr;
-	CScene* scene										= p_renderData->loadedAssets->GetScene();
+	CScene* scene											= p_renderData->loadedAssets->GetScene();
 	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
 	CVulkanRHI::Renderpass renderPass						= m_pipeline.renderpassData;
+	CFixedBuffers::PrimaryUniformData* primaryData			= p_renderData->fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
 
-	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Deferred Skybox"));
+	// Ping pong the depth
 	{
-		m_rhi->BeginRenderpass(m_frameBuffer[0], renderPass, cmdBfr);
-
-		//InsertMarker(m_vkCmdBfr[p_swapchainIndex], "Skybox");
-
-		m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)renderPass.framebufferWidth, -(float)renderPass.framebufferHeight);
-		m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
-
-		vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
-
-		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
-		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
-
-		VkDeviceSize offsets[1] = { 0 };
-		const CRenderable* mesh = scene->GetSkyBoxMesh();
-		std::vector<VkBuffer> vtxBuffers{ mesh->GetVertexBuffer().descInfo.buffer };
-		vkCmdBindVertexBuffers(cmdBfr, 0, (uint32_t)vtxBuffers.size(), vtxBuffers.data(), offsets);
-		vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer().descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-		uint32_t count = (uint32_t)mesh->GetIndexBuffer().descInfo.range / sizeof(uint32_t);
-		vkCmdDrawIndexed(cmdBfr, count, 1, 0, 0, 1);
-
-		m_rhi->EndRenderPass(cmdBfr);
+		CVulkanRHI::Image depthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(GetDepthTextureID(primaryData->pingPongIndex));
+		m_depthAttachInfo.imageView = depthRT.descInfo.imageView;
 	}
-	//m_rhi->EndCommandBuffer(cmdBfr);
 
+	{
+		vkCmdBeginRendering(cmdBfr, &m_renderingInfo);
+		{
+			m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)m_rhi->GetRenderWidth(), -(float)m_rhi->GetRenderHeight());
+			m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
+
+			vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
+
+			vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
+			vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Scene, 1, scene->GetDescriptorSet(scId), 0, nullptr);
+
+			VkDeviceSize offsets[1] = { 0 };
+			const CRenderable* mesh = scene->GetSkyBoxMesh();
+			std::vector<VkBuffer> vtxBuffers{ mesh->GetVertexBuffer().descInfo.buffer };
+			vkCmdBindVertexBuffers(cmdBfr, 0, (uint32_t)vtxBuffers.size(), vtxBuffers.data(), offsets);
+			vkCmdBindIndexBuffer(cmdBfr, mesh->GetIndexBuffer().descInfo.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+			uint32_t count = (uint32_t)mesh->GetIndexBuffer().descInfo.range / sizeof(uint32_t);
+			vkCmdDrawIndexed(cmdBfr, count, 1, 0, 0, 1);
+		}
+		vkCmdEndRendering(cmdBfr);
+	}
+	
 	return true;
 }
 
@@ -679,7 +703,7 @@ bool CShadowPass::CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_P
 	attribDesc.binding = 0;
 	attribDesc.location = 0;
 	attribDesc.format = VK_FORMAT_R32G32B32_SFLOAT;
-	attribDesc.offset = offset;//offsetof(Vertex, pos);
+	attribDesc.offset = offset;
 	vertexAttributs.push_back(attribDesc);
 	offset += 3 * sizeof(float);
 
@@ -687,7 +711,7 @@ bool CShadowPass::CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_P
 	attribDesc.binding = 0;
 	attribDesc.location = 1;
 	attribDesc.format = VK_FORMAT_R32G32B32_SFLOAT;
-	attribDesc.offset = offset;// offsetof(Vertex, normal);
+	attribDesc.offset = offset;
 	vertexAttributs.push_back(attribDesc);
 	offset += 3 * sizeof(float);
 
@@ -695,7 +719,7 @@ bool CShadowPass::CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_P
 	attribDesc.binding = 0;
 	attribDesc.location = 2;
 	attribDesc.format = VK_FORMAT_R32G32_SFLOAT;
-	attribDesc.offset = offset;// offsetof(Vertex, uv);
+	attribDesc.offset = offset;
 	vertexAttributs.push_back(attribDesc);
 	offset += 2 * sizeof(float);
 
@@ -703,7 +727,7 @@ bool CShadowPass::CStaticShadowPrepass::CreatePipeline(CVulkanCore::Pipeline p_P
 	attribDesc.binding = 0;
 	attribDesc.location = 3;
 	attribDesc.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-	attribDesc.offset = offset;// offsetof(Vertex, tangent);
+	attribDesc.offset = offset;
 	vertexAttributs.push_back(attribDesc);
 
 	CVulkanRHI::ShaderPaths shadowPassShaderpaths{};

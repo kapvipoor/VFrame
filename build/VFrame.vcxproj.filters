@@ -84,9 +84,6 @@
     <ClInclude Include="..\src\Pass.h">
       <Filter>frontend\Passes</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\ShadowPass.h">
-      <Filter>frontend\Passes</Filter>
-    </ClInclude>
     <ClInclude Include="..\Src\core\VulkanCore.h">
       <Filter>core\Vulkan</Filter>
     </ClInclude>
@@ -144,9 +141,6 @@
     <ClInclude Include="..\src\ScreenSpacePass.h">
       <Filter>frontend\Passes</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\SharedGlobal.h">
-      <Filter>frontend</Filter>
-    </ClInclude>
     <ClInclude Include="..\src\PostProcessingPasses.h">
       <Filter>frontend\Passes</Filter>
     </ClInclude>
@@ -156,9 +150,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Src\core\AssetLoader.cpp">
-      <Filter>core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Src\core\Global.cpp">
       <Filter>core</Filter>
     </ClCompile>
     <ClCompile Include="..\external\imgui\imgui.cpp">
@@ -184,9 +175,6 @@
     </ClCompile>
     <ClCompile Include="..\Src\RasterRender.cpp">
       <Filter>frontend</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ShadowPass.cpp">
-      <Filter>frontend\Passes</Filter>
     </ClCompile>
     <ClCompile Include="..\Src\core\VulkanCore.cpp">
       <Filter>core\Vulkan</Filter>

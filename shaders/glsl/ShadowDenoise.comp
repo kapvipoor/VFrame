@@ -6,18 +6,28 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 #include "Common.h"
-#include "DenoiseCommon.h"
+#include "SpatialHelper.h"
+
+#define delta 0.999
 
 layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) in;
 void main()
 {
-	ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
-	vec2 uv = xy/vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
-	float shouldDenoise = imageLoad(g_RT_StorageImages[STORE_RT_SHADOW_DENOISE], xy).x;
-	vec4 outColor = texture(sampler2D(g_RT_SampledImages[SAMPLE_RT_SHADOW_TEMPORAL_ACC], g_NearestSampler), uv).rgba;
-	if(shouldDenoise == 1.0)
+	ivec2 xy 			= ivec2(gl_GlobalInvocationID.xy);
+	vec2 uv 			= XY2RenderUV(xy);
+	float shouldDenoise = SampleNearest(SAMPLE_RT_SHADOW_DENOISE, uv).x; 
+	vec4 outColor 		= SampleNearest(SAMPLE_RT_SHADOW_TEMPORAL_ACC, uv);
+	if(shouldDenoise > 0.0f)
 	{
-		outColor = BilateralFilter(g_RT_SampledImages[SAMPLE_RT_SHADOW_TEMPORAL_ACC], g_NearestSampler, xy, outColor);
+		outColor = BilateralFilter(SAMPLE_RT_SHADOW_TEMPORAL_ACC, xy, outColor);
 	}
+
+	// Make sure if shadow is very close to 1 is considered as 1
+	outColor = clamp(outColor, 0.0, 1.0);
+	outColor.x = (outColor.x > delta) ? 1.0: outColor.x;
+	outColor.y = (outColor.y > delta) ? 1.0: outColor.y;
+	outColor.z = (outColor.z > delta) ? 1.0: outColor.z;
+	outColor.w = (outColor.w > delta) ? 1.0: outColor.w;
+	
 	imageStore(g_RT_StorageImages[STORE_RT_SHADOW_DENOISE], xy, outColor); 
 }

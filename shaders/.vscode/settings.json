@@ -5,6 +5,8 @@
         "limits": "cpp",
         "utility": "cpp",
         "xutility": "cpp",
-        "cmath": "cpp"
+        "cmath": "cpp",
+        "xiosbase": "cpp",
+        "xlocale": "cpp"
     }
 }

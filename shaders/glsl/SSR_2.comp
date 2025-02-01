@@ -45,7 +45,7 @@ float FindIntersection_Linear(vec3 samplePositionInTS, vec3 vReflDirInTS, float 
         //depth3 = (texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), rayPosInTS3.xy).x ) ;
         //depth2 = (texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), rayPosInTS2.xy).x ) ;
         //depth1 = (texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), rayPosInTS1.xy).x ) ;
-        depth0 = (texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), rayPosInTS0.xy).x ) ;
+        depth0 = (texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.pingPongIndex)], g_NearestSampler), rayPosInTS0.xy).x ) ;
         
         //{
         //    float thickness = rayPosInTS3.z - depth3;
@@ -100,7 +100,7 @@ float FindIntersection_Linear(vec3 samplePositionInTS, vec3 vReflDirInTS, float 
 // depth
 void ComputePosAndReflection(vec2 texCoord, vec3 sampleNormalInVS, inout vec3 outSamplePosInTS, inout vec3 outReflDirInTS, inout float outMaxDistance)
 {
-    float sampleDepth = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), texCoord).x;
+    float sampleDepth = texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.pingPongIndex)], g_NearestSampler), texCoord).x;
        
     // We are computing the sample position in (-1,1) for x and y. But since this is Vulkan, the depth 
     // here ranges between (0,1). Also we add 0.5 to gl_GlobalInvocationID because we wish to compute the 
@@ -157,7 +157,7 @@ void main()
     vec4 finalColor = vec4(0.0f);
     
     // normal in view space 
-    vec3 normal = texture(sampler2D(g_RT_SampledImages[SAMPLE_NORMAL], g_LinearSampler), texCoord).xyz;
+    vec3 normal = texture(sampler2D(g_RT_SampledImages[GetNormalStorageID(g_Info.pingPongIndex)], g_LinearSampler), texCoord).xyz;
 
     // Roughness map 
     float roughness = texture(sampler2D(g_RT_SampledImages[SAMPLE_ROUGH_METAL], g_LinearSampler), texCoord).x;

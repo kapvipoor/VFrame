@@ -117,7 +117,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;CPU;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>D:\Projects\MyPersonalProjects\VFrame\external;$(VULKAN_SDK)\Include;D:\Projects\MyPersonalProjects\VFrame;D:\Projects\MyPersonalProjects\VFrame\external\imgui</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -202,7 +202,6 @@
     <ClCompile Include="..\src\core\Camera.cpp" />
     <ClCompile Include="..\src\core\Light.cpp" />
     <ClCompile Include="..\src\core\SceneGraph.cpp" />
-    <ClCompile Include="..\Src\core\Global.cpp" />
     <ClCompile Include="..\Src\core\AssetLoader.cpp" />
     <ClCompile Include="..\src\core\UI.cpp" />
     <ClCompile Include="..\Src\core\VulkanCore.cpp" />

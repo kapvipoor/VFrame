@@ -7,138 +7,124 @@
 
 #include "Common.h"
 #include "MeshCommon.h"
-#include "RayTracingCommon.h"
+#include "ReprojectionHelper.h"
 
 #define DISPLAY_MOUSE_POINTER
 
 layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) in;
 void main()
 {
-    ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 xy 			= ivec2(gl_GlobalInvocationID.xy);
+	vec2 sampleUV 		= vec2(gl_GlobalInvocationID.xy + 0.5) / vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
 
-    // these resources are in view space
-	vec4 sky = imageLoad(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy).xyzw;       
-	vec4 finalColor = sky;
+	float sampleDepth 	= texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.pingPongIndex)], g_NearestSampler), sampleUV).x;
 
-    vec3 camPos = vec3(0.0f);                                                                       
+	if(sampleDepth < 1.0)
+	{
+		vec4 fragPos 			= GetPositionfromDepth(sampleUV, sampleDepth);
+		vec4 posInWorldSpace 	= g_Info.invCamView * fragPos;                              
 	
-	vec2 sampleUV = vec2(gl_GlobalInvocationID.xy + 0.5) / vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
-	float sampleDepth = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_NearestSampler), sampleUV).x;
-	vec4 fragPos = GetPositionfromDepth(sampleUV, sampleDepth);
-	
-	vec4 posInWorldSpace = g_Info.invCamView * fragPos;                              
-    
-	vec3 V = normalize(camPos - fragPos.xyz);                                                                                 
-    vec3 N = normalize(imageLoad(g_RT_StorageImages[STORE_NORMAL], xy).xyz);     
+		vec3 camPos 			= vec3(0.0f);                                                                       
+		vec3 V 					= normalize(camPos - fragPos.xyz);                                                                                 
+	    vec3 N 					= normalize(imageLoad(g_RT_StorageImages[GetNormalStorageID(g_Info.pingPongIndex)], xy).xyz);     
 
-    vec3 albedo = imageLoad(g_RT_StorageImages[STORE_ALBEDO], xy).xyz;    
-	vec2 roughMetal = imageLoad(g_RT_StorageImages[STORE_ROUGH_METAL], xy).xy;
+	    vec3 albedo 			= imageLoad(g_RT_StorageImages[STORE_ALBEDO], xy).xyz;    
+		vec2 roughMetal 		= imageLoad(g_RT_StorageImages[STORE_ROUGH_METAL], xy).xy;
 
-	// Surface reflectance at zero incidence
-	// For non-metallic surfaces, use a constant
-	// For metals, use albedo as metals have color to their
-	// specular.
-	vec3 F0 = mix(vec3(0.04), albedo.xyz, roughMetal.y);
-				
-	// Irradiance at the current position
-    vec3 Lo = vec3(0.0);
+		// Surface reflectance at zero incidence
+		// For non-metallic surfaces, use a constant
+		// For metals, use albedo as metals have color to their
+		// specular.
+		vec3 F0 				= mix(vec3(0.04), albedo.xyz, roughMetal.y);
 
-	// Higher the value, lower the contribution
-	float directionalShadow = 1.0; 
-				
-	// for each light source
-	for(int i = 0; i < g_lights.count; i++)
-	{	
-		vec3 radiance = vec3(0.0f);
-		Light light = g_lights.lights[i];
-		uint lightType = light.type_castShadow >> 16;
-		uint castShadow = light.type_castShadow - (lightType << 16);
-		// As light color is over 1, the result will be over 1, hence will need tone mapping
-		vec3 lightColor	= vec3(light.color[0], light.color[1], light.color[2]);
-		vec3 L = vec3(0.0f);    
-		vec4 sampleShadow = imageLoad(g_RT_StorageImages[STORE_RT_SHADOW_DENOISE], xy).xyzw;
-		 if(lightType == DIRECTIONAL_LIGHT_TYPE)
-		 {
-		 	// L in View Space
-		 	// this needs to be inverse transpose so as to negate the scaling in 
-		 	// the matrix before multipling with Light vector. But this isn't working
-		 	// and I do not know why!
-			vec4 lightDir = vec4(light.vector3[0], light.vector3[1], light.vector3[2], 0.0f);
-		 	L = normalize(g_Info.camView * lightDir).xyz;
-	 		
-			// Compute Shadow if enabled
-			int enableShadowRTPCF = int(g_Info.enable_Shadow_RT_PCF);
-			if((enableShadowRTPCF & ENABLE_SHADOW) == ENABLE_SHADOW && castShadow == 1)
-			{
-				if((enableShadowRTPCF & ENABLE_RT_SHADOW) == ENABLE_RT_SHADOW)
-				{		
-					directionalShadow = 1.0 - sampleShadow[i];
-				}
-				else
-				{
-					// calculating current position in world space to Light's view space
-		 			vec4 v0 = vec4(light.viewProj[0], light.viewProj[1], light.viewProj[2], light.viewProj[3]);
-		 			vec4 v1 = vec4(light.viewProj[4], light.viewProj[5], light.viewProj[6], light.viewProj[7]);
-		 			vec4 v2 = vec4(light.viewProj[8], light.viewProj[9], light.viewProj[10], light.viewProj[11]);
-		 			vec4 v3 = vec4(light.viewProj[12], light.viewProj[13], light.viewProj[14], light.viewProj[15]);
-		 			vec4 posInLightSpace = mat4(v0, v1, v2, v3) * posInWorldSpace;
-					bool enablePCF = ((enableShadowRTPCF & ENABLE_PCF) == ENABLE_PCF);
-					directionalShadow = CalculateDirectonalShadow(posInLightSpace, N, enablePCF);				
-				}
-			}
-			// Compute directional light if IBL is disabled
-			// Otherwise the ambient light is picked from
-			// Diffuse Irradiance and Specular IBL Maps
-			if(g_Info.enableIBL == 0)
-			{
-	 			// There is no attenuation for directional light
-				float attenuation = 1.0;
-		 		radiance = lightColor * light.intensity * attenuation;
-			}
-		 }
-		else if (lightType == POINT_LIGHT_TYPE)
-		{
-			// light.vector3 is a position of the point light here.
-			vec3 lightPosWS = vec3(light.vector3[0], light.vector3[1], light.vector3[2]);
-			// the light vector is going to be fragPos - (view matrix * light position)
-			// L in View Space
-			L = ((g_Info.camView * vec4(lightPosWS, 1.0f)) - fragPos).xyz;
-			float distVS = length(L);
-			float attenuation = max(0.0f, light.intensity - distVS);
+		// Irradiance at the current position
+	    vec3 Lo 				= vec3(0.0);
+
+		// Higher the value, lower the contribution
+		float directionalShadow = 1.0; 
+
+		vec3 ambient 			= g_Info.pbrAmbientFactor * albedo.xyz; /* * ambient occlusion */;	
+		vec4 finalColor 		= vec4(0.0);
+
+		// for each light source
+		for(int i = 0; i < g_lights.count; i++)
+		{	
+			vec3 radiance 		= vec3(0.0f);
 			
-			L = normalize(L);
-			float localShadow = 1.0;
-			if(castShadow == 1)
+			Light light 		= g_lights.lights[i];
+			uint lightType 		= light.type_castShadow >> 16;
+			uint castShadow 	= light.type_castShadow - (lightType << 16);
+			// As light color is over 1, the result will be over 1, hence will need tone mapping
+			vec3 lightColor		= vec3(light.color[0], light.color[1], light.color[2]);
+			vec3 L 				= vec3(0.0f);    
+
+			vec4 sampleShadow 	= SampleNearest(SAMPLE_RT_SHADOW_TEMPORAL_ACC, sampleUV); 
+			//vec4 sampleShadow 	= SampleNearest(SAMPLE_RT_SHADOW_DENOISE, sampleUV); 
+						
+			if(lightType == DIRECTIONAL_LIGHT_TYPE)
 			{
-				localShadow = 1.0 - sampleShadow[i];
+			 	// L in View Space
+			 	// this needs to be inverse transpose so as to negate the scaling in 
+			 	// the matrix before multipling with Light vector. But this isn't working
+			 	// and I do not know why!
+				vec4 lightDir 			= vec4(light.vector3[0], light.vector3[1], light.vector3[2], 0.0f);
+			 	L 						= normalize(g_Info.camView * lightDir).xyz;
+
+				// Compute Shadow if enabled
+				int enableShadowRTPCF 	= int(g_Info.enable_Shadow_RT_PCF);
+				if((enableShadowRTPCF & ENABLE_SHADOW) == ENABLE_SHADOW && castShadow == 1)
+				{
+					if((enableShadowRTPCF & ENABLE_RT_SHADOW) == ENABLE_RT_SHADOW)
+					{		
+						directionalShadow = 1.0 - sampleShadow[i];
+					}
+					else
+					{
+						// calculating current position in world space to Light's view space
+			 			vec4 v0 				= vec4(light.viewProj[0], light.viewProj[1], light.viewProj[2], light.viewProj[3]);
+			 			vec4 v1 				= vec4(light.viewProj[4], light.viewProj[5], light.viewProj[6], light.viewProj[7]);
+			 			vec4 v2 				= vec4(light.viewProj[8], light.viewProj[9], light.viewProj[10], light.viewProj[11]);
+			 			vec4 v3 				= vec4(light.viewProj[12], light.viewProj[13], light.viewProj[14], light.viewProj[15]);
+			 			vec4 posInLightSpace 	= mat4(v0, v1, v2, v3) * posInWorldSpace;
+						bool enablePCF 			= ((enableShadowRTPCF & ENABLE_PCF) == ENABLE_PCF);
+						directionalShadow 		= CalculateDirectonalShadow(posInLightSpace, N, enablePCF);				
+					}
+				}
+
+				// There is no image based lighting under the directional shadow
+				ambient = mix(ambient, CalculateIBLAmbience(F0, N, V, albedo, roughMetal.x, roughMetal.y), directionalShadow);
+				
+				// There is no attenuation for directional light
+				float attenuation 	= 1.0;
+			 	radiance 			= lightColor * light.intensity * attenuation * directionalShadow;
 			}
-			radiance = lightColor * light.intensity * attenuation * localShadow;
+			else if (lightType == POINT_LIGHT_TYPE)
+			{
+				// light.vector3 is a position of the point light here.
+				vec3 lightPosWS = vec3(light.vector3[0], light.vector3[1], light.vector3[2]);
+				// the light vector is going to be fragPos - (view matrix * light position)
+				// L in View Space
+				L 					= ((g_Info.camView * vec4(lightPosWS, 1.0f)) - fragPos).xyz;
+				float distVS 		= length(L);
+				float attenuation 	= max(0.0f, light.intensity - distVS);
+
+				L = normalize(L);
+				float localShadow = 1.0;
+				if(castShadow == 1)
+				{
+					localShadow 	= 1.0 - sampleShadow[i];
+				}
+				radiance 			= lightColor * light.intensity * attenuation * localShadow;
+			}
+
+			if(any(greaterThan(radiance, vec3(0.0f))))
+			{
+				// Add all outgoing radiance
+				Lo += CalculatePBRReflectance(radiance, F0, L, N, V, albedo, roughMetal.x, roughMetal.y);
+			}
 		}
-		if(any(greaterThan(radiance, vec3(0.0f))))
-		{
-			// Add all outgoing radiance
-			Lo += CalculatePBRReflectance(radiance, F0, L, N, V, albedo, roughMetal.x, roughMetal.y);
-		}
-	}
-	if(g_Info.enableIBL == 1)
-	{
-		vec3 ambient = vec3(1.0) /* * ambient occlusion */;	
-		// A pixel under shadow cannot participate in IBL
-		if(directionalShadow == 0)
-		{
-			ambient *= g_Info.pbrAmbientFactor * albedo.xyz;
-		}
-		else
-		{
-			ambient *= CalculateIBLAmbience(F0, N, V, albedo, roughMetal.x, roughMetal.y) * directionalShadow;
-		}
+		
 		finalColor = vec4(ambient + Lo, 1.0);
+		imageStore(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy, finalColor); 
 	}
-	else
-	{
-		vec3 ambient = vec3(g_Info.pbrAmbientFactor) * albedo.xyz * directionalShadow;
-		finalColor = vec4(ambient + Lo, 1.0);
-	}
-	
-	imageStore(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy, finalColor); 
 }	

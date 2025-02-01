@@ -111,6 +111,5 @@ void main()
     	
     // Gamma Correction because all light calculation is in sRGB and not linear
 	color = pow(color, vec3(1.0/2.2));
-
     outFragColor = vec4(color, 1.0);
 }

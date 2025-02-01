@@ -11,7 +11,7 @@ int TraceRay(vec3 origin, vec3 direction, float rayLength)
 {
 	rayQueryEXT rq;
 	rayQueryInitializeEXT(rq, g_TLAS, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullNoOpaqueEXT, 
-	0xff, origin, 1e-1, direction, rayLength);
+	0xff, origin, 1e-2, direction, rayLength);
 	rayQueryProceedEXT(rq);
 	return (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT) ? 1 : 0;
 }

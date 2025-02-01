@@ -217,7 +217,7 @@ public:
 
 	struct PrimaryUniformData
 	{
-		float						toneMappingSelection;
+		int							pingPongIndex;
 		nm::float3					cameraLookFrom;
 		nm::float4x4				cameraViewProj;
 		nm::float4x4				cameraJitteredViewProj;
@@ -249,7 +249,7 @@ public:
 		float						taaFlickerCorectionMode;
 		float						taaReprojectionFilter;
 		float						toneMappingExposure;
-		float						UNASSIGNED_float2;
+		float						toneMappingSelection;
 	};
 
 	CFixedBuffers();
@@ -278,20 +278,22 @@ class CRenderTargets : public CTextures, public CUIParticipant
 public:
 	enum RenderTargetId
 	{
-		  rt_PrimaryDepth			= 0		// This frame's depth target
-		, rt_Position				= 1		// Position in view space
-		, rt_Normal					= 2		// Normal in view space
-		, rt_Albedo					= 3		// Albedo
-		, rt_SSAO_Blur				= 4		// SSAO and Blur 
-		, rt_DirectionalShadowDepth	= 5		// Directional shadow depth
-		, rt_PrimaryColor			= 6		// This frame's color target, copies to swap chain by eof
-		, rt_RoughMetal				= 7		// Roughness and Metal
-		, rt_Motion					= 8		// Motion vectors
-		, rt_SSReflection			= 9		// Screen Space Reflection (RGB)
-		, rt_SSRBlur				= 10	// Blurred Screen Space Reflection (for rough surfaces)
-		, rt_Prev_PrimaryColor		= 11	// Previous frame's color target (done post tone mapping)
-		, rt_RTShadowTemporalAcc	= 12	// Temporal Accumulated ray traced shadows (4 count - 1 directional + 3 point)
-		, rt_RTShadowDenoise		= 13	// Denoised ray traces shadows (4 count - 1 directional + 3 point)
+		  rt_PingPong_Depth_0		= 0		// This frame's depth target for History/Current use
+		, rt_PingPong_Depth_1		= 1		// This frame's depth target for History/Current use
+		, rt_Position				= 2		// Position in view space for Current use
+		, rt_PingPong_Normal_0		= 3		// Normal in view space for History/Current use
+		, rt_PingPong_Normal_1		= 4		// Normal in view space for History/Current use
+		, rt_Albedo					= 5		// Albedo
+		, rt_SSAO_Blur				= 6		// SSAO and Blur 
+		, rt_DirectionalShadowDepth	= 7		// Directional shadow depth
+		, rt_PrimaryColor			= 8		// This frame's color target, copies to swap chain by eof
+		, rt_RoughMetal				= 9		// Roughness and Metal
+		, rt_Motion					= 10	// Motion vectors
+		, rt_SSReflection			= 11	// Screen Space Reflection (RGB)
+		, rt_SSRBlur				= 12	// Blurred Screen Space Reflection (for rough surfaces)
+		, rt_History_PrimaryColor	= 13	// Previous frame's color target (done post tone mapping)
+		, rt_RTShadowTemporalAcc	= 14	// Temporal Accumulated ray traced shadows (4 count - 1 directional + 3 point)
+		, rt_RTShadowDenoise		= 15	// Denoised ray traces shadows (4 count - 1 directional + 3 point)
 		, rt_max
 	};
 

@@ -73,9 +73,7 @@ bool CToneMapPass::Render(RenderData* p_renderData)
     const CRenderableUI* ui = p_renderData->loadedAssets->GetUI();
     const CPrimaryDescriptors* primaryDesc = p_renderData->primaryDescriptors;
 
-    //RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Tone Mapping"));
     {
-
         m_rhi->SetClearColorValue(renderPass, 0, VkClearColorValue{ 0.0f, 0.0f, 0.0f, 1.00f });
         m_rhi->BeginRenderpass(m_frameBuffer[p_renderData->scIdx], renderPass, cmdBfr);
 
@@ -86,19 +84,7 @@ bool CToneMapPass::Render(RenderData* p_renderData)
         vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
         vkCmdDraw(cmdBfr, 3, 1, 0, 0);
         m_rhi->EndRenderPass(cmdBfr);
-
-        m_rhi->InsertMarker(cmdBfr, "Resources Copy/Clear");
-
-        CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
-        CVulkanRHI::Image prevColorlRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_Prev_PrimaryColor);
-        m_rhi->CopyImage(cmdBfr, colorRT, prevColorlRT);
-
-        VkClearValue clear{};
-        clear.color = { 0.0, 0.0, 0.0, 1.0 };
-        CVulkanRHI::Image ssrRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_SSReflection);
-        m_rhi->ClearImage(cmdBfr, ssrRT, clear);
     }
-    //m_rhi->EndCommandBuffer(cmdBfr);
 
     return true;
 }

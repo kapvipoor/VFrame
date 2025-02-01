@@ -1,6 +1,5 @@
 #pragma once
 
-#include <unordered_map>
 #include "core/WinCore.h"
 #include "core/VulkanRHI.h"
 #include "core/Camera.h"
@@ -51,6 +50,7 @@ private:
 	};
 
 	uint32_t							m_swapchainIndex;
+	uint32_t							m_pingPongIndex;
 	uint32_t							m_frameCount;
 
 	VkSemaphore							m_activeAcquireSemaphore;
@@ -93,6 +93,7 @@ private:
 	
 	VkSemaphore GetAvailableAcquireSemaphore(VkSemaphore p_in);
 	VkFence WaitForFinishIfNecessary(VkFence p_in);
+	void UpdatePingPongIndex();
 
 	bool InitCamera();
 	bool CreateSyncPremitives();																															

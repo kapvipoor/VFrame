@@ -59,19 +59,13 @@ void main()
 	// Calculate motion vectors
 	{
 		// Perspective divide both positions
-		vec2 posinClipSpace 					= inPosinClipSpace.xy/inPosinClipSpace.w;
-		vec2 prevPosinClipSpace 				= inPrevPosinClipSpace.xy/inPrevPosinClipSpace.w;
+		vec2 posInNDC		= inPosinClipSpace.xy/inPosinClipSpace.w;
+		vec2 posInUV 		= posInNDC * vec2(0.5, -0.5) + vec2(0.5);
+		
+		vec2 prevPosInNDC 	= inPrevPosinClipSpace.xy/inPrevPosinClipSpace.w;
+		vec2 prevPosInUV	= prevPosInNDC * vec2(0.5, -0.5) + vec2(0.5);
 
-		// Compute difference and convert to UVs
-		vec2 velocity							= (prevPosinClipSpace - posinClipSpace);
-		velocity								= (velocity * vec2(0.5, -0.5));
-
-		// now correct the motion vectors with the jitter that has been applied to
-		// the current view-projection matrix only - g_Info.camViewProj
-		// No need to do this because we have multiplied with non-jittered
-		// viewproj of this and previous frame
-		//velocity								-= g_Info.taaJitterOffset;
-		outMotion.xy							= velocity;
+		outMotion.xy		= (prevPosInUV - posInUV);
 	}
 	//PickMeshID();
 }

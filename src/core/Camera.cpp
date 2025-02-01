@@ -35,6 +35,12 @@ void CCamera::Update(UpdateData data)
     //}
 }
 
+void CCamera::Look(float p_yaw, float p_pitch, nm::float4 p_lookFrom)
+{
+    m_yaw = p_yaw; m_pitch = p_pitch;
+    m_lookFrom = p_lookFrom;
+}
+
 nm::float4 CCamera::PolarToVector(float yaw, float pitch)
 {
     return  nm::float4(sinf(yaw) * cosf(pitch), sinf(pitch), cosf(yaw) * cosf(pitch), 0);

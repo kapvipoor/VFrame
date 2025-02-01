@@ -1,3 +1,6 @@
+#ifndef COMMON_H
+#define COMMON_H
+
 #extension GL_EXT_shader_image_load_formatted : require 
 
 #define GPU
@@ -5,7 +8,7 @@
 
 layout(set = 0, binding = 0) uniform GlobalBuffer
 {
-	float	toneMapperSelect;
+	int	pingPongIndex;
 	float	cameraLookFromX;
 	float	cameraLookFromY;
 	float	cameraLookFromZ;
@@ -39,7 +42,7 @@ layout(set = 0, binding = 0) uniform GlobalBuffer
 	float	taaFlickerCorrectionMode;
 	float	taaReprojectionFilter;
 	float	toneMappingExposure;
-	float	UNASSIGINED_Float2;
+	float	toneMapperSelect;
 } g_Info;
 
 layout(set = 0, binding = 1) uniform sampler g_LinearSampler;
@@ -69,16 +72,36 @@ vec2 UV2XY(in vec2 uv, in vec2 resolution)
 	return vec2(uv.x * resolution.x, uv.y * resolution.y);
 }
 
-// returns Position in View Space
-vec4 GetPositionfromDepth(vec2 sampleUV, float sampleDepth)
-{	
-    vec4 samplePosInCS = vec4((sampleUV * 2.0f) - 1.0f, sampleDepth, 1.0f);  
-    samplePosInCS.y *= -1;  // flipping y
+vec2 XY2DisplayUV(ivec2 xy)
+{
+	vec2 curRes 	= vec2(DISPLAY_RESOLUTION_X, DISPLAY_RESOLUTION_Y);
+	vec2 pixCenter 	= xy + vec2(0.5f);
+	return pixCenter/curRes;
+}
 
-    vec4 samplePositionInVS = g_Info.invCamProj * samplePosInCS;
-    samplePositionInVS /= samplePositionInVS.w;
+vec2 XY2RenderUV(ivec2 xy)
+{
+	vec2 curRes 	= vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
+	vec2 pixCenter 	= xy + vec2(0.5f);
+	return pixCenter/curRes;
+}
 
-    return samplePositionInVS;
+vec3 ViewToNDC(vec4 posInVS, mat4 proj)
+{
+	vec4 posInCS	= proj * posInVS;
+	vec3 posInNDC 	= posInCS.xyz / posInCS.w;
+	posInNDC 		= posInNDC * vec3(0.5, -0.5, 0.5) + vec3(0.5);
+	return posInNDC;
+}
+
+vec4 SampleNearest(in int texId, in vec2 uv)
+{
+	return texture(sampler2D(g_RT_SampledImages[texId], g_NearestSampler), uv);
+}
+
+vec4 SampleLinear(in texture2D tex, in vec2 uv)
+{
+	return texture(sampler2D(tex, g_LinearSampler), uv);
 }
 
 // Trowbridge-Reitz GGX normal distribution function
@@ -142,3 +165,5 @@ vec3 log2_safe(vec3 inVal)
 		return vec3(-10.0);
 	}
 }
+
+#endif

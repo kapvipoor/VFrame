@@ -10,6 +10,7 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	, m_activeAcquireSemaphore(VK_NULL_HANDLE)
 	, m_activeCmdBfrFreeFence(VK_NULL_HANDLE)
 	, m_frameCount(0)
+	, m_pingPongIndex(0)
 
 {			
 	m_rhi					= new CVulkanRHI(name, RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
@@ -156,9 +157,11 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 	{
 		RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(m_vkCmdBfr[0][0], "Preparing Render Targets"));
 
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PrimaryDepth);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PingPong_Depth_0);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PingPong_Depth_1);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Position);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Normal);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PingPong_Normal_0);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PingPong_Normal_1);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Albedo);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSAO_Blur);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_vkCmdBfr[0][0], CRenderTargets::rt_DirectionalShadowDepth);
@@ -166,7 +169,7 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_RoughMetal);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Motion);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSReflection);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Prev_PrimaryColor);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_History_PrimaryColor);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSRBlur);
 		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_RTShadowDenoise);
 		
@@ -182,9 +185,14 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 	RETURN_FALSE_IF_FALSE(InitCamera());
 
 	m_rhi->SetRenderType(CVulkanRHI::RendererType::Deferred);
-	m_shadowPass->GetStaticShadowPrePass()->Enable(false);
+	
+	m_shadowPass->GetStaticShadowPrePass()->Enable(true);
+	m_shadowPass->GetStaticShadowPrePass()->EnableRTShadow(true);
+
 	m_ssrComputePass->Enable(false);
 	m_taaComputePass->Enable(false);
+	
+	m_primaryCamera->Look(float(PI)/2.0f, float(PI)/8.0f, nm::float4(7.63807774f, 2.36050344f, -0.0755821913f, 1.91442621f));
 
 	return true;
 }
@@ -236,6 +244,7 @@ bool CRasterRender::on_update(float delta)
 		uniformData->mousePos						= nm::float2((float)mousepos_x, (float)mousepos_y);
 		uniformData->skyboxModelView				= m_primaryCamera->GetView();
 		uniformData->frameCount						= m_frameCount;
+		uniformData->pingPongIndex					= m_pingPongIndex;
 
 		CPass::UpdateData updateData{};
 		updateData.sceneGraph						= m_sceneGraph;
@@ -290,6 +299,8 @@ bool CRasterRender::on_update(float delta)
 		m_loadableAssets->GetScene()->SetSelectedRenderableMesh(meshID);
 		std::clog << "Picked Mesh: " << (meshID - 1) << std::endl;
 	}
+
+	UpdatePingPongIndex();
 
 	return true;
 }
@@ -351,6 +362,14 @@ VkFence CRasterRender::WaitForFinishIfNecessary(VkFence p_in)
 		return m_vkFenceCmdBfrFree[0];
 
 	return p_in;
+}
+
+void CRasterRender::UpdatePingPongIndex()
+{
+	// We are using Ping pong Index to decide between what is a current buffer and what is a previous buffer
+	// This helps remove the need to copy resources render targets from current to previous and simply tag
+	// something as current and previous based on the ping pong index
+	m_pingPongIndex = (m_pingPongIndex == 1) ? 0 : 1;
 }
 
 bool CRasterRender::InitCamera()
@@ -705,6 +724,22 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 
 	renderData.cmdBfr = m_vkCmdBfr[m_swapchainIndex][CommandBufferId::cb_UI];
 	RETURN_FALSE_IF_FALSE(m_uiPass->Render(&renderData));
+	
+
+	m_rhi->InsertMarker(renderData.cmdBfr, "Resources Copy/Clear");
+	{
+		//CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
+		//CVulkanRHI::Image prevColorlRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_History_PrimaryColor);
+		CVulkanRHI::Image ssrRT = renderData.fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_SSReflection);
+		CVulkanRHI::Image shadowDenoiseRT = renderData.fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_RTShadowDenoise);
+
+		//m_rhi->CopyImage(cmdBfr, colorRT, prevColorlRT);
+
+		VkClearValue clear{};
+		clear.color = { 0.0, 0.0, 0.0, 1.0 };
+		m_rhi->ClearImage(renderData.cmdBfr, ssrRT, clear);
+		m_rhi->ClearImage(renderData.cmdBfr, shadowDenoiseRT, clear);
+	}
 	m_cmdBfrsInUse.push_back(renderData.cmdBfr);
 
 	RETURN_FALSE_IF_FALSE(EndAllCommandBuffers(m_swapchainIndex));

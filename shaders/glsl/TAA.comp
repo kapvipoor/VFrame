@@ -7,6 +7,7 @@
 #define USE_VELOCITY
 
 #include "Common.h"
+#include "ReprojectionHelper.h"
 
 // Following color clamping to fix dis-occlusion, can lead to flickering in high luminosity values
 // specially around for specular regions. This is managed by tone mapping those regions at a cost
@@ -48,7 +49,7 @@ vec2 ComputeReprojectedUV(ivec2 in_xy)
 //#else
     else
     {
-        float z = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_DEPTH], g_LinearSampler), uv).x;
+        float z = texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.pingPongIndex)], g_LinearSampler), uv).x;
         float x = (uv.x * 2.0) - 1.0;
         float y = ((1.0 - uv.y) * 2.0) - 1.0;
         vec4 projPos = vec4(x,y,z,1.0);
@@ -111,7 +112,7 @@ vec3 SamplePreviousColor(vec2 reprojUV)
 {
     if(g_Info.taaReprojectionFilter == 0) // Standard Filtering 
     {
-        return texture(sampler2D(g_RT_SampledImages[SAMPLE_PREV_PRIMARY_COLOR], g_LinearSampler), reprojUV).xyz;
+        return texture(sampler2D(g_RT_SampledImages[SAMPLE_HISTORY_PRIMARY_COLOR], g_LinearSampler), reprojUV).xyz;
     }
     else // Catmull Rom
     {
@@ -125,7 +126,7 @@ vec3 SamplePreviousColor(vec2 reprojUV)
             {
                 vec2 samplePos = reprojXY + vec2(dx, dy);
                 vec2 sampleUV = samplePos / vec2(DISPLAY_RESOLUTION_X, DISPLAY_RESOLUTION_Y);
-                vec3 reprojSample = texture(sampler2D(g_RT_SampledImages[SAMPLE_PREV_PRIMARY_COLOR], g_LinearSampler), sampleUV).xyz;
+                vec3 reprojSample = texture(sampler2D(g_RT_SampledImages[SAMPLE_HISTORY_PRIMARY_COLOR], g_LinearSampler), sampleUV).xyz;
 
                 vec2 sampleDist = abs(samplePos - reprojXY);
                 float filterWeight = Filter(sampleDist.x, 1.0f, false) *
