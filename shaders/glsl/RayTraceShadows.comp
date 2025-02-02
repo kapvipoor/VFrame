@@ -71,9 +71,9 @@ int CastShadow(Light light, vec3 fragPosVS, vec3 fragPosWS)
 	return 0;	// no shadow
 }
 
-float TemporalAccumulateShadow(float curShadow, float preShadow, bool reprjCheck)
+float TemporalAccumulateShadow(float curShadow, float preShadow, bool reprojection_check)
 {
-	float accuWeight = reprjCheck ? g_Info.shadowTempAccumWeight : 0.0;
+	float accuWeight = reprojection_check ? g_Info.shadowTempAccumWeight : 0.0;
 	return mix(curShadow, preShadow, accuWeight);
 }
 
@@ -100,13 +100,11 @@ void main()
 		// Since we are accumulating the shadows over frame, we do
 		// not maintain a previous shadow buffer, instead read and
 		// update the Shadow Texture
-		bool reprjCheck = ReprojectionFast(uv, xy, SAMPLE_RT_SHADOW_TEMPORAL_ACC, shadowsOut); 
-		shadowsOut 		= SampleNearest(SAMPLE_RT_SHADOW_TEMPORAL_ACC, uv); 
-		
+		bool reprojection_check = ReprojectionFast(uv, xy, SAMPLE_RT_SHADOW_TEMPORAL_ACC, shadowsOut); 
 		for(uint i = 0; i < g_lights.count; i++)
 		{	
 			int curShadow = CastShadow(g_lights.lights[i], fragPosVS.xyz, fragPosWS.xyz);
-			shadowsOut[i] = TemporalAccumulateShadow(curShadow, shadowsOut[i], reprjCheck);
+			shadowsOut[i] = TemporalAccumulateShadow(curShadow, shadowsOut[i], reprojection_check);
 			shouldDenoise += ((shadowsOut[i] < (999*1e-3) && shadowsOut[i] > (1e-6)) ? 1 : 0);
 		}
 		

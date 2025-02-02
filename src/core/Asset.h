@@ -544,6 +544,7 @@ public:
 	uint32_t GetRenderableMeshCount() const { return (uint32_t)m_meshes.size(); }
 	const CRenderableMesh* GetRenderableMesh(uint32_t p_idx) const { return m_meshes[p_idx]; }
 	const CRenderable* GetSkyBoxMesh() const { return m_skyBox; }
+	CLights* GetLights() { return m_sceneLights; }
 
 private:
 	enum AssetLoadingState

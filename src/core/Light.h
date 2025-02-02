@@ -93,10 +93,13 @@ public:
 	virtual void Show(CVulkanRHI* p_rhi) override;
 
 	COrthoCamera* GetShadowCamera() { return m_camera; }
+	
+	void SetDirection(nm::float3);
 	nm::float3 GetDirection() { return m_direction; }
 
 private:
 	COrthoCamera* m_camera;
+	nm::float3 m_initDirection;
 	nm::float3 m_direction;
 };
 
@@ -132,6 +135,17 @@ public:
 		float coneAngle;
 	};
 
+	// This is a hard coded stop gap
+	// Will remove this code when I decide to experiment with
+	// a wide range of point lights for now only have 4 lights
+	enum LightID
+	{
+		 _Directional = 0
+		,_PointA
+		,_PointB
+		,_PointC
+	};
+
 	CLights();
 	~CLights();
 
@@ -143,6 +157,8 @@ public:
 	bool IsDirty() { return m_isDirty; }
 	void SetDirty(bool pDirty) { m_isDirty = pDirty; }
 	std::vector<LightGPUData> GetLightsGPUData() { return m_rawGPUData; }
+	
+	CLight* GetLight(LightID p_id) { return m_lights[p_id]; }
 
 private:
 	bool m_isDirty;

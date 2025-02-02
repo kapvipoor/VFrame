@@ -197,19 +197,18 @@ bool ReprojectionFast(ivec2 xy, int historyImageId, out float historyColor)
 bool ReprojectionFast(vec2 uv, ivec2 xy, int historyImageId, out vec4 historyColor)
 #endif
 {
-    vec2 renderRes     = vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
-	vec2 motion        = imageLoad(g_RT_StorageImages[STORE_MOTION], xy).xy;    
-    vec2 history_xy    = vec2(xy) + (motion * renderRes) + vec2(0.5, 0.5);
-    vec2 history_uv    = history_xy / renderRes;
-	
     vec3 curNormal      = SampleNearest(GetNormalTextureID(g_Info.pingPongIndex), uv).xyz;
-    vec3 prevNormal     = SampleNearest(GetHistoryNormalTextureID(g_Info.pingPongIndex), history_uv).xyz;
-    
     float curDepth      = SampleNearest(GetDepthTextureID(g_Info.pingPongIndex), uv).x;
     vec3 curPosition    = GetPositionfromDepth(uv.xy, curDepth).xyz;
 
+    vec2 renderRes     = vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
+	vec2 motion        = imageLoad(g_RT_StorageImages[STORE_MOTION], xy).xy;    
+    vec2 history_xy    = vec2(xy) + (motion * renderRes) + vec2(0.5, 0.5);
+    vec2 history_uv    = history_xy / renderRes;    
+    
     float prevDepth     = SampleNearest(GetHistoryDepthTextureID(g_Info.pingPongIndex), history_uv).x;  
-    vec3 prevPosition   = GetPositionfromDepth(history_uv.xy, curDepth).xyz;
+    vec3 prevNormal     = SampleNearest(GetHistoryNormalTextureID(g_Info.pingPongIndex), history_uv).xyz;
+    vec3 prevPosition   = GetPositionfromDepth(history_uv.xy, prevDepth).xyz;
 
     bool valid          = CheckReprojectionValidity(ivec2(history_xy), ivec2(renderRes), curNormal, prevNormal, curPosition, prevPosition);
     if(valid)

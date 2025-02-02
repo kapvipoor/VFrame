@@ -8,7 +8,7 @@
 
 layout(set = 0, binding = 0) uniform GlobalBuffer
 {
-	int	pingPongIndex;
+	int		pingPongIndex;
 	float	cameraLookFromX;
 	float	cameraLookFromY;
 	float	cameraLookFromZ;
@@ -99,9 +99,9 @@ vec4 SampleNearest(in int texId, in vec2 uv)
 	return texture(sampler2D(g_RT_SampledImages[texId], g_NearestSampler), uv);
 }
 
-vec4 SampleLinear(in texture2D tex, in vec2 uv)
+vec4 SampleLinear(in int texId, in vec2 uv)
 {
-	return texture(sampler2D(tex, g_LinearSampler), uv);
+	return texture(sampler2D(g_RT_SampledImages[texId], g_LinearSampler), uv);
 }
 
 // Trowbridge-Reitz GGX normal distribution function

@@ -39,7 +39,7 @@ void CLight::Show(CVulkanRHI* p_rhi)
 
 CDirectionaLight::CDirectionaLight(std::string p_name, bool p_castShadow, nm::float3 p_direction, float p_intensity, nm::float3 color, float p_coneAngle)
 	:CLight(p_name, Type::Directional, p_intensity, p_castShadow, p_coneAngle)
-	, m_direction(p_direction)
+	, m_initDirection(p_direction)
 {
 	m_color = color;
 	m_camera = new COrthoCamera();
@@ -65,7 +65,7 @@ bool CDirectionaLight::Update(const CCamera::UpdateData& p_data, const CSceneGra
 {
 	if (m_dirty)
 	{
-		m_direction = (m_transform.GetRotate() * nm::float4(0.0f, 1.0f, 0.0f, 1.0f)).xyz();
+		m_direction = (m_transform.GetRotate() * nm::float4(m_initDirection, 1.0f)).xyz();
 		m_intensity = m_transform.GetScaleVector()[0];
 	}
 
@@ -146,6 +146,13 @@ void CDirectionaLight::Show(CVulkanRHI* p_rhi)
 	ImGui::Indent();
 	ImGui::InputFloat3("Direction ", &m_direction[0]);
 	ImGui::Unindent();
+}
+
+void CDirectionaLight::SetDirection(nm::float3 p_dir)
+{
+	m_initDirection = p_dir;
+	m_transform = nm::Transform();
+	m_dirty = true;
 }
 
 /*
@@ -233,9 +240,9 @@ CLights::CLights()
 	: m_isDirty(false)
 {
 	CreateLight(CLight::Type::Directional, "Sunlight", true, nm::float3(1.0f, 1.0f, 0.99f), 1.0f, nm::float3(0.0f, 1.0f, 0.0f), 0.0f);
-	CreateLight(CLight::Type::Point, "PointLight_A", true, nm::float3(1.0f, 1.0f, 0.0f), 1.0f, nm::float3(0.0f, 0.0f, 0.0f), 0.0f);
-	CreateLight(CLight::Type::Point, "PointLight_B", true, nm::float3(0.0f, 1.0f, 1.0f), 1.0f, nm::float3(1.0f, 0.0f, 0.0f), 0.0f);
-	CreateLight(CLight::Type::Point, "PointLight_C", true, nm::float3(1.0f, 0.0f, 1.0f), 1.0f, nm::float3(0.0f, 0.0f, 1.0f), 0.0f);
+	CreateLight(CLight::Type::Point, "PointLight_A", true, nm::float3(1.0f, 1.0f, 0.0f), 3.0f, nm::float3(0.0f, 0.5f, 0.0f), 0.0f);
+	CreateLight(CLight::Type::Point, "PointLight_B", true, nm::float3(0.0f, 1.0f, 1.0f), 3.0f, nm::float3(1.0f, 0.5f, 0.0f), 0.0f);
+	CreateLight(CLight::Type::Point, "PointLight_C", true, nm::float3(1.0f, 0.0f, 1.0f), 3.0f, nm::float3(0.0f, 0.5f, 1.0f), 0.0f);
 }
 
 CLights::~CLights()

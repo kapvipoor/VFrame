@@ -819,7 +819,7 @@ void CShadowPass::CStaticShadowPrepass::GetVertexBindingInUse(CVulkanCore::Verte
 
 CShadowPass::CRayTraceShadowPass::CRayTraceShadowPass(CVulkanRHI* p_rhi)
 	: CComputePass(p_rhi)
-	, m_temporalAccumWeight(0.3f)
+	, m_temporalAccumWeight(0.9f)
 {
 }
 

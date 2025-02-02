@@ -194,6 +194,12 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 	
 	m_primaryCamera->Look(float(PI)/2.0f, float(PI)/8.0f, nm::float4(7.63807774f, 2.36050344f, -0.0755821913f, 1.91442621f));
 
+	CDirectionaLight* dirLight = dynamic_cast<CDirectionaLight*>(m_loadableAssets->GetScene()->GetLights()->GetLight(CLights::LightID::_Directional));
+	if (dirLight)
+	{
+		dirLight->SetDirection(nm::float3(0.0, 1.0, -0.5));
+	}
+
 	return true;
 }
 
