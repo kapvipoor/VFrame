@@ -17,7 +17,7 @@ layout (location = 5) in vec4 inPosinClipSpace;
 layout (location = 6) in vec4 inPrevPosinClipSpace;
 
 layout (location = 0) out vec4 outPosition;
-layout (location = 1) out vec4 outNormal;
+layout (location = 1) out vec4 outNormalMeshId;
 layout (location = 2) out vec4 outAlbedo;
 layout (location = 3) out vec2 outRoughMetal;
 layout (location = 4) out vec2 outMotion;
@@ -54,7 +54,8 @@ void main()
 	outAlbedo								+= vec4(GetEmissive(mat, inUV), 0.0);
 
 	mat3 TBN 								= mat3(inTangent, inBiTangent, inNormal);	
-	outNormal 								= vec4(GetNormal(TBN, mat.normal_id, inUV, inNormal), 1.0);
+	outNormalMeshId.xyz						= GetNormal(TBN, mat.normal_id, inUV, inNormal);
+	outNormalMeshId.w 						= g_pushConstant.mesh_id;
 
 	// Calculate motion vectors
 	{

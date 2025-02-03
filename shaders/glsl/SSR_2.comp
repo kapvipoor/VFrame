@@ -157,7 +157,7 @@ void main()
     vec4 finalColor = vec4(0.0f);
     
     // normal in view space 
-    vec3 normal = texture(sampler2D(g_RT_SampledImages[GetNormalStorageID(g_Info.pingPongIndex)], g_LinearSampler), texCoord).xyz;
+    vec3 normal = texture(sampler2D(g_RT_SampledImages[GetNormalMeshIDStorageID(g_Info.pingPongIndex)], g_LinearSampler), texCoord).xyz;
 
     // Roughness map 
     float roughness = texture(sampler2D(g_RT_SampledImages[SAMPLE_ROUGH_METAL], g_LinearSampler), texCoord).x;

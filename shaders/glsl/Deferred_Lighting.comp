@@ -26,7 +26,7 @@ void main()
 	
 		vec3 camPos 			= vec3(0.0f);                                                                       
 		vec3 V 					= normalize(camPos - fragPos.xyz);                                                                                 
-	    vec3 N 					= normalize(imageLoad(g_RT_StorageImages[GetNormalStorageID(g_Info.pingPongIndex)], xy).xyz);     
+	    vec3 N 					= normalize(imageLoad(g_RT_StorageImages[GetNormalMeshIDStorageID(g_Info.pingPongIndex)], xy).xyz);     
 
 	    vec3 albedo 			= imageLoad(g_RT_StorageImages[STORE_ALBEDO], xy).xyz;    
 		vec2 roughMetal 		= imageLoad(g_RT_StorageImages[STORE_ROUGH_METAL], xy).xy;

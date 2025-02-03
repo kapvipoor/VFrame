@@ -21,9 +21,9 @@ bool CForwardPass::CreateRenderingInfo(RenderData* p_renderData)
 	}
 	// Normal
 	{
-		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PingPong_Normal_0);
-		colorAttachFormats[AttachId::Normal]				= normalRT.format;
-		m_colorAttachInfos[AttachId::Normal].imageView		= normalRT.descInfo.imageView;
+		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PingPong_Normal_MeshId_0);
+		colorAttachFormats[AttachId::Normal_MeshId]				= normalRT.format;
+		m_colorAttachInfos[AttachId::Normal_MeshId].imageView	= normalRT.descInfo.imageView;
 	}
 	// Primary Color
 	{
@@ -104,8 +104,8 @@ bool CForwardPass::Render(RenderData* p_renderData)
 
 	// Ping pong the depth and normal render targets
 	{
-		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(GetNormalTextureID(primaryData->pingPongIndex));		
-		m_colorAttachInfos[AttachId::Normal].imageView = normalRT.descInfo.imageView;
+		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(GetNormalMeshIDTextureID(primaryData->pingPongIndex));
+		m_colorAttachInfos[AttachId::Normal_MeshId].imageView = normalRT.descInfo.imageView;
 
 		CVulkanRHI::Image depthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(GetDepthTextureID(primaryData->pingPongIndex));
 		m_depthAttachInfo.imageView = depthRT.descInfo.imageView;
@@ -292,11 +292,11 @@ bool CDeferredPass::CreateRenderingInfo(RenderData* p_renderData)
 		colorAttachFormats[AttachId::Posiiton]				= positionRT.format;
 		m_colorAttachInfos[AttachId::Posiiton].imageView	= positionRT.descInfo.imageView;
 	}
-	// Normal
+	// Normal + Mesh Id
 	{
-		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PingPong_Normal_0);
-		colorAttachFormats[AttachId::Normal]				= normalRT.format;
-		m_colorAttachInfos[AttachId::Normal].imageView		= normalRT.descInfo.imageView;
+		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PingPong_Normal_MeshId_0);
+		colorAttachFormats[AttachId::Normal_MeshId]				= normalRT.format;
+		m_colorAttachInfos[AttachId::Normal_MeshId].imageView	= normalRT.descInfo.imageView;
 	}
 	// Primary Color
 	{
@@ -377,8 +377,8 @@ bool CDeferredPass::Render(RenderData* p_renderData)
 
 	// Ping pong the depth and normal render targets
 	{
-		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(GetNormalTextureID(primaryData->pingPongIndex));
-		m_colorAttachInfos[AttachId::Normal].imageView = normalRT.descInfo.imageView;
+		CVulkanRHI::Image normalRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(GetNormalMeshIDTextureID(primaryData->pingPongIndex));
+		m_colorAttachInfos[AttachId::Normal_MeshId].imageView = normalRT.descInfo.imageView;
 
 		CVulkanRHI::Image depthRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(GetDepthTextureID(primaryData->pingPongIndex));
 		m_depthAttachInfo.imageView = depthRT.descInfo.imageView;

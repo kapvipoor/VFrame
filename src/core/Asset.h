@@ -278,22 +278,22 @@ class CRenderTargets : public CTextures, public CUIParticipant
 public:
 	enum RenderTargetId
 	{
-		  rt_PingPong_Depth_0		= 0		// This frame's depth target for History/Current use
-		, rt_PingPong_Depth_1		= 1		// This frame's depth target for History/Current use
-		, rt_Position				= 2		// Position in view space for Current use
-		, rt_PingPong_Normal_0		= 3		// Normal in view space for History/Current use
-		, rt_PingPong_Normal_1		= 4		// Normal in view space for History/Current use
-		, rt_Albedo					= 5		// Albedo
-		, rt_SSAO_Blur				= 6		// SSAO and Blur 
-		, rt_DirectionalShadowDepth	= 7		// Directional shadow depth
-		, rt_PrimaryColor			= 8		// This frame's color target, copies to swap chain by eof
-		, rt_RoughMetal				= 9		// Roughness and Metal
-		, rt_Motion					= 10	// Motion vectors
-		, rt_SSReflection			= 11	// Screen Space Reflection (RGB)
-		, rt_SSRBlur				= 12	// Blurred Screen Space Reflection (for rough surfaces)
-		, rt_History_PrimaryColor	= 13	// Previous frame's color target (done post tone mapping)
-		, rt_RTShadowTemporalAcc	= 14	// Temporal Accumulated ray traced shadows (4 count - 1 directional + 3 point)
-		, rt_RTShadowDenoise		= 15	// Denoised ray traces shadows (4 count - 1 directional + 3 point)
+		  rt_PingPong_Depth_0				= 0		// This frame's depth target for History/Current use
+		, rt_PingPong_Depth_1				= 1		// This frame's depth target for History/Current use
+		, rt_Position						= 2		// Position in view space for Current use
+		, rt_PingPong_Normal_MeshId_0		= 3		// XYZ [Normal in view space for History/Current use] W[Mesh Id for History/Current use]
+		, rt_PingPong_Normal_MeshId_1		= 4		// XYZ [Normal in view space for History/Current use] W[Mesh Id for History/Current use]
+		, rt_Albedo							= 5		// Albedo
+		, rt_SSAO_Blur						= 6		// SSAO and Blur 
+		, rt_DirectionalShadowDepth			= 7		// Directional shadow depth
+		, rt_PrimaryColor					= 8		// This frame's color target, copies to swap chain by eof
+		, rt_RoughMetal						= 9		// Roughness and Metal
+		, rt_Motion							= 10	// Motion vectors
+		, rt_SSReflection					= 11	// Screen Space Reflection (RGB)
+		, rt_SSRBlur						= 12	// Blurred Screen Space Reflection (for rough surfaces)
+		, rt_History_PrimaryColor			= 13	// Previous frame's color target (done post tone mapping)
+		, rt_RTShadowTemporalAcc			= 14	// Temporal Accumulated ray traced shadows (4 count - 1 directional + 3 point)
+		, rt_RTShadowDenoise				= 15	// Denoised ray traces shadows (4 count - 1 directional + 3 point)
 		, rt_max
 	};
 

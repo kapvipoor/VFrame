@@ -13,7 +13,7 @@ void main()
     vec2 uv                         = XY2UV(xy, vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y));
 
     vec3 gFragPos                   = imageLoad(g_RT_StorageImages[STORE_POSITION], xy).xyz;
-    vec3 gNormal                    = imageLoad(g_RT_StorageImages[GetNormalStorageID(g_Info.pingPongIndex)], xy).xyz;
+    vec3 gNormal                    = imageLoad(g_RT_StorageImages[GetNormalMeshIDStorageID(g_Info.pingPongIndex)], xy).xyz;
     vec3 randomVec                  = normalize(texture(sampler2D(g_ReadOnlyTexures[TEXTURE_READ_ID_SSAO_NOISE], g_LinearSampler), g_Info.ssaoNoiseScale * uv)).xyz;
 
     vec3 tangent                    = normalize(randomVec - gNormal * dot(randomVec, gNormal));

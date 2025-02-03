@@ -19,7 +19,7 @@ private:
 	enum AttachId
 	{
 		Posiiton = 0
-		, Normal
+		, Normal_MeshId
 		, Color
 		, RoughMetal
 		, Motion
@@ -91,7 +91,7 @@ private:
 	enum AttachId
 	{
 		  Posiiton		= 0
-		, Normal		= 1
+		, Normal_MeshId	= 1
 		, Albedo		= 2
 		, RoughMetal	= 3
 		, Motion		= 4

@@ -47,7 +47,7 @@ void main()
     }
 
     vec3 unitPositionFrom = normalize(positionFrom.xyz);
-    vec3 normal = normalize(texture(sampler2D(g_RT_SampledImages[GetNormalTextureID(g_Info.pingPongIndex)], g_LinearSampler), texCoord).xyz);
+    vec3 normal = normalize(texture(sampler2D(g_RT_SampledImages[GetNormalMeshIDTextureID(g_Info.pingPongIndex)], g_LinearSampler), texCoord).xyz);
     vec3 pivot = normalize(reflect(unitPositionFrom.xyz, normal));
 
     // Before the ray marching begins, the tracking of end is at the beginning point

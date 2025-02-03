@@ -37,8 +37,8 @@
 #define SAMPLE_PINGPONG_DEPTH_0				    0
 #define SAMPLE_PINGPONG_DEPTH_1			        1
 #define SAMPLE_POSITION						    2
-#define SAMPLE_PINGPONG_NORMAL_0			    3
-#define SAMPLE_PINGPONG_NORMAL_1			    4
+#define SAMPLE_PINGPONG_NORMAL_MESH_ID_0	    3
+#define SAMPLE_PINGPONG_NORMAL_MESH_ID_1	    4
 #define SAMPLE_ALBEDO						    5
 #define SAMPLE_SSAO_AND_BLUR			        6
 #define SAMPLE_DIRECTIONAL_SHADOW_DEPTH	        7
@@ -53,8 +53,8 @@
 #define SAMPLE_MAX_RENDER_TARGETS			    16
 
 #define STORE_POSITION					        0
-#define STORE_PINGPONG_NORMAL_0					1
-#define STORE_PINGPONG_NORMAL_1					2
+#define STORE_PINGPONG_NORMAL_MESH_ID_0			1
+#define STORE_PINGPONG_NORMAL_MESH_ID_1			2
 #define STORE_ALBEDO						    3
 #define STORE_SSAO_AND_BLUR				        4
 #define STORE_PRIMARY_COLOR				        5
@@ -98,43 +98,43 @@
 		return pingPongIndex == 0 ? SAMPLE_PINGPONG_DEPTH_1 : SAMPLE_PINGPONG_DEPTH_0;
 	}
 
-///// Normal Current and History Getters /////
+///// Normal + Mesh ID Current and History Getters /////
 #ifdef CPU
 	inline
 #endif
-	int GetNormalStorageID(int pingPongIndex)
+	int GetNormalMeshIDStorageID(int pingPongIndex)
 	{
 		// Depending on the ping pong index that flips between 0 and 1 every frame,
-		// we decide what is current Normal buffer and previous normal buffer.
-		return pingPongIndex == 0 ? STORE_PINGPONG_NORMAL_0 : STORE_PINGPONG_NORMAL_1;
+		// we decide what is current Normal + Mesh id buffer and previous normal buffer.
+		return pingPongIndex == 0 ? STORE_PINGPONG_NORMAL_MESH_ID_0 : STORE_PINGPONG_NORMAL_MESH_ID_1;
 	}
 
 #ifdef CPU
 	inline
 #endif
-	int GetNormalTextureID(int pingPongIndex)
+	int GetNormalMeshIDTextureID(int pingPongIndex)
 	{
 		// Depending on the ping pong index that flips between 0 and 1 every frame,
-		// we decide what is current Normal buffer and previous normal buffer.
-		return pingPongIndex == 0 ? SAMPLE_PINGPONG_NORMAL_0 : SAMPLE_PINGPONG_NORMAL_1;
+		// we decide what is current Normal + Mesh id buffer and previous normal buffer.
+		return pingPongIndex == 0 ? SAMPLE_PINGPONG_NORMAL_MESH_ID_0 : SAMPLE_PINGPONG_NORMAL_MESH_ID_1;
 	}
 
 #ifdef CPU
 	inline
 #endif
-	int GetHistoryNormalStorageID(int pingPongIndex)
+	int GetHistoryNormalMeshIDStorageID(int pingPongIndex)
 	{
 		// Depending on the ping pong index that flips between 0 and 1 every frame,
-		// we decide what is current Normal buffer and previous normal buffer.
-		return pingPongIndex == 0 ? STORE_PINGPONG_NORMAL_1 : STORE_PINGPONG_NORMAL_0;
+		// we decide what is current Normal + Mesh id buffer and previous normal buffer.
+		return pingPongIndex == 0 ? STORE_PINGPONG_NORMAL_MESH_ID_1 : STORE_PINGPONG_NORMAL_MESH_ID_0;
 	}
 
 #ifdef CPU
 	inline
 #endif
-	int GetHistoryNormalTextureID(int pingPongIndex)
+	int GetHistoryNormalMeshIDTextureID(int pingPongIndex)
 	{
 		// Depending on the ping pong index that flips between 0 and 1 every frame,
-		// we decide what is current Normal buffer and previous normal buffer.
-		return pingPongIndex == 0 ? SAMPLE_PINGPONG_NORMAL_1 : SAMPLE_PINGPONG_NORMAL_0;
+		// we decide what is current Normal + Mesh id buffer and previous normal buffer.
+		return pingPongIndex == 0 ? SAMPLE_PINGPONG_NORMAL_MESH_ID_1 : SAMPLE_PINGPONG_NORMAL_MESH_ID_0;
 	}
