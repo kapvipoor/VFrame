@@ -21,7 +21,7 @@ int CastPointLightShadow(Light light, vec3 fragPosVS, vec3 fragPosWS)
 	// intensity.
 	float rayDist 		= 0;
 	vec4 LPosWS 		= vec4(light.vector3[0], light.vector3[1], light.vector3[2], 1.0f);
-	vec3 LDirVS 		= ((g_Info.camView * LPosWS) - vec4(fragPosVS, 1.0)).xyz;
+	vec3 LDirVS 		= ((g_Info.data.camView * LPosWS) - vec4(fragPosVS, 1.0)).xyz;
 	float distVS 		= length(LDirVS);
 	float attenuation 	= max(0.0f, light.intensity - distVS);
 	// The ray tracing needs to happen in world space since
@@ -33,7 +33,7 @@ int CastPointLightShadow(Light light, vec3 fragPosVS, vec3 fragPosWS)
 	{
 		if(light.coneAngle > 0.0)
 		{
-			uint seed 	= genSeed(uint(gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupID.x), g_Info.frameCount, 16);
+			uint seed 	= genSeed(uint(gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupID.x), g_Info.data.frameCount, 16);
 			LDirWS.xyz 	= getConeSample(seed, LDirWS.xyz, light.coneAngle);
 		}						
 		return TraceRay(fragPosWS, LDirWS.xyz, rayDist);	
@@ -47,7 +47,7 @@ int CastDirectionalShadow(Light light, vec3 fragPosWS)
 	vec3 LDirWS 		= vec3(light.vector3[0], light.vector3[1], light.vector3[2]);
 	if(light.coneAngle > 0.0)
 	{
-		uint seed 		= genSeed(uint(gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupID.x), g_Info.frameCount, 16);
+		uint seed 		= genSeed(uint(gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupID.x), g_Info.data.frameCount, 16);
 		LDirWS 			= getConeSample(seed, LDirWS, light.coneAngle);
 	}					
 	return TraceRay(fragPosWS.xyz, LDirWS, rayDist);
@@ -71,10 +71,31 @@ int CastShadow(Light light, vec3 fragPosVS, vec3 fragPosWS)
 	return 0;	// no shadow
 }
 
-float TemporalAccumulateShadow(float curShadow, float preShadow, bool reprojection_check)
+float CalculateMoments(bool reprojection_check, ivec2 xy)
 {
-	float accuWeight = reprojection_check ? g_Info.shadowTempAccumWeight : 0.0;
-	return mix(curShadow, preShadow, accuWeight);
+	float historyLength 	= 1.0f; 
+	float accumWeight 		= 1.0f;
+	if(reprojection_check)
+	{
+		// Increment the history length if the reprojection check
+		// passes
+		historyLength 		= Load(STORE_HISTORY_LENGTH, xy).x + 1.0;
+
+		// Larger the history length, smaller its contribution.
+		accumWeight			= 1.0 / historyLength;
+
+		// Accsumulated weight decides how much of history sample will
+		// be used for accumulation
+		accumWeight 		= max(accumWeight, g_Info.data.shadowMinAccumWeight);
+	}
+
+	Store(STORE_HISTORY_LENGTH, xy, vec4(historyLength, 0.0, 0.0, 1.0));
+	return accumWeight;
+}
+
+float TemporalAccumulateShadow(float curShadow, float preShadow, float accuWeight)
+{
+	return mix(preShadow, curShadow, accuWeight);
 }
 
 // Format is R16G16B16A16. Hence 16 bits per channel to represent per light's
@@ -90,25 +111,27 @@ void main()
 
 	ivec2 xy 			= ivec2(gl_GlobalInvocationID.xy);
 	vec2 uv 			= XY2RenderUV(xy);
-	float sampleDepth 	= SampleNearest(GetDepthTextureID(g_Info.pingPongIndex), uv).x;
+	float sampleDepth 	= SampleNearest(GetDepthTextureID(g_Info.data.pingPongIndex), uv).x;
 	if(sampleDepth < 1.0)
 	{
 		vec4 fragPosVS 	= GetPositionfromDepth(uv, sampleDepth);
-		vec4 fragPosWS 	= g_Info.invCamView * fragPosVS;
+		vec4 fragPosWS 	= g_Info.data.invCamView * fragPosVS;
 
 		// Sampling previous frame's shadow values for this position
 		// Since we are accumulating the shadows over frame, we do
 		// not maintain a previous shadow buffer, instead read and
 		// update the Shadow Texture
 		bool reprojection_check = ReprojectionFast(uv, xy, SAMPLE_RT_SHADOW_TEMPORAL_ACC, shadowsOut); 
+		float accumWeight 		= CalculateMoments(reprojection_check, xy);
+
 		for(uint i = 0; i < g_lights.count; i++)
 		{	
 			int curShadow = CastShadow(g_lights.lights[i], fragPosVS.xyz, fragPosWS.xyz);
-			shadowsOut[i] = TemporalAccumulateShadow(curShadow, shadowsOut[i], reprojection_check);
+			shadowsOut[i] = TemporalAccumulateShadow(curShadow, shadowsOut[i], accumWeight);
 			shouldDenoise += ((shadowsOut[i] < (999*1e-3) && shadowsOut[i] > (1e-6)) ? 1 : 0);
 		}
-		
-		imageStore(g_RT_StorageImages[STORE_RT_SHADOW_TEMPORAL_ACC], xy, shadowsOut); 
-		imageStore(g_RT_StorageImages[STORE_RT_SHADOW_DENOISE], xy, vec4(shouldDenoise, 0, 0, 1.0)); 
+
+		Store(STORE_RT_SHADOW_TEMPORAL_ACC, xy, shadowsOut);
+		Store(STORE_RT_SHADOW_DENOISE, xy, vec4(shouldDenoise, 0, 0, 1.0));
 	}
 }	

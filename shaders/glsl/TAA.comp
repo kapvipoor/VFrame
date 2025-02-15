@@ -14,11 +14,11 @@
 // of reduced brightness of those regions. Can either use Luminance weighing or log weighing techniques.
 vec4 AdjustHDRColor(vec3 color)
 {
-    if(g_Info.taaFlickerCorrectionMode == 1)    // Log Weighing
+    if(g_Info.data.taaFlickerCorrectionMode == 1)    // Log Weighing
     {
         return vec4(log2_safe(color), 1.0);
     }
-    else if(g_Info.taaFlickerCorrectionMode == 2) // Luminance Weighing
+    else if(g_Info.data.taaFlickerCorrectionMode == 2) // Luminance Weighing
     {
         float luminance = ComputeLuminance(color);
         float luminanceWeight = 1.0 / (1.0 + luminance);
@@ -41,7 +41,7 @@ vec2 ComputeReprojectedUV(ivec2 in_xy)
     vec2 reprojUV = vec2(0.0);
     vec2 uv = vec2(float(in_xy.x)/DISPLAY_RESOLUTION_X, float(in_xy.y)/DISPLAY_RESOLUTION_Y);
 //#ifdef USE_VELOCITY
-    if(g_Info.taaUseMotionVectors == 1.0f)
+    if(g_Info.data.taaUseMotionVectors == 1.0f)
     {
         vec2 velocityUV = texture(sampler2D(g_RT_SampledImages[SAMPLE_MOTION], g_LinearSampler), uv).xy;
         reprojUV = uv + velocityUV;
@@ -49,13 +49,13 @@ vec2 ComputeReprojectedUV(ivec2 in_xy)
 //#else
     else
     {
-        float z = texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.pingPongIndex)], g_LinearSampler), uv).x;
+        float z = texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.data.pingPongIndex)], g_LinearSampler), uv).x;
         float x = (uv.x * 2.0) - 1.0;
         float y = ((1.0 - uv.y) * 2.0) - 1.0;
         vec4 projPos = vec4(x,y,z,1.0);
-        vec4 worldPos = g_Info.camInvViewProj * projPos;
+        vec4 worldPos = g_Info.data.camInvViewProj * projPos;
 
-        vec4 prePos = g_Info.camPreViewProj * worldPos;
+        vec4 prePos = g_Info.data.camPreViewProj * worldPos;
         prePos.xyz /= prePos.w;
         reprojUV = (prePos.xy * vec2(0.5, -0.5)) + 0.5;
     }
@@ -110,9 +110,10 @@ float Filter(float x, float filterRadius, bool rescaleCubic)
 
 vec3 SamplePreviousColor(vec2 reprojUV)
 {
-    if(g_Info.taaReprojectionFilter == 0) // Standard Filtering 
+    vec3 outColor = vec3(0.0, 0.0, 0.0);
+    if(g_Info.data.taaReprojectionFilter == 0) // Standard Filtering 
     {
-        return texture(sampler2D(g_RT_SampledImages[SAMPLE_HISTORY_PRIMARY_COLOR], g_LinearSampler), reprojUV).xyz;
+        return outColor;//texture(sampler2D(g_RT_SampledImages[SAMPLE_HISTORY_PRIMARY_COLOR], g_LinearSampler), reprojUV).xyz;
     }
     else // Catmull Rom
     {
@@ -126,7 +127,7 @@ vec3 SamplePreviousColor(vec2 reprojUV)
             {
                 vec2 samplePos = reprojXY + vec2(dx, dy);
                 vec2 sampleUV = samplePos / vec2(DISPLAY_RESOLUTION_X, DISPLAY_RESOLUTION_Y);
-                vec3 reprojSample = texture(sampler2D(g_RT_SampledImages[SAMPLE_HISTORY_PRIMARY_COLOR], g_LinearSampler), sampleUV).xyz;
+                vec3 reprojSample = outColor;//texture(sampler2D(g_RT_SampledImages[SAMPLE_HISTORY_PRIMARY_COLOR], g_LinearSampler), sampleUV).xyz;
 
                 vec2 sampleDist = abs(samplePos - reprojXY);
                 float filterWeight = Filter(sampleDist.x, 1.0f, false) *
@@ -155,25 +156,25 @@ vec3 Resolve(vec2 uv, vec2 reprojUV)
     curColor = AdjustHDRColor(curColor.xyz);
 
     // sample pixel color from previous color buffer
-    vec4 prevColor = vec4(SamplePreviousColor(reprojUV).xyz, 1.0);
+    vec4 prevColor = vec4(0.0, 0.0, 0.0, 0.0); //vec4(SamplePreviousColor(reprojUV).xyz, 1.0);
     prevColor = AdjustHDRColor(prevColor.xyz);
     prevColor.xyz = ColorClampPrevious(uv, prevColor.xyz);
 
     // linear interpolate between current and previous colors based on a weight
     // tutorial hard-codes this to 0.1, but I ll pass this as TAA_Resolve_Weight
-    if(g_Info.taaFlickerCorrectionMode == 0) // None
+    if(g_Info.data.taaFlickerCorrectionMode == 0) // None
     {
-        return mix(curColor.xyz, prevColor.xyz, g_Info.taaResolveWeight);
+        return mix(curColor.xyz, prevColor.xyz, g_Info.data.taaResolveWeight);
     }
     else
     {
-        float curWeight = (1.0 - g_Info.taaResolveWeight) * curColor.a;
-        float prevWeight = (g_Info.taaResolveWeight) * prevColor.a;
+        float curWeight = (1.0 - g_Info.data.taaResolveWeight) * curColor.a;
+        float prevWeight = (g_Info.data.taaResolveWeight) * prevColor.a;
 
         vec3 resColor = (curColor.xyz * curWeight) + (prevColor.xyz * prevWeight);
         resColor /= (curWeight + prevWeight);
 
-        if(g_Info.taaFlickerCorrectionMode == 1) // Log Weighing
+        if(g_Info.data.taaFlickerCorrectionMode == 1) // Log Weighing
         {
             resColor = exp(resColor);
         }

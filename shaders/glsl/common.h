@@ -6,44 +6,49 @@
 #define GPU
 #include "../../src/core/Global.h"
 
-layout(set = 0, binding = 0) uniform GlobalBuffer
+//layout(set = 0, binding = 0) uniform GlobalBuffer
+//{
+//	int		pingPongIndex;
+//	float	cameraLookFromX;
+//	float	cameraLookFromY;
+//	float	cameraLookFromZ;
+//	mat4	camViewProj;				// without jitter
+//	mat4	camJitteredViewProj;		// with jitter
+//	mat4	camInvViewProj;				// without jitter
+//	mat4	camPreViewProj;				// without jitter
+//	mat4	camProj;
+//	mat4	camView;
+//	mat4	invCamView;
+//	mat4	invCamProj;
+//	mat4	skyboxView;
+//	vec2	mousePosition;
+//	vec2	ssaoNoiseScale;
+//	float	ssaoKernelSize;
+//	float	ssaoRadius;
+//	float	enable_Shadow_RT_PCF;
+//	float	shadowMinAccumWeight;
+//	uint	frameCount;
+//	float 	enableIBL;
+//	float 	pbrAmbientFactor;
+//	float 	enabelSSAO;
+//	float 	biasSSAO;
+//	float	ssrEnabled;
+//	float 	ssrMaxDistance;
+//	float 	ssrResolution;
+//	float 	ssrThickness;
+//	float 	ssrSteps;
+//	float 	taaResolveWeight;
+//	float	taaUseMotionVectors;
+//	float	taaFlickerCorrectionMode;
+//	float	taaReprojectionFilter;
+//	float	toneMappingExposure;
+//	float	toneMapperSelect;
+//} g_Info;
+
+layout(set = 0, binding = 0) uniform PrimaryUniform
 {
-	int		pingPongIndex;
-	float	cameraLookFromX;
-	float	cameraLookFromY;
-	float	cameraLookFromZ;
-	mat4	camViewProj;				// without jitter
-	mat4	camJitteredViewProj;		// with jitter
-	mat4	camInvViewProj;				// without jitter
-	mat4	camPreViewProj;				// without jitter
-	mat4	camProj;
-	mat4	camView;
-	mat4	invCamView;
-	mat4	invCamProj;
-	mat4	skyboxView;
-	vec2	mousePosition;
-	vec2	ssaoNoiseScale;
-	float	ssaoKernelSize;
-	float	ssaoRadius;
-	float	enable_Shadow_RT_PCF;
-	float	shadowTempAccumWeight;
-	uint	frameCount;
-	float 	enableIBL;
-	float 	pbrAmbientFactor;
-	float 	enabelSSAO;
-	float 	biasSSAO;
-	float	ssrEnabled;
-	float 	ssrMaxDistance;
-	float 	ssrResolution;
-	float 	ssrThickness;
-	float 	ssrSteps;
-	float 	taaResolveWeight;
-	float	taaUseMotionVectors;
-	float	taaFlickerCorrectionMode;
-	float	taaReprojectionFilter;
-	float	toneMappingExposure;
-	float	toneMapperSelect;
-} g_Info;
+	PrimaryUniformData data;
+}g_Info;
 
 layout(set = 0, binding = 1) uniform sampler g_LinearSampler;
 layout(set = 0, binding = 2) uniform sampler g_NearestSampler;
@@ -102,6 +107,16 @@ vec4 SampleNearest(in int texId, in vec2 uv)
 vec4 SampleLinear(in int texId, in vec2 uv)
 {
 	return texture(sampler2D(g_RT_SampledImages[texId], g_LinearSampler), uv);
+}
+
+void Store(in int imgId, in vec2 xy, in vec4 result)
+{
+	imageStore(g_RT_StorageImages[imgId], ivec2(xy), result); 
+}
+
+vec4 Load(in int imgId, in vec2 xy)
+{
+	return imageLoad(g_RT_StorageImages[imgId], ivec2(xy));    
 }
 
 // Trowbridge-Reitz GGX normal distribution function

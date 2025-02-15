@@ -18,5 +18,5 @@ void main()
 {
 	outUVW = inPos;
 	//outUVW.xy = -1.0 * outUVW.xy;
-	gl_Position = g_Info.camProj * g_Info.skyboxView  * vec4(inPos, 1.0);
+	gl_Position = g_Info.data.camProj * g_Info.data.skyboxView  * vec4(inPos, 1.0);
 }

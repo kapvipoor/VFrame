@@ -13,29 +13,29 @@ void main()
     vec2 uv                         = XY2UV(xy, vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y));
 
     vec3 gFragPos                   = imageLoad(g_RT_StorageImages[STORE_POSITION], xy).xyz;
-    vec3 gNormal                    = imageLoad(g_RT_StorageImages[GetNormalMeshIDStorageID(g_Info.pingPongIndex)], xy).xyz;
-    vec3 randomVec                  = normalize(texture(sampler2D(g_ReadOnlyTexures[TEXTURE_READ_ID_SSAO_NOISE], g_LinearSampler), g_Info.ssaoNoiseScale * uv)).xyz;
+    vec3 gNormal                    = imageLoad(g_RT_StorageImages[GetNormalMeshIDStorageID(g_Info.data.pingPongIndex)], xy).xyz;
+    vec3 randomVec                  = normalize(texture(sampler2D(g_ReadOnlyTexures[TEXTURE_READ_ID_SSAO_NOISE], g_LinearSampler), g_Info.data.ssaoNoiseScale * uv)).xyz;
 
     vec3 tangent                    = normalize(randomVec - gNormal * dot(randomVec, gNormal));
     vec3 bitangent                  = cross(gNormal, tangent);
     mat3 tbn                        = mat3(tangent, bitangent, gNormal);
 
     float occulusion                = 0.0;
-    for(int i = 0; i < g_Info.ssaoKernelSize; i++)
+    for(int i = 0; i < g_Info.data.ssaoKernelSize; i++)
     {
         vec3 ssaoSample             = tbn * g_SSAOStorage.kernel[i].xyz;
-        ssaoSample                  = gFragPos + ssaoSample * g_Info.ssaoRadius;  
+        ssaoSample                  = gFragPos + ssaoSample * g_Info.data.ssaoRadius;  
 
-        vec4 offset                 = g_Info.camProj * vec4(ssaoSample, 1.0);       // view space to clip-space
+        vec4 offset                 = g_Info.data.camProj * vec4(ssaoSample, 1.0);       // view space to clip-space
         offset.xyz                  = offset.xyz/offset.w;                          //ndc (-1, 1)
         offset                      = (offset * 0.5) + 0.5;                         //(0,1) range
         offset.xy                   = UV2XY(vec2(offset.x, 1.0f - offset.y), vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y)).xy;
         
         float gDepth                = imageLoad(g_RT_StorageImages[STORE_POSITION], ivec2(offset.xy)).z;
-        float rangeCheck            = smoothstep(0.0, 1.0, g_Info.ssaoRadius / abs(gFragPos.z - gDepth));
-        occulusion                  = occulusion + (((gDepth >= (ssaoSample.z + g_Info.biasSSAO)) ? 1.0 : 0.0) * rangeCheck);
+        float rangeCheck            = smoothstep(0.0, 1.0, g_Info.data.ssaoRadius / abs(gFragPos.z - gDepth));
+        occulusion                  = occulusion + (((gDepth >= (ssaoSample.z + g_Info.data.biasSSAO)) ? 1.0 : 0.0) * rangeCheck);
     }
 
-    occulusion                      = 1.0 - (occulusion / g_Info.ssaoKernelSize);
+    occulusion                      = 1.0 - (occulusion / g_Info.data.ssaoKernelSize);
     imageStore(g_RT_StorageImages[STORE_SSAO_AND_BLUR], xy, vec4(occulusion, 0.0, 0.0, 0.0));
 }

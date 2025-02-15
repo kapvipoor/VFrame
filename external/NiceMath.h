@@ -24,6 +24,7 @@
 #include <cmath>
 #include <stdint.h>
 #include <vulkan/vulkan.h>
+#include <array>
 
  /**
   * \mainpage Reference Manual
@@ -635,6 +636,13 @@ namespace nm {
                 for (unsigned j = 0u; j < N; ++j)
                     result.column[i].data[j] = (S)(i == j ? 1.0f : 0.0f);
             return result;
+        }
+
+        static constexpr std::array<S, N*N> Array(const mat& inMat) {
+            const S* fpMat = &inMat.column[0][0];
+            std::array<S, N*N> outArray;
+            std::copy(&fpMat[0], &fpMat[N*N], std::begin(outArray));
+            return outArray;
         }
 
         /**

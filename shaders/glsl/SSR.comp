@@ -11,21 +11,21 @@ layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) 
 void main()
 {
     // This is the maximum distance we wish the reflected ray to be
-    float maxDistance = g_Info.ssrMaxDistance;
+    float maxDistance = g_Info.data.ssrMaxDistance;
 
     // Resolution ranges between 0-1. Where 1.0 is sampling the scene at full resolution
     // And 0.5 is sampling the scene at half resolution. If samppling at full resultion,
     // we iterate at a a pace of 1 pixel on the reflected ray when marching over it. If 0.5,
     // then we iterate at a apace of 2 pixels.
-    float resolution = g_Info.ssrResolution;
+    float resolution = g_Info.data.ssrResolution;
 
     // These are number of steps we take to find the exact point of intersection in step 2,
     // when using the binary search method between no-hit and hit points.
-    uint steps = uint(g_Info.ssrSteps);
+    uint steps = uint(g_Info.data.ssrSteps);
 
     // This variable varies between having overlapping samples if too thick to having holes
     // between samples if too thin.
-    float thickness = g_Info.ssrThickness;
+    float thickness = g_Info.data.ssrThickness;
 
     vec2 texSize = vec2(RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
     vec2 texCoord = vec2(gl_GlobalInvocationID.xy + 0.5)/texSize;
@@ -35,7 +35,7 @@ void main()
     // This is the primary position from where a reflected ray is going to be launched off
     // This is in view space
     //vec4 positionFrom = texture(sampler2D(g_RT_SampledImages[SAMPLE_POSITION], g_LinearSampler), texCoord);
-    float sampleDepth = texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.pingPongIndex)], g_NearestSampler), texCoord).x;
+    float sampleDepth = texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.data.pingPongIndex)], g_NearestSampler), texCoord).x;
 	vec4 positionFrom = GetPositionfromDepth(texCoord, sampleDepth);
     
     // We are sampling the roughness map to not run SSR for pixels with max roughness values
@@ -47,7 +47,7 @@ void main()
     }
 
     vec3 unitPositionFrom = normalize(positionFrom.xyz);
-    vec3 normal = normalize(texture(sampler2D(g_RT_SampledImages[GetNormalMeshIDTextureID(g_Info.pingPongIndex)], g_LinearSampler), texCoord).xyz);
+    vec3 normal = normalize(texture(sampler2D(g_RT_SampledImages[GetNormalMeshIDTextureID(g_Info.data.pingPongIndex)], g_LinearSampler), texCoord).xyz);
     vec3 pivot = normalize(reflect(unitPositionFrom.xyz, normal));
 
     // Before the ray marching begins, the tracking of end is at the beginning point
@@ -59,14 +59,14 @@ void main()
     vec4 endView = vec4((positionFrom.xyz) + (pivot * maxDistance), 1.0f);
     
     vec4 startFrag = startView;
-    startFrag = g_Info.camProj * startFrag; // from view to screen space
+    startFrag = g_Info.data.camProj * startFrag; // from view to screen space
     startFrag.xyz /= startFrag.w; // from screen space to NDC. Z ranges here from (-1, 1) 
     startFrag.xy = (startFrag.xy * vec2(0.5, -0.5)) + 0.5; // from NDC to UV
     startFrag.xy *= texSize; // from UV to Fragment Coordinate - this ranges betweem 0 and resolution
 
     // End frag could also be under 0 and over resolution
     vec4 endFrag = endView;
-    endFrag = g_Info.camProj * endFrag; // from view to screen space
+    endFrag = g_Info.data.camProj * endFrag; // from view to screen space
     endFrag.xyz /= endFrag.w; // from screen space to NDC. Z ranges here from (-1, 1) 
     endFrag.xy = (endFrag.xy * vec2(0.5, -0.5)) + 0.5; // from NDC to UV
     endFrag.xy = clamp(endFrag.xy, vec2(0.0, 0.0), vec2(1.0, 1.0));
@@ -108,7 +108,7 @@ void main()
         // At any given point, frag + increment can be out of [0, res]
         frag += increment;
         uv.xy = frag/texSize; // this is uv of the next position along the reflection line
-        float sampleDepth = texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.pingPongIndex)], g_NearestSampler), uv.xy).x;
+        float sampleDepth = texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.data.pingPongIndex)], g_NearestSampler), uv.xy).x;
 	    positionTo = GetPositionfromDepth(uv.xy, sampleDepth);
 
         // since search 1 holds the value between start and end, we update search 1 to hold the pixels jumped
@@ -161,7 +161,7 @@ void main()
         // and exactly between previous miss and current hit
         frag = mix(startFrag.xy, endFrag.xy, search1);
         uv.xy = frag/texSize;
-        float sampleDepth = texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.pingPongIndex)], g_LinearSampler), uv.xy).x;
+        float sampleDepth = texture(sampler2D(g_RT_SampledImages[GetDepthTextureID(g_Info.data.pingPongIndex)], g_LinearSampler), uv.xy).x;
 	    positionTo = GetPositionfromDepth(uv.xy, sampleDepth);
         
         // Remember perspective magic to calculate the distance from the camera to the new point

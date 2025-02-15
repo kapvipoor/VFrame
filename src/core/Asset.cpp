@@ -844,6 +844,7 @@ void CRenderableMesh::Show(CVulkanRHI* p_rhi)
 
 void CRenderableMesh::SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform, bool p_bRecomputeSceneBBox)
 {
+	m_prevTransform				= m_transform;
 	m_dirty						= true;
 	m_transform					= p_transform;
 
@@ -1070,23 +1071,21 @@ bool CScene::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
 		m_sceneLights->SetDirty(false);
 	}
 
-	std::vector<float> perMeshUniformData;
-	perMeshUniformData.reserve(m_meshInfo_uniform[p_loadedUpdate.swapchainIndex].reqMemSize);
+	std::vector<MeshData> allMeshUniformData;
 	for (auto& mesh : m_meshes)
 	{
 		mesh->SetDirty(false);
-		mesh->m_viewNormalTransform					= (p_loadedUpdate.camView * mesh->GetTransform().GetTransform());	// nm::inverse(nm::transpose(p_loadedUpdate.viewMatrix * mesh->GetTransform().GetTransform()));
-
-		const float* modelMat						= &(mesh->GetTransform().GetTransform()).column[0][0];
-
-		const float* trn_inv_model					= &mesh->m_viewNormalTransform.column[0][0];							// this needs to be inverse transpose so as to negate the scaling in the matrix before multiplying with normal. But this isn't working and I do not know why !
-
-		std::copy(&modelMat[0], &modelMat[16], std::back_inserter(perMeshUniformData));										// model matrix for this mesh
-		std::copy(&trn_inv_model[0], &trn_inv_model[16], std::back_inserter(perMeshUniformData));							// Transpose(inverse(view * model)) for transforming normal to view space
+		mesh->m_viewNormalTransform			= (p_loadedUpdate.camView * mesh->GetTransform().GetTransform());	// nm::inverse(nm::transpose(p_loadedUpdate.viewMatrix * mesh->GetTransform().GetTransform()));
+		
+		MeshData meshData{};
+		meshData.modelMatrix				= nm::float4x4::Array(mesh->GetTransform().GetTransform());
+		meshData.normalMatrix				= nm::float4x4::Array(mesh->m_viewNormalTransform);
+		meshData.preModelMatrix				= nm::float4x4::Array(mesh->m_prevTransform.GetTransform());
+		allMeshUniformData.push_back(meshData);
 	}
 
-	uint8_t* data = (uint8_t*)(perMeshUniformData.data());
-	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, m_meshInfo_uniform[p_loadedUpdate.swapchainIndex], false));
+	uint8_t* data = (uint8_t*)(allMeshUniformData.data());
+	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, m_meshInfo_uniform[p_loadedUpdate.swapchainIndex], false, allMeshUniformData.size() * sizeof(MeshData)));
 
 	return true;
 }
@@ -1463,10 +1462,11 @@ bool CScene::UpdateTLAS(CVulkanRHI* p_rhi, CVulkanRHI::CommandBuffer& p_cmdBfr)
 
 bool CScene::CreateMeshUniformBuffer(CVulkanRHI* p_rhi)
 {
-	size_t uniBufize = MAX_SUPPORTED_MESHES * (
-		(sizeof(float) * 16)	// model matrix
-	+	(sizeof(float) * 16)	// transpose(inverse(model)) for transforming normal to world space
-		);
+	//size_t uniBufize = MAX_SUPPORTED_MESHES * (
+	//	(sizeof(float) * 16)	// model matrix
+	//+	(sizeof(float) * 16)	// transpose(inverse(model)) for transforming normal to world space
+	//	);
+	size_t uniBufize = MAX_SUPPORTED_MESHES * sizeof(MeshData);
 
 	for (int i = 0; i < FRAME_BUFFER_COUNT; i++)
 	{
@@ -1824,7 +1824,7 @@ bool CReadOnlyTextures::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers,
 	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_commandPool, &cmdBfr, 1, &debugMarker));
 	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
 
-	CFixedBuffers::PrimaryUniformData* priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
+	PrimaryUniformData* priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
 	RETURN_FALSE_IF_FALSE(CreateSSAOKernelTexture(p_rhi, stgList, priUnidata, cmdBfr));
 	
 	if (!p_rhi->EndCommandBuffer(cmdBfr))
@@ -1846,7 +1846,7 @@ void CReadOnlyTextures::Destroy(CVulkanRHI* p_rhi)
 	DestroyTextures(p_rhi);
 }
 
-bool CReadOnlyTextures::CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData* p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
+bool CReadOnlyTextures::CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, PrimaryUniformData* p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
 	uint32_t ssaoNoiseDim = p_rhi->GetRenderWidth() / (uint32_t)p_primaryUniformData->ssaoNoiseScale[0];
 	
@@ -1889,7 +1889,7 @@ bool CReadOnlyBuffers::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers, 
 	RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffers(p_commandPool, &cmdBfr, 1, &debugMarker));
 	RETURN_FALSE_IF_FALSE(p_rhi->BeginCommandBuffer(cmdBfr, debugMarker.c_str()));
 
-	CFixedBuffers::PrimaryUniformData* priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
+	PrimaryUniformData* priUnidata		= p_fixedBuffers.GetPrimaryUnifromData();
 	RETURN_FALSE_IF_FALSE(CreateSSAONoiseBuffer(p_rhi, stgList, priUnidata, cmdBfr));
 
 	if (!p_rhi->EndCommandBuffer(cmdBfr))
@@ -1911,7 +1911,7 @@ void CReadOnlyBuffers::Destroy(CVulkanRHI* p_rhi)
 	DestroyBuffers(p_rhi);
 }
 
-bool CReadOnlyBuffers::CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData* p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
+bool CReadOnlyBuffers::CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, PrimaryUniformData* p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
 {
 	p_primaryUniformData->ssaoKernelSize			= 64.f;
 	p_primaryUniformData->ssaoRadius				= 0.5f;
@@ -1984,10 +1984,10 @@ bool CLoadableAssets::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_update
 }
 
 CRenderTargets::CRenderTargets()
-	: CTextures(CRenderTargets::RenderTargetId::rt_max)
+	: CTextures(SAMPLE_MAX_RENDER_TARGETS)
 	, CUIParticipant(CUIParticipant::ParticipationType::pt_onSelect, CUIParticipant::UIDPanelType::uipt_same)
 {
-	m_rtID.resize(CRenderTargets::RenderTargetId::rt_max);
+	m_rtID.resize(SAMPLE_MAX_RENDER_TARGETS);
 }
 
 CRenderTargets::~CRenderTargets()
@@ -2011,22 +2011,22 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 
 	//uint32_t maxMip = static_cast<uint32_t>(std::floor(std::log2(max(fullResWidth, fullResHeight)) + 1));
 
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PingPong_Depth_0,				VK_FORMAT_D32_SFLOAT,			fullResWidth, fullResHeight, 1,			shaderRead,	"primary_depth",			sample_depth));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PingPong_Depth_1,				VK_FORMAT_D32_SFLOAT,			fullResWidth, fullResHeight, 1,			shaderRead,	"primary_depth",			sample_depth));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Position,						VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"pingpong_position_0",		sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PingPong_Normal_MeshId_0,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"pingpong_normal_meshid_0",	sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PingPong_Normal_MeshId_1,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"pingpong_normal_meshid_1",	sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Albedo,							VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"albedo",					sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSAO_Blur,						VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1,			general,	"ssao_and_blur",			sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_DirectionalShadowDepth,			VK_FORMAT_D32_SFLOAT,			4096, 4096,					 1,			shaderRead,	"directional_shadow",		sample_depth));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_PrimaryColor,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"primary_color",			sample_storage_color_src));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RoughMetal,						VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1,			general,	"Rough_Metal",				sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_Motion,							VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1,			general,	"Motion",					sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSReflection,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"ss_reflection",			sample_storage_color_dest));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_SSRBlur,							VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"ssr_blur",					sample_storage_color_src_dest));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_History_PrimaryColor,			VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"history_primary_color",	sample_storage_color_dest));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RTShadowTemporalAcc,				VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"rt_shadow_temp_acc",		sample_storage_color));
-	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, rt_RTShadowDenoise,					VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"rt_shadow_denoise",		sample_storage_color_dest));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_PINGPONG_DEPTH_0,				VK_FORMAT_D32_SFLOAT,			fullResWidth, fullResHeight, 1,			shaderRead,	"primary_depth",			sample_depth));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_PINGPONG_DEPTH_1,				VK_FORMAT_D32_SFLOAT,			fullResWidth, fullResHeight, 1,			shaderRead,	"primary_depth",			sample_depth));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_POSITION,						VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"pingpong_position_0",		sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_PINGPONG_NORMAL_MESH_ID_0,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"pingpong_normal_meshid_0",	sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_PINGPONG_NORMAL_MESH_ID_1,		VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"pingpong_normal_meshid_1",	sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_ALBEDO,							VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"albedo",					sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_SSAO_AND_BLUR,					VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1,			general,	"ssao_and_blur",			sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_DIRECTIONAL_SHADOW_DEPTH,		VK_FORMAT_D32_SFLOAT,			4096, 4096,					 1,			shaderRead,	"directional_shadow",		sample_depth));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_PRIMARY_COLOR,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"primary_color",			sample_storage_color_src));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_ROUGH_METAL,						VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1,			general,	"Rough_Metal",				sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_MOTION,							VK_FORMAT_R16G16_SFLOAT,		fullResWidth, fullResHeight, 1,			general,	"Motion",					sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_SS_REFLECTION,					VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"ss_reflection",			sample_storage_color_dest));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_SSR_BLUR,						VK_FORMAT_R32G32B32A32_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"ssr_blur",					sample_storage_color_src_dest));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_HISTORY_LENGTH,					VK_FORMAT_R16_SFLOAT,			fullResWidth, fullResHeight, 1,			general,	"history_length",			sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_RT_SHADOW_TEMPORAL_ACC,			VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"rt_shadow_temp_acc",		sample_storage_color));
+	RETURN_FALSE_IF_FALSE(CreateRenderTarget(p_rhi, SAMPLE_RT_SHADOW_DENOISE,				VK_FORMAT_R16G16B16A16_SFLOAT,	fullResWidth, fullResHeight, 1,			general,	"rt_shadow_denoise",		sample_storage_color_dest));
 
 	return true;
 }
@@ -2040,9 +2040,9 @@ void CRenderTargets::Show(CVulkanRHI* p_rhi)
 {
 	CVulkanRHI::ImageList rendTargetList = GetTextures();
 	ImGui::Indent();
-	for (int i = 0; i < CRenderTargets::RenderTargetId::rt_max; i++)
+	for (uint32_t i = 0; i < SAMPLE_MAX_RENDER_TARGETS; i++)
 	{
-		std::string rtName = GetRenderTargetIDinString((CRenderTargets::RenderTargetId)i);
+		std::string rtName = GetRenderTargetIDinString(i);
 		CVulkanCore::Image renderTarget = rendTargetList[i];
 		if (ImGui::TreeNode(rtName.c_str()))
 		{
@@ -2066,44 +2066,44 @@ void CRenderTargets::Show(CVulkanRHI* p_rhi)
 	ImGui::Unindent();
 }
 
-void CRenderTargets::SetLayout(RenderTargetId p_id, VkImageLayout p_layout)
+void CRenderTargets::SetLayout(uint32_t p_renderTargetId, VkImageLayout p_layout)
 {
-	m_textures[p_id].descInfo.imageLayout = p_layout;
+	m_textures[p_renderTargetId].descInfo.imageLayout = p_layout;
 }
 
-std::string CRenderTargets::GetRenderTargetIDinString(RenderTargetId p_id)
+std::string CRenderTargets::GetRenderTargetIDinString(uint32_t p_renderTargetId)
 {
-	if (p_id == CRenderTargets::RenderTargetId::rt_PingPong_Depth_0)
+	if (p_renderTargetId == SAMPLE_PINGPONG_DEPTH_0)
 		return "Ping-pong Depth 0";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_PingPong_Depth_1)
+	else if (p_renderTargetId == SAMPLE_PINGPONG_DEPTH_1)
 		return "Ping-pong Depth 1";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_Position)
+	else if (p_renderTargetId == SAMPLE_POSITION)
 		return "Position";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_PingPong_Normal_MeshId_0)
+	else if (p_renderTargetId == SAMPLE_PINGPONG_NORMAL_MESH_ID_0)
 		return "XYZ [Normals] W[Mesh Id] Ping Pong 0";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_PingPong_Normal_MeshId_1)
+	else if (p_renderTargetId == SAMPLE_PINGPONG_NORMAL_MESH_ID_1)
 		return "XYZ [Normals] W[Mesh Id] Ping Pong 1";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_Albedo)
+	else if (p_renderTargetId == SAMPLE_ALBEDO)
 		return "Albedo";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_SSAO_Blur)
+	else if (p_renderTargetId == SAMPLE_SSAO_AND_BLUR)
 		return "SSAO and Blur";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_DirectionalShadowDepth)
+	else if (p_renderTargetId == SAMPLE_DIRECTIONAL_SHADOW_DEPTH)
 		return "Directional Shadow Depth";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_PrimaryColor)
+	else if (p_renderTargetId == SAMPLE_PRIMARY_COLOR)
 		return "Primary Color";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_RoughMetal)
+	else if (p_renderTargetId == SAMPLE_ROUGH_METAL)
 		return "Rough Metal";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_Motion)
+	else if (p_renderTargetId == SAMPLE_MOTION)
 		return "Motion";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_SSReflection)
+	else if (p_renderTargetId == SAMPLE_SS_REFLECTION)
 		return "Screen Space Reflection (UVs)";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_History_PrimaryColor)
-		return "History Primary Color";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_SSRBlur)
+	else if (p_renderTargetId == SAMPLE_HISTORY_LENGTH)
+		return "History Length";
+	else if (p_renderTargetId == SAMPLE_SSR_BLUR)
 		return "SSR Blur";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_RTShadowTemporalAcc)
+	else if (p_renderTargetId == SAMPLE_RT_SHADOW_TEMPORAL_ACC)
 		return "RT Shadows Temporal Accumulation";
-	else if (p_id == CRenderTargets::RenderTargetId::rt_RTShadowDenoise)
+	else if (p_renderTargetId == SAMPLE_RT_SHADOW_DENOISE)
 		return "RT Shadows Denoise";
 	else
 		return "Error Render Target";
@@ -2113,28 +2113,28 @@ CFixedBuffers::CFixedBuffers()
 	: CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_same)
 	, CBuffers(CFixedBuffers::FixedBufferId::fb_max)
 {
-	m_primaryUniformData.ssaoKernelSize			= 64.0f;
-	m_primaryUniformData.ssaoNoiseScale         = nm::float2((float)RENDER_RESOLUTION_X / 4.0f, (float)RENDER_RESOLUTION_Y / 4.0f);
-	m_primaryUniformData.ssaoRadius				= 0.5f;
-	m_primaryUniformData.enable_Shadow_RT_PCF	= 0;
-	m_primaryUniformData.frameCount				= 0;
-	m_primaryUniformData.enableIBL				= 0;
-	m_primaryUniformData.pbrAmbientFactor		= 0.05f;
-	m_primaryUniformData.enableSSAO				= 1;
-	m_primaryUniformData.biasSSAO				= 0.015f;
-	m_primaryUniformData.ssrEnable				= false;
-	m_primaryUniformData.ssrMaxDistance			= 5.0f;
-	m_primaryUniformData.ssrResolution			= 1.0f;
-	m_primaryUniformData.ssrThickness			= 0.11f;
-	m_primaryUniformData.ssrSteps				= 2;
-	m_primaryUniformData.taaResolveWeight		= 0.9f;
-	m_primaryUniformData.taaUseMotionVectors	= false;
-	m_primaryUniformData.taaFlickerCorectionMode = 0;		// None
-	m_primaryUniformData.taaReprojectionFilter	= 0;		// Standard
-	m_primaryUniformData.toneMappingSelection	= 0.0f;
-	m_primaryUniformData.toneMappingExposure	= 1.0f;
-	m_primaryUniformData.shadowTemporalAccumWeight = 0.0f;
-	m_primaryUniformData.pingPongIndex			= 0;
+	m_primaryUniformData.ssaoKernelSize				= 64.0f;
+	m_primaryUniformData.ssaoNoiseScale				= { (float)RENDER_RESOLUTION_X / 4.0f, (float)RENDER_RESOLUTION_Y / 4.0f };
+	m_primaryUniformData.ssaoRadius					= 0.5f;
+	m_primaryUniformData.enable_Shadow_RT_PCF		= 0;
+	m_primaryUniformData.frameCount					= 0;
+	m_primaryUniformData.enableIBL					= 0;
+	m_primaryUniformData.pbrAmbientFactor			= 0.05f;
+	m_primaryUniformData.enableSSAO					= 1;
+	m_primaryUniformData.biasSSAO					= 0.015f;
+	m_primaryUniformData.ssrEnabled					= false;
+	m_primaryUniformData.ssrMaxDistance				= 5.0f;
+	m_primaryUniformData.ssrResolution				= 1.0f;
+	m_primaryUniformData.ssrThickness				= 0.11f;
+	m_primaryUniformData.ssrSteps					= 2;
+	m_primaryUniformData.taaResolveWeight			= 0.9f;
+	m_primaryUniformData.taaUseMotionVectors		= false;
+	m_primaryUniformData.taaFlickerCorrectionMode	= 0;		// None
+	m_primaryUniformData.taaReprojectionFilter		= 0;		// Standard
+	m_primaryUniformData.toneMapperSelect			= 0.0f;
+	m_primaryUniformData.toneMappingExposure		= 1.0f;
+	m_primaryUniformData.shadowMinAccumWeight		= 0.0f;
+	m_primaryUniformData.pingPongIndex				= 0;
 }
 
 CFixedBuffers::~CFixedBuffers()
@@ -2209,7 +2209,7 @@ void CFixedBuffers::Show(CVulkanRHI* p_rhi)
 		{
 			//ImGui::InputFloat("Time Elapsed", &m_primaryUniformData.elapsedTime);
 			//ImGui::InputFloat2("Render Resolution", &m_primaryUniformData.renderRes[0]);
-			ImGui::InputFloat2("Mouse Position", &m_primaryUniformData.mousePos[0]);
+			ImGui::InputFloat2("Mouse Position", &m_primaryUniformData.mousePosition[0]);
 
 			ImGui::TreePop();
 		}
@@ -2227,59 +2227,8 @@ void CFixedBuffers::Destroy(CVulkanRHI* p_rhi)
 }
 
 bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
-{
-	float* cameraViewProj					= const_cast<float*>(&m_primaryUniformData.cameraViewProj.column[0][0]);
-	float* cameraJitteredViewProj			= const_cast<float*>(&m_primaryUniformData.cameraJitteredViewProj.column[0][0]);
-	float* cameraInvViewProj				= const_cast<float*>(&m_primaryUniformData.cameraInvViewProj.column[0][0]);
-	float* cameraPreViewProj				= const_cast<float*>(&m_primaryUniformData.cameraPreViewProj.column[0][0]);
-	float* cameraProj						= const_cast<float*>(&m_primaryUniformData.cameraProj.column[0][0]);
-	float* cameraView						= const_cast<float*>(&m_primaryUniformData.cameraView.column[0][0]);
-	float* cameraInvView					= const_cast<float*>(&m_primaryUniformData.cameraInvView.column[0][0]);
-	float* cameraInvProj					= const_cast<float*>(&m_primaryUniformData.cameraInvProj.column[0][0]);
-	float* skyboxModelView					= const_cast<float*>(&m_primaryUniformData.skyboxModelView.column[0][0]);
-	
-	// canceling out translation for skybox rendering
-	skyboxModelView[12]						= 0.0;
-	skyboxModelView[13]						= 0.0;
-	skyboxModelView[14]						= 0.0;
-	skyboxModelView[15]						= 1.0;
-
-	std::vector<float> uniformValues;
-	uniformValues.push_back((float)m_primaryUniformData.pingPongIndex);																						// Ping Pong Index
-	std::copy(&m_primaryUniformData.cameraLookFrom[0], &m_primaryUniformData.cameraLookFrom[3], std::back_inserter(uniformValues));							// camera look from x, y, z
-	std::copy(&cameraViewProj[0], &cameraViewProj[16], std::back_inserter(uniformValues));																	// camera view projection matrix
-	std::copy(&cameraJitteredViewProj[0], &cameraJitteredViewProj[16], std::back_inserter(uniformValues));													// camera jittered view projection matrix
-	std::copy(&cameraInvViewProj[0], &cameraInvViewProj[16], std::back_inserter(uniformValues));															// camera inv view projection matrix
-	std::copy(&cameraPreViewProj[0], &cameraPreViewProj[16], std::back_inserter(uniformValues));															// camera pre view projection matrix
-	std::copy(&cameraProj[0], &cameraProj[16], std::back_inserter(uniformValues));																			// camera projection matrix
-	std::copy(&cameraView[0], &cameraView[16], std::back_inserter(uniformValues));																			// camera view matrix
-	std::copy(&cameraInvView[0], &cameraInvView[16], std::back_inserter(uniformValues));																	// inverse camera view matrix
-	std::copy(&cameraInvProj[0], &cameraInvProj[16], std::back_inserter(uniformValues));																	// inverse camera projection matrix
-	std::copy(&skyboxModelView[0], &skyboxModelView[16], std::back_inserter(uniformValues));																// skybox model view
-	uniformValues.push_back((float)m_primaryUniformData.mousePos[0]);	uniformValues.push_back((float)m_primaryUniformData.mousePos[1]);					// mouse pos
-	uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[0]); uniformValues.push_back((float)m_primaryUniformData.ssaoNoiseScale[1]);			// SSAO noise scale
-	uniformValues.push_back((float)m_primaryUniformData.ssaoKernelSize);																					// SSAO kernel size
-	uniformValues.push_back((float)m_primaryUniformData.ssaoRadius);																						// SSAO radius
-	uniformValues.push_back((float)m_primaryUniformData.enable_Shadow_RT_PCF);																				// Packed Enable Shadow << (RT vs Raster) << PCF
-	uniformValues.push_back((float)m_primaryUniformData.shadowTemporalAccumWeight);																			// Packed Enable Shadow << (RT vs Raster) << PCF	
-	uniformValues.push_back((float)m_primaryUniformData.frameCount);																						// Frame Count
-	uniformValues.push_back((float)m_primaryUniformData.enableIBL);																							// enable IBL
-	uniformValues.push_back(m_primaryUniformData.pbrAmbientFactor);																							// PBR Ambient Factor
-	uniformValues.push_back((float)m_primaryUniformData.enableSSAO);																						// enable SSAO
-	uniformValues.push_back(m_primaryUniformData.biasSSAO);																									// SSAO Bias
-	uniformValues.push_back((float)m_primaryUniformData.ssrEnable);																							// SSR Enable
-	uniformValues.push_back(m_primaryUniformData.ssrMaxDistance);																							// SSR Max Distance
-	uniformValues.push_back(m_primaryUniformData.ssrResolution);																							// SSR Resolution
-	uniformValues.push_back(m_primaryUniformData.ssrThickness);																								// SSR Thickness
-	uniformValues.push_back((float)m_primaryUniformData.ssrSteps);																							// SSR Steps
-	uniformValues.push_back(m_primaryUniformData.taaResolveWeight);																							// TAA Resolve Weight
-	uniformValues.push_back((float)m_primaryUniformData.taaUseMotionVectors);																				// TAA Use Motion Vector
-	uniformValues.push_back((float)m_primaryUniformData.taaFlickerCorectionMode);																			// TAA Flicker Correction Mode
-	uniformValues.push_back((float)m_primaryUniformData.taaReprojectionFilter);																				// TAA Re-projection Filter
-	uniformValues.push_back(m_primaryUniformData.toneMappingExposure);																						// Tone Mapping Exposure
-	uniformValues.push_back((float)m_primaryUniformData.toneMappingSelection);																				// Tone Mapping Selection
-	
-	uint8_t* data							= (uint8_t*)(uniformValues.data());
+{	
+	uint8_t* data							= (uint8_t*)(&m_primaryUniformData);
 	RETURN_FALSE_IF_FALSE(p_rhi->WriteToBuffer(data, m_buffers[p_scId], false));
 		
 	return true;
@@ -2376,7 +2325,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 	
 	// Sampling Render Targets Descriptor Info
 	std::vector<VkDescriptorImageInfo> sampleRenderTargetsDesInfoList;
-	for(int i = 0; i < CRenderTargets::RenderTargetId::rt_max; i++)
+	for(int i = 0; i < SAMPLE_MAX_RENDER_TARGETS; i++)
 	{
 		sampleRenderTargetsDesInfoList.push_back(rendTargets->GetTexture(i).descInfo);
 	}
@@ -2384,19 +2333,19 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 	// Storage Render Targets Descriptor Info
 	std::vector<VkDescriptorImageInfo> storeRenderTargetsDesInfoList(STORE_MAX_RENDER_TARGETS, VkDescriptorImageInfo{});
 	{
-		storeRenderTargetsDesInfoList[STORE_POSITION]						= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Position).descInfo;
-		storeRenderTargetsDesInfoList[STORE_PINGPONG_NORMAL_MESH_ID_0]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_PingPong_Normal_MeshId_0).descInfo;
-		storeRenderTargetsDesInfoList[STORE_PINGPONG_NORMAL_MESH_ID_1]		= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_PingPong_Normal_MeshId_1).descInfo;
-		storeRenderTargetsDesInfoList[STORE_ALBEDO]							= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Albedo).descInfo;
-		storeRenderTargetsDesInfoList[STORE_SSAO_AND_BLUR]					= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSAO_Blur).descInfo;
-		storeRenderTargetsDesInfoList[STORE_PRIMARY_COLOR]					= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_PrimaryColor).descInfo;
-		storeRenderTargetsDesInfoList[STORE_ROUGH_METAL]					= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_RoughMetal).descInfo;
-		storeRenderTargetsDesInfoList[STORE_MOTION]							= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_Motion).descInfo;
-		storeRenderTargetsDesInfoList[STORE_SS_REFLECTION]					= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSReflection).descInfo;
-		storeRenderTargetsDesInfoList[STORE_SSR_BLUR]						= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_SSRBlur).descInfo;
-		storeRenderTargetsDesInfoList[STORE_HISTORY_PRIMARY_COLOR]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_History_PrimaryColor).descInfo;
-		storeRenderTargetsDesInfoList[STORE_RT_SHADOW_TEMPORAL_ACC]			= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_RTShadowTemporalAcc).descInfo;
-		storeRenderTargetsDesInfoList[STORE_RT_SHADOW_DENOISE]				= rendTargets->GetTexture(CRenderTargets::RenderTargetId::rt_RTShadowDenoise).descInfo;
+		storeRenderTargetsDesInfoList[STORE_POSITION]						= rendTargets->GetTexture(SAMPLE_POSITION).descInfo;
+		storeRenderTargetsDesInfoList[STORE_PINGPONG_NORMAL_MESH_ID_0]		= rendTargets->GetTexture(SAMPLE_PINGPONG_NORMAL_MESH_ID_0).descInfo;
+		storeRenderTargetsDesInfoList[STORE_PINGPONG_NORMAL_MESH_ID_1]		= rendTargets->GetTexture(SAMPLE_PINGPONG_NORMAL_MESH_ID_1).descInfo;
+		storeRenderTargetsDesInfoList[STORE_ALBEDO]							= rendTargets->GetTexture(SAMPLE_ALBEDO).descInfo;
+		storeRenderTargetsDesInfoList[STORE_SSAO_AND_BLUR]					= rendTargets->GetTexture(SAMPLE_SSAO_AND_BLUR).descInfo;
+		storeRenderTargetsDesInfoList[STORE_PRIMARY_COLOR]					= rendTargets->GetTexture(SAMPLE_PRIMARY_COLOR).descInfo;
+		storeRenderTargetsDesInfoList[STORE_ROUGH_METAL]					= rendTargets->GetTexture(SAMPLE_ROUGH_METAL).descInfo;
+		storeRenderTargetsDesInfoList[STORE_MOTION]							= rendTargets->GetTexture(SAMPLE_MOTION).descInfo;
+		storeRenderTargetsDesInfoList[STORE_SS_REFLECTION]					= rendTargets->GetTexture(SAMPLE_SS_REFLECTION).descInfo;
+		storeRenderTargetsDesInfoList[STORE_SSR_BLUR]						= rendTargets->GetTexture(SAMPLE_SSR_BLUR).descInfo;
+		storeRenderTargetsDesInfoList[STORE_HISTORY_LENGTH]					= rendTargets->GetTexture(SAMPLE_HISTORY_LENGTH).descInfo;
+		storeRenderTargetsDesInfoList[STORE_RT_SHADOW_TEMPORAL_ACC]			= rendTargets->GetTexture(SAMPLE_RT_SHADOW_TEMPORAL_ACC).descInfo;
+		storeRenderTargetsDesInfoList[STORE_RT_SHADOW_DENOISE]				= rendTargets->GetTexture(SAMPLE_RT_SHADOW_DENOISE).descInfo;
 	}
 
 	// read only texture desc info

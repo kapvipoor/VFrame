@@ -157,7 +157,7 @@ public:
 		virtual bool Dispatch(RenderData*) override;
 		
 	private:
-		float m_temporalAccumWeight;
+		float m_minAccumWeight;
 	};
 
 	class CShadowDenoisePass : public CComputePass

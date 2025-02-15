@@ -9,9 +9,8 @@
 layout (local_size_x = THREAD_GROUP_SIZE_X, local_size_y = THREAD_GROUP_SIZE_Y) in;
 void main()
 {
-    ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
-
-    // Copying Current Color to Previous Color
-    vec4 curColor = imageLoad(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy);
-    imageStore(g_RT_StorageImages[STORE_HISTORY_PRIMARY_COLOR], xy, curColor);
+    //ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
+    //// Copying Current Color to Previous Color
+    //vec4 curColor = imageLoad(g_RT_StorageImages[STORE_PRIMARY_COLOR], xy);
+    //imageStore(g_RT_StorageImages[STORE_HISTORY_PRIMARY_COLOR], xy, curColor);
 }

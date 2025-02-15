@@ -36,13 +36,13 @@ void main()
 	outTangentinVieSpace	 			= normalize((meshData.normalMatrix * vec4(inTangent.x, inTangent.y, inTangent.z, 0.0f))).xyz; 
 	outBiTangentinViewSpace 			= cross(outNormalinViewSpace, outTangentinVieSpace) * inTangent.w;
 	vec4 PosinWorldSpace 				= (meshData.modelMatrix * vec4(inPos, 1.0));
-	outPosinViewSpace 					= g_Info.camView * PosinWorldSpace;
-	gl_Position 						= g_Info.camJitteredViewProj * PosinWorldSpace;
+	outPosinViewSpace 					= g_Info.data.camView * PosinWorldSpace;
+	gl_Position 						= g_Info.data.camJitteredViewProj * PosinWorldSpace;
 
 	// Used to calculate the motion vectors
-	outPosinClipSpace					= g_Info.camViewProj * PosinWorldSpace;
+	outPosinClipSpace					= g_Info.data.camViewProj * PosinWorldSpace;
 	outPrevPosinClipSpace				= PosinWorldSpace;
-	outPrevPosinClipSpace				= g_Info.camPreViewProj * PosinWorldSpace;
+	outPrevPosinClipSpace				= g_Info.data.camPreViewProj * PosinWorldSpace;
 
 	for(int i = 0; i < g_lights.count; i++)
 	{

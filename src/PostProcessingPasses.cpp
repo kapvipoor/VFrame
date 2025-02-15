@@ -59,7 +59,7 @@ bool CToneMapPass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 
 bool CToneMapPass::Update(UpdateData* p_updateData)
 {
-    p_updateData->uniformData->toneMappingSelection = (float)m_toneMapper;
+    p_updateData->uniformData->toneMapperSelect = (float)m_toneMapper;
     p_updateData->uniformData->toneMappingExposure = m_exposure;
 
     return true;
@@ -149,7 +149,7 @@ bool CTAAComputePass::Update(UpdateData* p_updateData)
 {
     p_updateData->uniformData->taaResolveWeight         = m_resolveWeight;
     p_updateData->uniformData->taaUseMotionVectors      = m_useMotionVectors;
-    p_updateData->uniformData->taaFlickerCorectionMode  = (float)m_flickerCorrectionMode;
+    p_updateData->uniformData->taaFlickerCorrectionMode = (float)m_flickerCorrectionMode;
     p_updateData->uniformData->taaReprojectionFilter    = (float)m_reprojectionFilter;
 
     return true;

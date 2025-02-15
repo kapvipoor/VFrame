@@ -1,14 +1,11 @@
+#include "common.h"
+
 layout(push_constant) uniform MeshID
 {
 	uint mesh_id;
 	uint material_id;
 }g_pushConstant;
 
-struct MeshData
-{
-	mat4  modelMatrix;			// model matrix for this vertex buffer
-	mat4  normalMatrix;			// inverse transpose of (view * model)
-};
 layout(set = 1, binding = 0) uniform Mesh
 {
 	MeshData data[1];

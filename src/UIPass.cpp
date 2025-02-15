@@ -213,7 +213,7 @@ bool CDebugDrawPass::CreateRenderingInfo(RenderData* p_renderData)
 	m_colorAttachInfos = std::vector<VkRenderingAttachmentInfo>(AttachId::max, CVulkanCore::RenderingAttachinfo());
 	// Color
 	{
-		CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
+		CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(SAMPLE_PRIMARY_COLOR);
 		colorAttachFormats[AttachId::Color]					= colorRT.format;
 		m_colorAttachInfos[AttachId::Color].imageView		= colorRT.descInfo.imageView;
 		m_colorAttachInfos[AttachId::Color].clearValue		= VkClearValue{ 0.0, 0.0, 0.0, 0.0 };
@@ -222,7 +222,7 @@ bool CDebugDrawPass::CreateRenderingInfo(RenderData* p_renderData)
 
 	// Primary Depth
 	{
-		CVulkanRHI::Image depthRT							= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PingPong_Depth_0);
+		CVulkanRHI::Image depthRT							= p_renderData->fixedAssets->GetRenderTargets()->GetTexture(SAMPLE_PINGPONG_DEPTH_0);
 		m_pipeline.depthAttachFormat						= depthRT.format;
 
 		m_depthAttachInfo									= CVulkanCore::RenderingAttachinfo();
@@ -294,12 +294,12 @@ bool CDebugDrawPass::Update(UpdateData*)
 
 bool CDebugDrawPass::Render(RenderData* p_renderData)
 {
-	uint32_t scId												= p_renderData->scIdx;
-	CVulkanRHI::CommandBuffer cmdBfr							= p_renderData->cmdBfr;
-	CVulkanRHI::Renderpass renderPass							= m_pipeline.renderpassData;
-	CRenderableDebug* debugRender								= p_renderData->fixedAssets->GetDebugRenderer();
-	const CPrimaryDescriptors* primaryDesc						= p_renderData->primaryDescriptors;
-	CFixedBuffers::PrimaryUniformData* primaryData				= p_renderData->fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
+	uint32_t scId											= p_renderData->scIdx;
+	CVulkanRHI::CommandBuffer cmdBfr						= p_renderData->cmdBfr;
+	CVulkanRHI::Renderpass renderPass						= m_pipeline.renderpassData;
+	CRenderableDebug* debugRender							= p_renderData->fixedAssets->GetDebugRenderer();
+	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
+	PrimaryUniformData* primaryData							= p_renderData->fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
 
 	// instanced indexed draw
 	RETURN_FALSE_IF_FALSE(debugRender->PreDrawInstanced(m_rhi, scId, p_renderData->fixedAssets->GetFixedBuffers(), p_renderData->sceneGraph, cmdBfr));

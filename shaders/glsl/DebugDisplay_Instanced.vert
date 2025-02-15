@@ -11,5 +11,5 @@ layout (location = 0) in vec3 inPos;
 
 void main() 
 {
-	gl_Position = g_Info.camViewProj *  (g_Uniform.model[gl_InstanceIndex] * vec4(inPos, 1.0));
+	gl_Position = g_Info.data.camViewProj *  (g_Uniform.model[gl_InstanceIndex] * vec4(inPos, 1.0));
 }

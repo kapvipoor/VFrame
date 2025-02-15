@@ -482,7 +482,7 @@ public:
 	void UnMapMemory(Buffer p_buffer);
 
 	bool ReadFromBuffer(void* p_data, Buffer p_buffer);
-	bool WriteToBuffer(void* p_data, Buffer p_buffer, bool p_bFlush = false);
+	bool WriteToBuffer(void* p_data, Buffer p_buffer, bool p_bFlush = false, size_t p_writeSize = 0);
 	bool UploadFromHostToDevice(Buffer& p_staging, Buffer& p_dest, VkCommandBuffer & p_cmdBfr);
 	void UploadFromHostToDevice(Buffer& p_staging, VkImageLayout p_finLayout, Image& p_dest, VkCommandBuffer& p_cmdBfr, bool p_uploadMips = false);
 	

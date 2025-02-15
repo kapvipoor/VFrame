@@ -28,10 +28,10 @@ void PickMeshID()
 {
 	vec4 fragCoord = gl_FragCoord;
 
-	if(		fragCoord.x >= g_Info.mousePosition.x - 2.0
-		&&	fragCoord.x <= g_Info.mousePosition.x + 2.0
-		&&	fragCoord.y >= g_Info.mousePosition.y - 2.0
-		&&	fragCoord.y <= g_Info.mousePosition.y + 2.0)
+	if(		fragCoord.x >= g_Info.data.mousePosition.x - 2.0
+		&&	fragCoord.x <= g_Info.data.mousePosition.x + 2.0
+		&&	fragCoord.y >= g_Info.data.mousePosition.y - 2.0
+		&&	fragCoord.y <= g_Info.data.mousePosition.y + 2.0)
 	{
 		g_objpickerStorage.id = (g_pushConstant.mesh_id + 1);	
 

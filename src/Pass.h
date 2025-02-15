@@ -23,13 +23,13 @@ public:
 
 	struct UpdateData
 	{
-		float								timeElapsed;
-		nm::float2							curMousePos;
-		nm::float2							screenRes;
-		bool								leftMouseDown;
-		bool								rightMouseDown;
-		CSceneGraph*						sceneGraph;
-		CFixedBuffers::PrimaryUniformData*  uniformData;
+		float						timeElapsed;
+		nm::float2					curMousePos;
+		nm::float2					screenRes;
+		bool						leftMouseDown;
+		bool						rightMouseDown;
+		CSceneGraph*				sceneGraph;
+		PrimaryUniformData*			uniformData;
 	};
 
 	CPass(CVulkanRHI* p_core);

@@ -215,43 +215,6 @@ public:
 		, fb_max
 	};
 
-	struct PrimaryUniformData
-	{
-		int							pingPongIndex;
-		nm::float3					cameraLookFrom;
-		nm::float4x4				cameraViewProj;
-		nm::float4x4				cameraJitteredViewProj;
-		nm::float4x4				cameraInvViewProj;
-		nm::float4x4				cameraPreViewProj;
-		nm::float4x4				cameraProj;
-		nm::float4x4				cameraView;
-		nm::float4x4				cameraInvView;
-		nm::float4x4				cameraInvProj;
-		nm::float4x4				skyboxModelView;
-		nm::float2					mousePos;
-		nm::float2					ssaoNoiseScale;
-		float						ssaoKernelSize;
-		float						ssaoRadius;
-		uint32_t					enable_Shadow_RT_PCF;
-		float						shadowTemporalAccumWeight;
-		uint32_t					frameCount;
-		int							enableIBL;
-		float						pbrAmbientFactor;
-		int							enableSSAO;
-		float						biasSSAO;
-		float						ssrEnable;
-		float						ssrMaxDistance;
-		float						ssrResolution;
-		float						ssrThickness;
-		float						ssrSteps;
-		float						taaResolveWeight;
-		float						taaUseMotionVectors;
-		float						taaFlickerCorectionMode;
-		float						taaReprojectionFilter;
-		float						toneMappingExposure;
-		float						toneMappingSelection;
-	};
-
 	CFixedBuffers();
 	~CFixedBuffers();
 
@@ -276,27 +239,6 @@ struct FixedUpdateData
 class CRenderTargets : public CTextures, public CUIParticipant
 {
 public:
-	enum RenderTargetId
-	{
-		  rt_PingPong_Depth_0				= 0		// This frame's depth target for History/Current use
-		, rt_PingPong_Depth_1				= 1		// This frame's depth target for History/Current use
-		, rt_Position						= 2		// Position in view space for Current use
-		, rt_PingPong_Normal_MeshId_0		= 3		// XYZ [Normal in view space for History/Current use] W[Mesh Id for History/Current use]
-		, rt_PingPong_Normal_MeshId_1		= 4		// XYZ [Normal in view space for History/Current use] W[Mesh Id for History/Current use]
-		, rt_Albedo							= 5		// Albedo
-		, rt_SSAO_Blur						= 6		// SSAO and Blur 
-		, rt_DirectionalShadowDepth			= 7		// Directional shadow depth
-		, rt_PrimaryColor					= 8		// This frame's color target, copies to swap chain by eof
-		, rt_RoughMetal						= 9		// Roughness and Metal
-		, rt_Motion							= 10	// Motion vectors
-		, rt_SSReflection					= 11	// Screen Space Reflection (RGB)
-		, rt_SSRBlur						= 12	// Blurred Screen Space Reflection (for rough surfaces)
-		, rt_History_PrimaryColor			= 13	// Previous frame's color target (done post tone mapping)
-		, rt_RTShadowTemporalAcc			= 14	// Temporal Accumulated ray traced shadows (4 count - 1 directional + 3 point)
-		, rt_RTShadowDenoise				= 15	// Denoised ray traces shadows (4 count - 1 directional + 3 point)
-		, rt_max
-	};
-
 	CRenderTargets();
 	~CRenderTargets();
 
@@ -310,9 +252,9 @@ public:
 	// shaders as shader resources. Once the primary descriptors are created all
 	// the layout of the render targets are reset to default IE:
 	// LAYOUT_UNDEFINED
-	void SetLayout(RenderTargetId, VkImageLayout);
+	void SetLayout(uint32_t p_renderTargetId, VkImageLayout);
 
-	std::string GetRenderTargetIDinString(RenderTargetId);
+	std::string GetRenderTargetIDinString(uint32_t p_renderTargetId);
 
 private:
 
@@ -465,6 +407,7 @@ private:
 	std::vector<BBox>				m_subBoundingBoxes;
 	uint32_t						m_mesh_id;
 	nm::float4x4					m_viewNormalTransform;
+	nm::Transform					m_prevTransform;	// For now we are only providing this feature to meshes to compute their motion vectors
 	
 	// few members needed for ui
 	int								m_selectedSubMeshId;
@@ -633,7 +576,7 @@ public:
 	void Destroy(CVulkanRHI*);
 
 private:
-	bool CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData*, CVulkanRHI::CommandBuffer& p_cmdBfr);
+	bool CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, PrimaryUniformData*, CVulkanRHI::CommandBuffer& p_cmdBfr);
 };
 
 class CReadOnlyBuffers : public CBuffers
@@ -652,7 +595,7 @@ public:
 	void Destroy(CVulkanRHI*);
 
 private:
-	bool CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData*, CVulkanRHI::CommandBuffer& p_cmdBfr);
+	bool CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, PrimaryUniformData*, CVulkanRHI::CommandBuffer& p_cmdBfr);
 };
 
 class CLoadableAssets;

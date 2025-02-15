@@ -157,21 +157,21 @@ bool CRasterRender::on_create(HINSTANCE pInstance)
 	{
 		RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(m_vkCmdBfr[0][0], "Preparing Render Targets"));
 
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PingPong_Depth_0);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PingPong_Depth_1);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Position);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PingPong_Normal_MeshId_0);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PingPong_Normal_MeshId_1);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Albedo);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSAO_Blur);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_vkCmdBfr[0][0], CRenderTargets::rt_DirectionalShadowDepth);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_PrimaryColor);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_RoughMetal);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_Motion);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSReflection);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_History_PrimaryColor);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_SSRBlur);
-		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], CRenderTargets::rt_RTShadowDenoise);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, m_vkCmdBfr[0][0], SAMPLE_PINGPONG_DEPTH_0);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, m_vkCmdBfr[0][0], SAMPLE_PINGPONG_DEPTH_1);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], SAMPLE_POSITION);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], SAMPLE_PINGPONG_NORMAL_MESH_ID_0);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], SAMPLE_PINGPONG_NORMAL_MESH_ID_1);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], SAMPLE_ALBEDO);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], SAMPLE_SSAO_AND_BLUR);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_vkCmdBfr[0][0], SAMPLE_DIRECTIONAL_SHADOW_DEPTH);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], SAMPLE_PRIMARY_COLOR);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], SAMPLE_ROUGH_METAL);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], SAMPLE_MOTION);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], SAMPLE_SS_REFLECTION);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], SAMPLE_HISTORY_LENGTH);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], SAMPLE_SSR_BLUR);
+		m_fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, m_vkCmdBfr[0][0], SAMPLE_RT_SHADOW_DENOISE);
 		
 		RETURN_FALSE_IF_FALSE(m_rhi->EndCommandBuffer(m_vkCmdBfr[0][0]));
 
@@ -237,24 +237,34 @@ bool CRasterRender::on_update(float delta)
 	}
 
 	{
-		CFixedBuffers::PrimaryUniformData* uniformData = m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
-		uniformData->cameraInvView					= nm::inverse(m_primaryCamera->GetView());
-		uniformData->cameraInvProj					= nm::inverse(m_primaryCamera->GetProjection());
-		uniformData->cameraLookFrom					= m_primaryCamera->GetLookFrom();
-		uniformData->cameraProj						= m_primaryCamera->GetProjection();
-		uniformData->cameraView						= m_primaryCamera->GetView();
-		uniformData->cameraViewProj					= m_primaryCamera->GetViewProj();
-		uniformData->cameraJitteredViewProj			= m_primaryCamera->GetJitteredViewProj();
-		uniformData->cameraInvViewProj				= m_primaryCamera->GetInvViewProj();
-		uniformData->cameraPreViewProj				= m_primaryCamera->GetPreViewProj();
-		uniformData->mousePos						= nm::float2((float)mousepos_x, (float)mousepos_y);
-		uniformData->skyboxModelView				= m_primaryCamera->GetView();
-		uniformData->frameCount						= m_frameCount;
-		uniformData->pingPongIndex					= m_pingPongIndex;
+		nm::float4x4 skyboxModelView		= m_primaryCamera->GetView();
+		skyboxModelView.column[3][0]		= 0.0;
+		skyboxModelView.column[3][1]		= 0.0;
+		skyboxModelView.column[3][2]		= 0.0;
+		skyboxModelView.column[3][3]		= 1.0;
+
+
+		PrimaryUniformData* uniformData		= m_fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();		
+		uniformData->cameraLookFromX		= m_primaryCamera->GetLookFrom().x();
+		uniformData->cameraLookFromY		= m_primaryCamera->GetLookFrom().y();
+		uniformData->cameraLookFromZ		= m_primaryCamera->GetLookFrom().z();
+		
+		uniformData->invCamView				= nm::float4x4::Array(nm::inverse(m_primaryCamera->GetView()));
+		uniformData->invCamProj				= nm::float4x4::Array(nm::inverse(m_primaryCamera->GetProjection()));
+		uniformData->camProj				= nm::float4x4::Array(m_primaryCamera->GetProjection());
+		uniformData->camView				= nm::float4x4::Array(m_primaryCamera->GetView());
+		uniformData->camViewProj			= nm::float4x4::Array(m_primaryCamera->GetViewProj());
+		uniformData->camJitteredViewProj	= nm::float4x4::Array(m_primaryCamera->GetJitteredViewProj());
+		uniformData->camInvViewProj			= nm::float4x4::Array(m_primaryCamera->GetInvViewProj());
+		uniformData->camPreViewProj			= nm::float4x4::Array(m_primaryCamera->GetPreViewProj());
+		uniformData->mousePosition			= {(float)mousepos_x, (float)mousepos_y};
+		uniformData->skyboxView				= nm::float4x4::Array(skyboxModelView);
+		uniformData->frameCount				= m_frameCount;
+		uniformData->pingPongIndex			= m_pingPongIndex;
 
 		CPass::UpdateData updateData{};
-		updateData.sceneGraph						= m_sceneGraph;
-		updateData.uniformData						= uniformData;
+		updateData.sceneGraph				= m_sceneGraph;
+		updateData.uniformData				= uniformData;
 
 		m_shadowPass->GetStaticShadowPrePass()->Update(&updateData);
 		m_skyboxForwardPass->Update(&updateData);
@@ -736,8 +746,8 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 	{
 		//CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_PrimaryColor);
 		//CVulkanRHI::Image prevColorlRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_History_PrimaryColor);
-		CVulkanRHI::Image ssrRT = renderData.fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_SSReflection);
-		CVulkanRHI::Image shadowDenoiseRT = renderData.fixedAssets->GetRenderTargets()->GetTexture(CRenderTargets::rt_RTShadowDenoise);
+		CVulkanRHI::Image ssrRT = renderData.fixedAssets->GetRenderTargets()->GetTexture(SAMPLE_SS_REFLECTION);
+		CVulkanRHI::Image shadowDenoiseRT = renderData.fixedAssets->GetRenderTargets()->GetTexture(SAMPLE_RT_SHADOW_DENOISE);
 
 		//m_rhi->CopyImage(cmdBfr, colorRT, prevColorlRT);
 

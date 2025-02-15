@@ -29,10 +29,10 @@ void PickMeshID()
 {
 	vec4 fragCoord = gl_FragCoord;
 
-	if(fragCoord.x >= g_Info.mousePosition.x - 2.0
-		&&	fragCoord.x <= g_Info.mousePosition.x + 2.0
-		&&	fragCoord.y >= g_Info.mousePosition.y - 2.0
-		&&	fragCoord.y <= g_Info.mousePosition.y + 2.0)
+	if(fragCoord.x >= g_Info.data.mousePosition.x - 2.0
+		&&	fragCoord.x <= g_Info.data.mousePosition.x + 2.0
+		&&	fragCoord.y >= g_Info.data.mousePosition.y - 2.0
+		&&	fragCoord.y <= g_Info.data.mousePosition.y + 2.0)
 	{
 		g_objpickerStorage.id 			= (g_pushConstant.mesh_id + 1);	
 
@@ -84,10 +84,10 @@ void main()
 		{
 			// this needs to be inverse transpose so as to negate the scaling in the matrix before multipling with Light vector. But this isn't working and I do not know why!
 			vec4 lightDir 	= vec4(light.vector3[0], light.vector3[1], light.vector3[2], 0.0f);
-			L 				= normalize(g_Info.camView * lightDir).xyz;
+			L 				= normalize(g_Info.data.camView * lightDir).xyz;
 
 			// Compute Shadow if enabled
-			int enableShadowRTPCF = int(g_Info.enable_Shadow_RT_PCF);
+			int enableShadowRTPCF = int(g_Info.data.enable_Shadow_RT_PCF);
 			if((enableShadowRTPCF & ENABLE_SHADOW) == ENABLE_SHADOW)
 			{
 				if((enableShadowRTPCF & ENABLE_RT_SHADOW) != ENABLE_RT_SHADOW)
@@ -100,7 +100,7 @@ void main()
 			// Compute directional light if IBL is disabled
 			// Otherwise the ambient light is picked from
 			// Diffuse Irradiance and Specular IBL Maps
-			if(g_Info.enableIBL == 0)
+			if(g_Info.data.enableIBL == 0)
 			{
 		 		// There is no attenuation for directional light
 				float attenuation 	= 1.0;
@@ -112,7 +112,7 @@ void main()
 			// light.vector3 is a position of the point light here.
 			// the light vector is going to be inPosinViewSpace - (view matrix * light position)
 			// L in View Space
-			L 					= ((g_Info.camView * vec4(light.vector3[0], light.vector3[1], light.vector3[2], 1.0f)) - inPosinViewSpace).xyz;
+			L 					= ((g_Info.data.camView * vec4(light.vector3[0], light.vector3[1], light.vector3[2], 1.0f)) - inPosinViewSpace).xyz;
 			float distance 		= length(L);
 			L 					= normalize(L);
 			float attenuation 	= max(0.0f, light.intensity - distance);
@@ -125,12 +125,12 @@ void main()
 		}
 	}
 
-	if(g_Info.enableIBL == 1)
+	if(g_Info.data.enableIBL == 1)
 	{
 		vec3 ambient = vec3(1.0) /* * ambient occlusion */;	
 		if(shadow == 0)
 		{
-			ambient *= g_Info.pbrAmbientFactor * albedo.xyz;
+			ambient *= g_Info.data.pbrAmbientFactor * albedo.xyz;
 		}
 		else
 		{
@@ -140,7 +140,7 @@ void main()
 	}
 	else
 	{
-		vec3 ambient 	= vec3(g_Info.pbrAmbientFactor) * albedo.xyz;
+		vec3 ambient 	= vec3(g_Info.data.pbrAmbientFactor) * albedo.xyz;
 		finalColor 		= vec4(ambient + Lo, 1.0);
 	}
 	
@@ -155,10 +155,10 @@ void main()
 		velocity 				= velocity * vec2(0.5, -0.5);
 
 		// now correct the motion vectors with the jitter that has been passed to
-		// the current view-projection matrix only - g_Info.camViewProj
+		// the current view-projection matrix only - g_Info.data.camViewProj
 		// No need to do this because we have multiplied with non-jittered
 		// viewproj of this and previous frame
-		//velocity								-= g_Info.taaJitterOffset;
+		//velocity								-= g_Info.data.taaJitterOffset;
 		outMotion.xy 			= velocity;
 	}
 

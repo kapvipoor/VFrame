@@ -1939,14 +1939,17 @@ void CVulkanCore::UnMapMemory(Buffer p_buffer)
 	vkUnmapMemory(m_vkDevice, p_buffer.devMem);
 }
 
-bool CVulkanCore::WriteToBuffer(void* p_data, Buffer p_buffer, bool p_bFlush)
+bool CVulkanCore::WriteToBuffer(void* p_data, Buffer p_buffer, bool p_bFlush, size_t p_writeSize)
 {
 	uint8_t* data = nullptr;
 	std::vector<VkMappedMemoryRange> ranges;
 	if (!MapMemory(p_buffer, p_bFlush, (void**)&data, &ranges))
 		return false;
 
-	memcpy(data, p_data, (size_t)p_buffer.descInfo.range);
+	if(p_writeSize > 0 && p_writeSize <= p_buffer.descInfo.range)
+		memcpy(data, p_data, p_writeSize);
+	else
+		memcpy(data, p_data, (size_t)p_buffer.descInfo.range);
 
 	if (p_bFlush == true)
 	{

@@ -83,13 +83,13 @@ void main()
 {    
     vec3 color = texture(sampler2D(g_RT_SampledImages[SAMPLE_PRIMARY_COLOR], g_LinearSampler), inUV).xyz;
 
-    if(g_Info.enabelSSAO == 1)
+    if(g_Info.data.enableSSAO == 1)
 	{
 		float ssaoFactor = imageLoad(g_RT_StorageImages[STORE_SSAO_AND_BLUR], ivec2(gl_FragCoord.xy)).y;
         color *=  ssaoFactor;
 	}
 
-    if(g_Info.ssrEnabled == 1)
+    if(g_Info.data.ssrEnabled == 1)
     {
         vec4 reflectedColor = texture(sampler2D(g_RT_SampledImages[SAMPLE_SS_REFLECTION], g_LinearSampler), inUV).xyzw;
         //if(reflectedColor.w < 0.8)
@@ -101,12 +101,12 @@ void main()
     }
 
     // Applying Exposure
-    color *= g_Info.toneMappingExposure;
+    color *= g_Info.data.toneMappingExposure;
 
     // Tonemapping (moving from HDR to LDR)
-	if(g_Info.toneMapperSelect == 1)
+	if(g_Info.data.toneMapperSelect == 1)
         color = Reinhard(color);
-    else if(g_Info.toneMapperSelect == 2)
+    else if(g_Info.data.toneMapperSelect == 2)
         color = TimothyTonemapper(color);
     	
     // Gamma Correction because all light calculation is in sRGB and not linear

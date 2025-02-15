@@ -116,7 +116,7 @@ bool CSSAOComputePass::Update(UpdateData* p_updateData)
 	p_updateData->uniformData->biasSSAO = m_bias;
 	p_updateData->uniformData->enableSSAO = m_isEnabled;
 	p_updateData->uniformData->ssaoKernelSize = m_kernelSize;
-	p_updateData->uniformData->ssaoNoiseScale = m_noiseScale;
+	p_updateData->uniformData->ssaoNoiseScale = { m_noiseScale[0], m_noiseScale[1] };
 	p_updateData->uniformData->ssaoRadius = m_kernelRadius;
 
 	return true;
@@ -133,7 +133,7 @@ bool CSSAOComputePass::Dispatch(RenderData* p_renderData)
 	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Compute SSAO"));
 	m_rhi->InsertMarker(cmdBfr, "SSAO Compute");
 	{
-		p_renderData->fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, cmdBfr, CRenderTargets::rt_SSAO_Blur);
+		p_renderData->fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, cmdBfr, SAMPLE_SSAO_AND_BLUR);
 
 		vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeline);
 		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
@@ -229,7 +229,7 @@ bool CSSRComputePass::CreatePipeline(CVulkanCore::Pipeline p_Pipeline)
 
 bool CSSRComputePass::Update(UpdateData* p_updateData)
 {
-	p_updateData->uniformData->ssrEnable		= IsEnabled();
+	p_updateData->uniformData->ssrEnabled		= IsEnabled();
 	p_updateData->uniformData->ssrMaxDistance	= m_maxDistance;
 	p_updateData->uniformData->ssrResolution	= m_resolution;
 	p_updateData->uniformData->ssrThickness		= m_thickness;
@@ -251,7 +251,7 @@ bool CSSRComputePass::Dispatch(RenderData* p_renderData)
 	{
 		m_rhi->InsertMarker(cmdBfr, "SSR Compute");
 		{
-			p_renderData->fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, cmdBfr, CRenderTargets::rt_SSReflection);
+			p_renderData->fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, cmdBfr, SAMPLE_SS_REFLECTION);
 
 			vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeline);
 			vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
@@ -316,7 +316,7 @@ bool CCopyComputePass::Dispatch(RenderData* p_renderData)
 	
 	//RETURN_FALSE_IF_FALSE(m_rhi->BeginCommandBuffer(cmdBfr, "Copy Compute"));
 	{
-		p_renderData->fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, cmdBfr, CRenderTargets::rt_SSReflection);
+		p_renderData->fixedAssets->GetRenderTargets()->IssueLayoutBarrier(m_rhi, VK_IMAGE_LAYOUT_GENERAL, cmdBfr, SAMPLE_SS_REFLECTION);
 
 		vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeline);
 		vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);
