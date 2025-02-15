@@ -6,45 +6,6 @@
 #define GPU
 #include "../../src/core/Global.h"
 
-//layout(set = 0, binding = 0) uniform GlobalBuffer
-//{
-//	int		pingPongIndex;
-//	float	cameraLookFromX;
-//	float	cameraLookFromY;
-//	float	cameraLookFromZ;
-//	mat4	camViewProj;				// without jitter
-//	mat4	camJitteredViewProj;		// with jitter
-//	mat4	camInvViewProj;				// without jitter
-//	mat4	camPreViewProj;				// without jitter
-//	mat4	camProj;
-//	mat4	camView;
-//	mat4	invCamView;
-//	mat4	invCamProj;
-//	mat4	skyboxView;
-//	vec2	mousePosition;
-//	vec2	ssaoNoiseScale;
-//	float	ssaoKernelSize;
-//	float	ssaoRadius;
-//	float	enable_Shadow_RT_PCF;
-//	float	shadowMinAccumWeight;
-//	uint	frameCount;
-//	float 	enableIBL;
-//	float 	pbrAmbientFactor;
-//	float 	enabelSSAO;
-//	float 	biasSSAO;
-//	float	ssrEnabled;
-//	float 	ssrMaxDistance;
-//	float 	ssrResolution;
-//	float 	ssrThickness;
-//	float 	ssrSteps;
-//	float 	taaResolveWeight;
-//	float	taaUseMotionVectors;
-//	float	taaFlickerCorrectionMode;
-//	float	taaReprojectionFilter;
-//	float	toneMappingExposure;
-//	float	toneMapperSelect;
-//} g_Info;
-
 layout(set = 0, binding = 0) uniform PrimaryUniform
 {
 	PrimaryUniformData data;

@@ -92,7 +92,6 @@ struct LoadedUpdateData
 	nm::float4x4						camProjection;
 	nm::float4x4						camView;
 	CCamera::UpdateData					cameraData;
-
 };
 
 class CDescriptor
