@@ -216,7 +216,8 @@ bool CDebugDrawPass::CreateRenderingInfo(RenderData* p_renderData)
 		CVulkanRHI::Image colorRT = p_renderData->fixedAssets->GetRenderTargets()->GetTexture(SAMPLE_PRIMARY_COLOR);
 		colorAttachFormats[AttachId::Color]					= colorRT.format;
 		m_colorAttachInfos[AttachId::Color].imageView		= colorRT.descInfo.imageView;
-		m_colorAttachInfos[AttachId::Color].clearValue		= VkClearValue{ 0.0, 0.0, 0.0, 0.0 };
+		m_colorAttachInfos[AttachId::Color].loadOp			= VK_ATTACHMENT_LOAD_OP_LOAD;
+		
 	}
 	m_pipeline.colorAttachFormats = colorAttachFormats;
 
@@ -228,7 +229,7 @@ bool CDebugDrawPass::CreateRenderingInfo(RenderData* p_renderData)
 		m_depthAttachInfo									= CVulkanCore::RenderingAttachinfo();
 		m_depthAttachInfo.imageView							= depthRT.descInfo.imageView;
 		m_depthAttachInfo.imageLayout						= VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-		m_depthAttachInfo.clearValue						= VkClearValue{ 1.0, 0 };
+		m_depthAttachInfo.loadOp							= VK_ATTACHMENT_LOAD_OP_LOAD;
 	}
 
 	m_renderingInfo = CVulkanCore::RenderingInfo();
@@ -296,7 +297,6 @@ bool CDebugDrawPass::Render(RenderData* p_renderData)
 {
 	uint32_t scId											= p_renderData->scIdx;
 	CVulkanRHI::CommandBuffer cmdBfr						= p_renderData->cmdBfr;
-	CVulkanRHI::Renderpass renderPass						= m_pipeline.renderpassData;
 	CRenderableDebug* debugRender							= p_renderData->fixedAssets->GetDebugRenderer();
 	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
 	PrimaryUniformData* primaryData							= p_renderData->fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
@@ -314,7 +314,7 @@ bool CDebugDrawPass::Render(RenderData* p_renderData)
 		vkCmdBeginRendering(cmdBfr, &m_renderingInfo);
 		{
 			m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)m_rhi->GetRenderWidth(), -(float)m_rhi->GetRenderHeight());
-			m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
+			m_rhi->SetScissors(cmdBfr, 0, 0, m_rhi->GetRenderWidth(), m_rhi->GetRenderHeight());
 
 			vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
 			vkCmdBindDescriptorSets(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeLayout, BindingSet::bs_Primary, 1, primaryDesc->GetDescriptorSet(scId), 0, nullptr);

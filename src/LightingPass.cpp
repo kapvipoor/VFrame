@@ -229,7 +229,6 @@ bool CSkyboxPass::Render(RenderData* p_renderData)
 	CVulkanRHI::CommandBuffer cmdBfr						= p_renderData->cmdBfr;
 	const CScene* scene										= p_renderData->loadedAssets->GetScene();
 	const CPrimaryDescriptors* primaryDesc					= p_renderData->primaryDescriptors;
-	CVulkanRHI::Renderpass renderPass						= m_pipeline.renderpassData;
 	PrimaryUniformData* primaryData							= p_renderData->fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
 
 	// Ping pong the depth
@@ -242,7 +241,7 @@ bool CSkyboxPass::Render(RenderData* p_renderData)
 		vkCmdBeginRendering(cmdBfr, &m_renderingInfo);
 		{
 			m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)m_rhi->GetRenderWidth(), -(float)m_rhi->GetRenderHeight());
-			m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
+			m_rhi->SetScissors(cmdBfr, 0, 0, m_rhi->GetRenderWidth(), m_rhi->GetRenderHeight());
 
 			vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
 
@@ -567,7 +566,6 @@ bool CSkyboxDeferredPass::Render(RenderData* p_renderData)
 	CVulkanRHI::CommandBuffer cmdBfr		= p_renderData->cmdBfr;
 	CScene* scene							= p_renderData->loadedAssets->GetScene();
 	const CPrimaryDescriptors* primaryDesc	= p_renderData->primaryDescriptors;
-	CVulkanRHI::Renderpass renderPass		= m_pipeline.renderpassData;
 	PrimaryUniformData* primaryData			= p_renderData->fixedAssets->GetFixedBuffers()->GetPrimaryUnifromData();
 
 	// Ping pong the depth
@@ -580,7 +578,7 @@ bool CSkyboxDeferredPass::Render(RenderData* p_renderData)
 		vkCmdBeginRendering(cmdBfr, &m_renderingInfo);
 		{
 			m_rhi->SetViewport(cmdBfr, 0.0f, 1.0f, (float)m_rhi->GetRenderWidth(), -(float)m_rhi->GetRenderHeight());
-			m_rhi->SetScissors(cmdBfr, 0, 0, renderPass.framebufferWidth, renderPass.framebufferHeight);
+			m_rhi->SetScissors(cmdBfr, 0, 0, m_rhi->GetRenderWidth(), m_rhi->GetRenderHeight());
 
 			vkCmdBindPipeline(cmdBfr, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.pipeline);
 
