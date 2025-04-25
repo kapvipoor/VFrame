@@ -48,7 +48,7 @@ bool CVulkanRHI::SubmitCommandBuffers(
 	}
 	else // defaulting to executing to primary (graphics) queue if none provided
 	{
-		queue = GetQueue(0);
+		queue = GetQueue();
 	}
 		
 	//VkPipelineStageFlags waitstage{ VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
@@ -93,7 +93,7 @@ bool CVulkanRHI::SubmitCommandBuffer(CommandBuffer p_commndBfr, bool p_waitForFi
 	if (p_queueType == QueueType::qt_Secondary)
 		queue = GetSecondaryQueue();
 	else // defaulting to executing to primary (graphics) queue if none provided
-		queue = GetQueue(0);
+		queue = GetQueue();
 
 	RETURN_FALSE_IF_FALSE(EndCommandBuffer(p_commndBfr));
 

@@ -908,7 +908,7 @@ bool LoadObj(const char* p_path, SceneRaw& p_objScene, const ObjLoadData& p_load
 
 	if (!objReader.Warning().empty())
 	{
-		std::cout << "TinyObjReader Warning: " << objReader.Warning();
+		CLOG_YELLOW("TinyObjReader Warning: " << objReader.Warning());
 	}
 
 	auto& attrib = objReader.GetAttrib();

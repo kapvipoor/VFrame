@@ -1729,7 +1729,7 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 					}
 
 					std::clog << "Submitting command buffer" << std::endl;
-					RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true /*wait for finish*/, CVulkanRHI::QueueType::qt_Secondary));
+					RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true /*wait for finish*/, CVulkanRHI::QueueType::qt_Primary));
 					m_assetLoadingTracker.progress = 0.8f;
 
 					// Destroy local staging resources

@@ -15,24 +15,24 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsMessengerCallback(VkDebugUtilsMessageSe
 
 	if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
 	{
-		std::cout << "Vulkan Info: "
+		CLOG("Vulkan Info: "
 			<< "{" << callback_data->messageIdNumber << "} - "
 			<< "{" << callback_data->pMessageIdName << "}: "
-			<< "{" << callback_data->pMessage << std::endl;
+			<< "{" << callback_data->pMessage << std::endl);
 	}
 	else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
 	{
-		std::cout << "Vulkan Warning: "
+		CLOG_YELLOW("Vulkan Warning: "
 			<< "{" << callback_data->messageIdNumber << "} - "
 			<< "{" << callback_data->pMessageIdName << "}: "
-			<< "{" << callback_data->pMessage << std::endl;
+			<< "{" << callback_data->pMessage << std::endl);
 	}
 	else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
 	{
-		std::cout << "Vulkan Error: "
+		CLOG_RED("Vulkan Error: "
 			<< "{" << callback_data->messageIdNumber << "} - "
 			<< "{" << callback_data->pMessageIdName << "}: "
-			<< "{" << callback_data->pMessage << std::endl;
+			<< "{" << callback_data->pMessage << std::endl);
 	}
 	return VK_FALSE;
 }
@@ -101,6 +101,7 @@ CVulkanCore::CVulkanCore(const char* p_applicaitonName, int p_renderWidth, int p
 		, m_vkPhysicalDevice(VK_NULL_HANDLE)
 		, m_QFIndex(0)
 		, m_vkSurface(VK_NULL_HANDLE)
+		, m_supportRayTracing(false)
 {}
 
 CVulkanCore::~CVulkanCore()
@@ -362,8 +363,6 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 		}		
 	}
 
-	// Brute-force setting up device extensions; device creation will fail if extensions are
-	// not supported 
 	std::vector<const char*> deviceExtensionList;
 	{
 		deviceExtensionList.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
@@ -378,6 +377,71 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 #if VULKAN_DEBUG_MARKERS == 1
 		deviceExtensionList.push_back(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
 #endif
+		uint32_t layerCount = 0;
+		std::vector<VkExtensionProperties> extensionList;
+		VkResult res = vkEnumerateDeviceExtensionProperties(m_vkPhysicalDevice, NULL, &layerCount, nullptr);
+		if (res != VK_SUCCESS)
+		{
+			std::cerr << "" << "vkEnumerateDeviceExtensionProperties failed: " << res << std::endl;
+			return false;
+		}
+
+		if(!layerCount)
+		{
+			std::cerr << "No device extensions found." << std::endl;
+			return false;
+		}
+
+		extensionList.resize(layerCount);
+		res = vkEnumerateDeviceExtensionProperties(m_vkPhysicalDevice, NULL, &layerCount, extensionList.data());
+		if (res != VK_SUCCESS)
+		{
+			std::cerr << "" << "vkEnumerateDeviceExtensionProperties failed: " << res << std::endl;
+			return false;
+		}
+
+		bool isDeferredHostOpsFound = false;
+		bool isAccelerationStructureFound = false;
+		bool isRayQueryFound = false;
+		
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		CLOG("Checking support for requested device extensions" << std::endl);
+		for (std::vector<const char*>::iterator requestedExtension = deviceExtensionList.begin(); requestedExtension != deviceExtensionList.end(); requestedExtension++)
+		{
+			bool isExtensionFound = false;
+			for (const auto& extension : extensionList)
+			{
+				if (strcmp(extension.extensionName, *requestedExtension) == 0)
+				{
+					if (extension.extensionName == VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME)
+					{
+						isDeferredHostOpsFound = true;
+					}
+					if (extension.extensionName == VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)
+					{
+						isAccelerationStructureFound = true;
+					}
+					if (extension.extensionName == VK_KHR_RAY_QUERY_EXTENSION_NAME)
+					{
+						isRayQueryFound = true;
+					}
+
+					isExtensionFound = true;
+					CLOG_GREEN("	"  << extension.extensionName << std::endl);
+					break;
+				}
+			}
+			if (!isExtensionFound)
+			{
+				CLOG_RED("	" << *requestedExtension << std::endl);
+
+				std::vector<const char*>::iterator prevIterator = requestedExtension-1;
+				deviceExtensionList.erase(requestedExtension);
+				requestedExtension = prevIterator;
+			}
+		}
+
+		m_supportRayTracing = isDeferredHostOpsFound && isAccelerationStructureFound && isRayQueryFound;
 	}
 
 	// Getting compute queue details only only
@@ -400,7 +464,7 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 				m_QFIndex = qfIndex;
 				deviceQueueCreateInfos[0] = VkDeviceQueueCreateInfo{};
 				deviceQueueCreateInfos[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-				deviceQueueCreateInfos[0].queueCount = 2;
+				deviceQueueCreateInfos[0].queueCount = 1;
 				deviceQueueCreateInfos[0].queueFamilyIndex = m_QFIndex;
 				deviceQueueCreateInfos[0].pQueuePriorities = queuePriority;
 				break;
@@ -425,7 +489,7 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
 	dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
 	dynamicRenderingFeatures.dynamicRendering							= VK_TRUE;
-	dynamicRenderingFeatures.pNext										= &rayQueryFeature;
+	dynamicRenderingFeatures.pNext										= m_supportRayTracing ? &rayQueryFeature : nullptr; // if device does not support Ray Tracing, do not enable the feature
 
 	VkPhysicalDeviceFeatures enabledFeatures{};
 	enabledFeatures.geometryShader										= VK_TRUE;
@@ -457,15 +521,15 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	vulkan12Features.pNext												= &physicalDeviceFeatures2;
 
 	VkDeviceCreateInfo deviceCreateInfo{};
-	deviceCreateInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	deviceCreateInfo.pNext = &vulkan12Features;
-	deviceCreateInfo.pEnabledFeatures = nullptr;
-	deviceCreateInfo.queueCreateInfoCount = (uint32_t)deviceQueueCreateInfos.size();
-	deviceCreateInfo.pQueueCreateInfos = deviceQueueCreateInfos.data();
-	deviceCreateInfo.enabledExtensionCount = (uint32_t)deviceExtensionList.size();
-	deviceCreateInfo.ppEnabledExtensionNames = deviceExtensionList.data();
-	deviceCreateInfo.enabledLayerCount = 0;
-	deviceCreateInfo.ppEnabledLayerNames = nullptr;
+	deviceCreateInfo.sType												= VkStructureType::VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	deviceCreateInfo.pNext												= &vulkan12Features;
+	deviceCreateInfo.pEnabledFeatures									= nullptr;
+	deviceCreateInfo.queueCreateInfoCount								= (uint32_t)deviceQueueCreateInfos.size();
+	deviceCreateInfo.pQueueCreateInfos									= deviceQueueCreateInfos.data();
+	deviceCreateInfo.enabledExtensionCount								= (uint32_t)deviceExtensionList.size();
+	deviceCreateInfo.ppEnabledExtensionNames							= deviceExtensionList.data();
+	deviceCreateInfo.enabledLayerCount									= 0;
+	deviceCreateInfo.ppEnabledLayerNames								= nullptr;
 
 	VkResult res = vkCreateDevice(m_vkPhysicalDevice, &deviceCreateInfo, nullptr, &m_vkDevice);
 	if (res != VK_SUCCESS)
@@ -476,20 +540,21 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 
 	// Primary Render Queue
 	{
-		vkGetDeviceQueue(m_vkDevice, m_QFIndex, 0, &m_vkQueue[0]);
+		vkGetDeviceQueue(m_vkDevice, m_QFIndex, 0, &m_vkQueue);
 	}
 
 	// Secondary Queue
-	{
-		vkGetDeviceQueue(m_vkDevice, m_QFIndex, 1, &m_secondaryQueue);
-		if(m_secondaryQueue == VK_NULL_HANDLE)
-		{
-			std::cerr << "vkGetDeviceQueue failed for secondary queue" << std::endl;
-			return false;
-		}
-	}
+	//{
+	//	vkGetDeviceQueue(m_vkDevice, m_QFIndex, 1, &m_secondaryQueue);
+	//	if(m_secondaryQueue == VK_NULL_HANDLE)
+	//	{
+	//		std::cerr << "vkGetDeviceQueue failed for secondary queue" << std::endl;
+	//		return false;
+	//	}
+	//}
 
 	// Get Ray Tracing function pointers
+	if(m_supportRayTracing)
 	{
 		m_pfnGetAccelerationStructureBuildSizesKHR = 
 			reinterpret_cast<PFN_vkGetAccelerationStructureBuildSizesKHR>(vkGetDeviceProcAddr(m_vkDevice, 
@@ -1836,8 +1901,8 @@ void CVulkanCore::BuildAccelerationStructure(VkCommandBuffer p_cmdBfr, uint32_t 
 {
 	if(m_pfnvkCmdBuildAccelerationStructuresKHR)
 		m_pfnvkCmdBuildAccelerationStructuresKHR(p_cmdBfr, p_infoCount, p_acBuildInfo, p_acRange);
-	else
-		std::cout << "CVulkanCore::BuildAccelerationStructure: Warning vkCmdBuildAccelerationStructuresKHR is invalid" << std::endl;
+	//else
+	//	CLOG_YELLOW("CVulkanCore::BuildAccelerationStructure: Warning vkCmdBuildAccelerationStructuresKHR is invalid" << std::endl);
 }
 
 VkDeviceAddress CVulkanCore::GetAccelerationStructureDeviceAddress(const VkAccelerationStructureKHR& p_accStructure)
@@ -1851,7 +1916,7 @@ VkDeviceAddress CVulkanCore::GetAccelerationStructureDeviceAddress(const VkAccel
 		return m_pfnvkGetAccelerationStructureDeviceAddressKHR(m_vkDevice, &info);
 	}
 
-	std::cout << "CVulkanCore::GetAccelerationStructureDeviceAddress: Warning vkGetAccelerationStructureDeviceAddressKHR is invalid" << std::endl;
+	CLOG_YELLOW("CVulkanCore::GetAccelerationStructureDeviceAddress: Warning vkGetAccelerationStructureDeviceAddressKHR is invalid" << std::endl);
 	return 0;
 }
 
@@ -2066,20 +2131,20 @@ bool CVulkanCore::ListAvailableInstanceLayers(std::vector<const char*> reqList)
 		return false;
 	}
 
-	std::cout << "listing supported instance layers" << std::endl;
+	CLOG("listing supported instance layers" << std::endl);
 	for (auto& layer : supportedLayerPropList)
 	{
-		std::cout << "	" << layer.layerName;
+		CLOG("	" << layer.layerName);
 
 		for (auto& reqExtn : reqList)
 		{
 			if (std::strcmp(reqExtn, layer.layerName) == 0)
 			{
-				std::cout << "----------------------------LOADED";
+				CLOG("----------------------------LOADED");
 			}
 		}
 
-		std::cout << std::endl;
+		//CLOG("\n");
 	}
 
 	return true;
@@ -2104,20 +2169,20 @@ bool CVulkanCore::ListAvailableInstanceExtensions(std::vector<const char*> reqLi
 		return false;
 	}
 
-	std::cout << "listing supported instance extensions" << std::endl;
+	CLOG("listing supported instance extensions" << std::endl);
 	for (auto& exten : supportedInstanceExtensionList)
 	{
-		std::cout << "	" << exten.extensionName;
+		CLOG("	" << exten.extensionName);
 
 		for (auto& reqExtn : reqList)
 		{
 			if (std::strcmp(reqExtn, exten.extensionName) == 0)
 			{
-				std::cout << "----------------------------LOADED";
+				CLOG("----------------------------LOADED");
 			}
 		}
 
-		std::cout << std::endl;
+		//CLOG("\n");
 	}
 
 	return true;

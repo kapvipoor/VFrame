@@ -1,15 +1,12 @@
 #include <sstream>
 
+#include "core/Global.h"
 #include "RasterRender.h"
 
 int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
-    // display console
-    BOOL console = AllocConsole();
-    FILE* stdin_console = freopen("CONIN$", "r", stdin);
-    FILE* stdout_console = freopen("CONOUT$", "w", stdout);
-    FILE* stderr_console = freopen("CONOUT$", "w", stderr);
-    
+    init_console();
+
     // refer https://stackoverflow.com/questions/5419356/is-there-a-way-to-redirect-stdout-stderr-to-a-string
     std::stringstream cerrBuff;
     std::streambuf* cerrStream = std::cerr.rdbuf(cerrBuff.rdbuf());

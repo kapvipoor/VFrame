@@ -18,7 +18,6 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 	m_rhi					= new CVulkanRHI(name, RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
 
 	m_primaryCamera			= new CPerspectiveCamera();
-	//m_sunLight				= new CDirectionaLight("Sunlight", true, nm::float3(0.0f, 1.0f, 0.0f));
 
 	m_sceneGraph			= new CSceneGraph(m_primaryCamera);
 
@@ -297,7 +296,7 @@ bool CRasterRender::on_update(float delta)
 void CRasterRender::on_present()
 {
 	CVulkanRHI::SwapChain swapchain				= m_rhi->GetSwapChain();
-	CVulkanRHI::Queue queue						= m_rhi->GetQueue(0);
+	CVulkanRHI::Queue queue						= m_rhi->GetQueue();
 
 	VkPresentInfoKHR presentInfo{};
 	VkResult presentResult						= VkResult::VK_RESULT_MAX_ENUM;
