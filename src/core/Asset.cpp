@@ -98,7 +98,7 @@ bool CDescriptor::CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_id, std::strin
 	return true;
 }
 
-void CDescriptor::DestroyDescriptors(CVulkanRHI* p_rhi)
+void CDescriptor::Destroy(CVulkanRHI* p_rhi)
 {
 	for (auto& desc : m_descList)
 	{
@@ -129,10 +129,10 @@ void CRenderable::Clear(CVulkanRHI* p_rhi, uint32_t p_idx)
 	m_indexBuffers.DestroyBuffer(p_rhi, p_idx);
 }
 
-void CRenderable::DestroyRenderable(CVulkanRHI* p_rhi)
+void CRenderable::Destroy(CVulkanRHI* p_rhi)
 {
-	m_vertexBuffers.DestroyBuffers(p_rhi);
-	m_indexBuffers.DestroyBuffers(p_rhi);
+	m_vertexBuffers.Destroy(p_rhi);
+	m_indexBuffers.Destroy(p_rhi);
 }
 
 bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index)
@@ -302,7 +302,7 @@ void CBuffers::DestroyBuffer(CVulkanRHI* p_rhi, uint32_t p_idx)
 	//m_buffers.erase(m_buffers.begin() + p_idx);
 }
 
-void CBuffers::DestroyBuffers(CVulkanRHI* p_rhi)
+void CBuffers::Destroy(CVulkanRHI* p_rhi)
 {
 	for (auto& buffer : m_buffers)
 	{
@@ -450,7 +450,7 @@ void CTextures::PushBackPreLoadedTexture(uint32_t p_texIndex)
 	m_textures.push_back(m_textures[p_texIndex]);
 }
 
-void CTextures::DestroyTextures(CVulkanRHI* p_rhi)
+void CTextures::Destroy(CVulkanRHI* p_rhi)
 {
 	for (auto& tex : m_textures)
 	{
@@ -570,9 +570,10 @@ bool CRenderableUI::Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_c
 	return true;
 }
 
-void CRenderableUI::DestroyRenderable(CVulkanRHI* p_rhi)
+void CRenderableUI::Destroy(CVulkanRHI* p_rhi)
 {
-	DestroyTextures(p_rhi);
+	CTextures::Destroy(p_rhi);
+	CRenderable::Destroy(p_rhi);
 }
 
 bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
@@ -775,9 +776,9 @@ bool CRenderableUI::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx)
 	return true;
 }
 
-CRenderableMesh::CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat, VkAccelerationStructureInstanceKHR* p_accStructInstance)
-	: CRayTracingRenderable(p_accStructInstance)
-	, CEntity(p_name)
+CRenderableMesh::CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat, VkBufferUsageFlags p_usage)
+	: CEntity(p_name)
+	, CRenderable(p_usage | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0)
 	, m_mesh_id(p_meshId)
 	, m_selectedSubMeshId(-1)
 {
@@ -788,6 +789,13 @@ CRenderableMesh::~CRenderableMesh()
 {
 	if (m_boundingVolume)
 		delete m_boundingVolume;
+}
+
+void CRenderableMesh::Destroy(CVulkanRHI* p_rhi)
+{
+	m_submeshes.clear();
+	m_subBoundingBoxes.clear();
+	CRenderable::Destroy(p_rhi);
 }
 
 void CRenderableMesh::Show(CVulkanRHI* p_rhi)
@@ -838,9 +846,6 @@ void CRenderableMesh::SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform,
 {
 	m_dirty						= true;
 	m_transform					= p_transform;
-
-	// Update the BVH with the new transform
-	UpdateBLASInstance(p_rhi, m_transform);
 
 	// Let scene graph know that there is a need for an update
 	if(p_bRecomputeSceneBBox)
@@ -895,11 +900,14 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 
 		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true/*wait for finish*/));
 	}
-	debugMarker = "TLAS Creation";
+	if (p_rhi->IsRayTracingEnabled())
 	{
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
-		RETURN_FALSE_IF_FALSE(LoadTLAS(p_rhi, stgList, cmdBfr));
-		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true/*wait for finish*/));
+		debugMarker = "TLAS Creation";
+		{
+			RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
+			RETURN_FALSE_IF_FALSE(LoadTLAS(p_rhi, stgList, cmdBfr));
+			RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true/*wait for finish*/));
+		}
 	}
 
 	DestroyStaging(p_rhi, stgList);
@@ -913,20 +921,20 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 
 void CScene::Destroy(CVulkanRHI* p_rhi)
 {
-	m_skyBox->DestroyRenderable(p_rhi);
+	m_skyBox->Destroy(p_rhi);
 	delete m_skyBox;
 
-	DestroyDescriptors(p_rhi);
-	m_sceneTextures->DestroyTextures(p_rhi);
+	CDescriptor::Destroy(p_rhi);
+	m_sceneTextures->Destroy(p_rhi);
 
 	p_rhi->FreeMemoryDestroyBuffer(m_instanceBuffer);
 	p_rhi->FreeMemoryDestroyBuffer(m_TLASscratchBuffer);
-	m_tlasBuffers->DestroyBuffers(p_rhi);
+	m_tlasBuffers->Destroy(p_rhi);
 	p_rhi->DestroyAccelerationStrucutre(m_TLAS);
 
 	for (auto& mesh : m_meshes)
 	{
-		mesh->DestroyRenderable(p_rhi);
+		mesh->Destroy(p_rhi);
 		delete mesh;
 	}
 	m_meshes.clear();
@@ -1170,26 +1178,9 @@ bool CScene::LoadDefaultTextures(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerLis
 bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr, bool p_dumpBinaryToDisk)
 {
 	std::vector<std::filesystem::path>		defaultScenePaths;
-	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels / 2.0 / DragonAttenuation / glTF / DragonAttenuation.gltf");				//0
-	//m_scenePaths.push_back(g_AssetPath/"shadow_test_3.gltf");																		//1
-	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");					//2
-	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
-	//defaultScenePaths.push_back(g_AssetPath / "glTFSampleModels/2.0/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf");
-	defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
-	//defaultScenePaths.push_back(g_AssetPath / "glTFSampleModels/2.0/Sponza/glTF/Sponza.gltf");
-	defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");									//4
-	defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf");
-	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");				//6
-	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/cube/cube.obj");											//7
-	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/icosphere.gltf");											//8
-	//m_scenePaths.push_back(g_AssetPath/"dragon/dragon.obj");															f			//9
-	//m_scenePaths.push_back(g_AssetPath/"stanford_dragon_pbr/scene.gltf");															//10
-	//m_scenePaths.push_back(g_AssetPath/"mitsuba/mitsuba.obj");																	//11
-	//m_scenePaths.push_back(g_AssetPath/"wall_and_floor/wall_and_floor.gltf");														//12
-	//m_scenePaths.push_back(g_AssetPath / "main_sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");								//13
-	//m_scenePaths.push_back(g_AssetPath/"main_sponza/PKG_A_Curtains/NewSponza_Curtains_glTF.gltf");								//14
-	//m_scenePaths.push_back(g_AssetPath/"an_afternoon_in_a_persian_garden/scene.obj");												//15
-	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/glTFSampleModels/2.0/SpecGlossVsMetalRough/glTF/SpecGlossVsMetalRough.gltf");
+	defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/Sponza/glTF/Sponza.gltf");
+	defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/Suzanne/glTF/Suzanne.gltf");
+	defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/SciFiHelmet/glTF/SciFiHelmet.gltf");
 
 	std::vector<bool> flipYList{ false, false, false };
 
@@ -1235,7 +1226,13 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	for (auto& meshraw : sceneraw.meshList)
 	{
 		std::clog << "CScene::LoadDefaultScene: Loading Asset to GPU - " << meshraw.name << std::endl;
-		CRenderableMesh* mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform, &m_accStructInstances[m_meshes.size()]);
+		CRenderableMesh* mesh = nullptr;
+		
+		if (p_rhi->IsRayTracingEnabled())
+			mesh = new CRayTracingRenderable(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform, &m_accStructInstances[m_meshes.size()]);
+		else
+			mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform);
+		
 		mesh->m_submeshes = meshraw.submeshes;
 
 		BVolume* bVol = new BBox(meshraw.bbox);
@@ -1249,8 +1246,8 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr, meshraw.name));
 
 		// TODO: Insert a memory barrier here
-
-		RETURN_FALSE_IF_FALSE(mesh->CreateBuildBLAS(p_rhi, p_stgList, p_cmdBfr, meshraw.name + " BLAS"));
+		if(p_rhi->IsRayTracingEnabled())
+			RETURN_FALSE_IF_FALSE(dynamic_cast<CRayTracingRenderable*>(mesh)->CreateBuildBLAS(p_rhi, p_stgList, p_cmdBfr, meshraw.name + " BLAS"));
 
 		m_meshes.push_back(mesh);
 	}
@@ -1648,7 +1645,12 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 						// Load vertex and index buffers
 						for (auto& meshraw : sceneraw.meshList)
 						{
-							CRenderableMesh* mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform, &m_accStructInstances[m_meshes.size()]);
+							CRenderableMesh* mesh = nullptr;
+							if (p_rhi->IsRayTracingEnabled())
+								mesh = new CRayTracingRenderable(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform, &m_accStructInstances[m_meshes.size()]);
+							else
+								mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform);
+
 							mesh->m_submeshes = meshraw.submeshes;
 
 							std::clog << "Setting Bounding Volume" << std::endl;
@@ -1835,7 +1837,7 @@ bool CReadOnlyTextures::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers,
 
 void CReadOnlyTextures::Destroy(CVulkanRHI* p_rhi)
 {
-	DestroyTextures(p_rhi);
+	CTextures::Destroy(p_rhi);
 }
 
 bool CReadOnlyTextures::CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData* p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
@@ -1900,7 +1902,7 @@ bool CReadOnlyBuffers::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers, 
 
 void CReadOnlyBuffers::Destroy(CVulkanRHI* p_rhi)
 {
-	DestroyBuffers(p_rhi);
+	CBuffers::Destroy(p_rhi);
 }
 
 bool CReadOnlyBuffers::CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CFixedBuffers::PrimaryUniformData* p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
@@ -1962,8 +1964,7 @@ bool CLoadableAssets::Create(CVulkanRHI* p_rhi, const CFixedAssets& p_fixedAsset
 void CLoadableAssets::Destroy(CVulkanRHI* p_rhi)
 {
 	m_scene.Destroy(p_rhi);
-	m_ui.DestroyRenderable(p_rhi);
-	m_ui.DestroyTextures(p_rhi);
+	m_ui.Destroy(p_rhi);
 	m_readOnlyBuffers.Destroy(p_rhi);
 	m_readOnlyTextures.Destroy(p_rhi);
 }
@@ -2021,7 +2022,7 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 
 void CRenderTargets::Destroy(CVulkanRHI* p_rhi)
 {
-	DestroyTextures(p_rhi);
+	CTextures::Destroy(p_rhi);
 }
 
 void CRenderTargets::Show(CVulkanRHI* p_rhi)
@@ -2203,7 +2204,7 @@ void CFixedBuffers::Show(CVulkanRHI* p_rhi)
 
 void CFixedBuffers::Destroy(CVulkanRHI* p_rhi)
 {
-	DestroyBuffers(p_rhi);
+	CBuffers::Destroy(p_rhi);
 }
 
 bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
@@ -2436,7 +2437,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 
 void CPrimaryDescriptors::Destroy(CVulkanRHI* p_rhi)
 {
-	DestroyDescriptors(p_rhi);
+	CDescriptor::Destroy(p_rhi);
 }
 
 CRenderableDebug::CRenderableDebug()
@@ -2606,6 +2607,8 @@ bool CRenderableDebug::PreDrawInstanced(CVulkanRHI* p_rhi, uint32_t p_scIdx, con
 
 void CRenderableDebug::Destroy(CVulkanRHI* p_rhi)
 {
+	CDescriptor::Destroy(p_rhi);
+	CRenderable::Destroy(p_rhi);
 }
 
 bool CRenderableDebug::CreateDebugDescriptors(CVulkanRHI* p_rhi, const CFixedBuffers* p_fixedBuffers)
@@ -2683,26 +2686,34 @@ bool CRenderableDebug::CreateBoxSphereBuffers(CVulkanRHI* p_rhi, CVulkanRHI::Buf
 	return true;
 }
 
-CRayTracingRenderable::CRayTracingRenderable(VkAccelerationStructureInstanceKHR* p_accStructInstance)
-	: CRenderable(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0)
+CRayTracingRenderable::CRayTracingRenderable(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat, VkAccelerationStructureInstanceKHR* p_accStructInstance)
+	: CRenderableMesh(p_name, p_meshId, p_modelMat, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR)
 	, m_accStructInstance(p_accStructInstance)
 	, m_blasBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0)
 	, m_BLAS(VK_NULL_HANDLE)
 {
 }
 
-void CRayTracingRenderable::DestroyRenderable(CVulkanRHI* p_rhi)
+void CRayTracingRenderable::Destroy(CVulkanRHI* p_rhi)
 {
-	m_blasBuffer.DestroyBuffers(p_rhi);
-	p_rhi->DestroyAccelerationStrucutre(m_BLAS);
+	m_blasBuffer.Destroy(p_rhi);
+	p_rhi->DestroyAccelerationStrucutre(m_BLAS);	
+	CRenderableMesh::Destroy(p_rhi);
 }
 
-bool CRayTracingRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index)
+void CRayTracingRenderable::SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform, bool p_bRecomputeSceneBBox)
 {
-	RETURN_FALSE_IF_FALSE(CRenderable::CreateVertexIndexBuffer(p_rhi, p_stgList, p_meshRaw, p_cmdBfr, p_debugStr, index));
-
-	return true;
+	// Update the BVH with the new transform
+	UpdateBLASInstance(p_rhi, m_transform);
+	CRenderableMesh::SetTransform(p_rhi, p_transform, p_bRecomputeSceneBBox);
 }
+
+//bool CRayTracingRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index)
+//{
+//	RETURN_FALSE_IF_FALSE(CRenderable::CreateVertexIndexBuffer(p_rhi, p_stgList, p_meshRaw, p_cmdBfr, p_debugStr, index));
+//
+//	return true;
+//}
 
 bool CRayTracingRenderable::CreateBuildBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr)
 {

@@ -124,7 +124,7 @@ protected:
 	VkDescriptorPool					m_descPool;
 
 	bool CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_id = 0, std::string p_debugName = "");
-	void DestroyDescriptors(CVulkanRHI* p_rhi);
+	void Destroy(CVulkanRHI* p_rhi);
 	void AddDescriptor(CVulkanRHI::DescriptorData p_dData, uint32_t p_id = 0);
 
 	CVulkanRHI::DescriptorBindFlags m_bindFlags;
@@ -141,7 +141,7 @@ public:
 
 	~CBuffers() {};
 
-	virtual void DestroyBuffers(CVulkanRHI*);
+	void Destroy(CVulkanRHI*);
 
 	// Use this to create buffers with assorted usage and memory properties
 	bool CreateBuffer(CVulkanRHI*, VkBufferUsageFlags, VkMemoryPropertyFlags, size_t, std::string p_debugName, int32_t p_id = -1);
@@ -188,7 +188,7 @@ public:
 	// at this index that is referenced by the mesh
 	void PushBackPreLoadedTexture(uint32_t p_texIndex);
 
-	void DestroyTextures(CVulkanRHI* p_rhi);
+	void Destroy(CVulkanRHI* p_rhi);
 
 	void IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id, int p_mipLevel = -1);
 
@@ -337,7 +337,7 @@ public:
 	void Clear(CVulkanRHI* p_rhi, uint32_t p_idx);
 
 	// This is a clean up operation performed during shut down
-	virtual void DestroyRenderable(CVulkanRHI*);
+	void Destroy(CVulkanRHI*);
 
 	virtual bool CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw,
 		CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index = -1);
@@ -361,30 +361,6 @@ protected:
 	uint32_t						m_primitiveCount;
 	uint32_t						m_vertexCount;
 	size_t							m_vertexStrideInBytes;
-};
-
-class CRayTracingRenderable : public CRenderable
-{
-public:
-	CRayTracingRenderable(VkAccelerationStructureInstanceKHR* p_accStructInstance);
-	~CRayTracingRenderable() {};
-
-	virtual void DestroyRenderable(CVulkanRHI*) override;
-
-	bool CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw,
-		CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index = -1);
-
-	bool CreateBuildBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, std::string p_debugStr);
-
-	VkAccelerationStructureKHR GetBLAS() { return m_BLAS; }
-	const CVulkanRHI::Buffer GetBLASBuffer() { return m_blasBuffer.GetBuffer(0); }
-
-protected:
-	CBuffers							m_blasBuffer;
-	VkAccelerationStructureKHR			m_BLAS;
-	VkAccelerationStructureInstanceKHR* m_accStructInstance;
-
-	void UpdateBLASInstance(CVulkanRHI* p_rhi, const nm::Transform& p_transform);
 };
 
 class CRenderableUI : public CRenderable, public CTextures, public CDescriptor, public CUIParticipant, public CSelectionListener
@@ -417,7 +393,7 @@ public:
 	void virtual Show(CVulkanRHI* p_rhi) override;
 
 	bool Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool);
-	virtual void DestroyRenderable(CVulkanRHI* p_rhi) override;
+	void Destroy(CVulkanRHI* p_rhi);
 
 	bool Update(CVulkanRHI* p_rhi, const LoadedUpdateData&);
 	bool PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx);
@@ -434,15 +410,15 @@ private:
 	bool ShowGuizmo(CVulkanRHI* p_rhi, nm::float4x4 p_camView, nm::float4x4 p_camProjection);
 };
 
-class CRenderableMesh : public CRayTracingRenderable, public CEntity
+class CRenderableMesh : public CEntity, public CRenderable
 {
 	friend class CScene;
 public:
-	CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat, VkAccelerationStructureInstanceKHR* p_accStructInstance);
+	CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat, VkBufferUsageFlags p_usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 	~CRenderableMesh();
-	
-	virtual void Show(CVulkanRHI* p_rhi) override; //CUIParticipant virtual override
 
+	void Destroy(CVulkanRHI*);
+	virtual void Show(CVulkanRHI* p_rhi) override;			//CUIParticipant virtual override
 	virtual void SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform, bool p_bRecomputeSceneBBox) override;
 
 	uint32_t GetMeshId() const { return m_mesh_id; }
@@ -455,14 +431,40 @@ public:
 
 	int GetSelectedSubMeshId() { return m_selectedSubMeshId; }
 
-private:
+protected:
 	std::vector<SubMesh>			m_submeshes;
 	std::vector<BBox>				m_subBoundingBoxes;
 	uint32_t						m_mesh_id;
 	nm::float4x4					m_viewNormalTransform;
-	
+
 	// few members needed for ui
 	int								m_selectedSubMeshId;
+};
+
+class CRayTracingRenderable : public CRenderableMesh
+{
+public:
+	//CRayTracingRenderable(VkAccelerationStructureInstanceKHR* p_accStructInstance);
+	CRayTracingRenderable(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat, VkAccelerationStructureInstanceKHR* p_accStructInstance);
+	~CRayTracingRenderable() {};
+
+	void Destroy(CVulkanRHI*);
+	virtual void SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform, bool p_bRecomputeSceneBBox) override;
+
+	//bool CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw,
+	//	CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index = -1);
+
+	bool CreateBuildBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer&, std::string p_debugStr);
+
+	VkAccelerationStructureKHR GetBLAS() { return m_BLAS; }
+	const CVulkanRHI::Buffer GetBLASBuffer() { return m_blasBuffer.GetBuffer(0); }
+
+protected:
+	CBuffers							m_blasBuffer;
+	VkAccelerationStructureKHR			m_BLAS;
+	VkAccelerationStructureInstanceKHR* m_accStructInstance;
+
+	void UpdateBLASInstance(CVulkanRHI* p_rhi, const nm::Transform& p_transform);
 };
 
 class CRenderableDebug : public CRenderable, public CDescriptor
