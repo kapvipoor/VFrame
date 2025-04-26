@@ -1065,6 +1065,8 @@ bool CVulkanCore::HasStencilComponent(VkFormat p_format)
 
 bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipeline& pData, std::string p_debugName)
 {
+	CLOG("Creating Graphics Pipeline - " << p_debugName << std::endl);
+
 	pData.vertexShader = VK_NULL_HANDLE;
 	if (p_shaderPaths.shaderpath_vertex == "" || !LoadShader(p_shaderPaths.shaderpath_vertex.string().c_str(), pData.vertexShader))
 		return false;
@@ -1263,6 +1265,8 @@ bool CVulkanCore::CreateGraphicsPipeline(const ShaderPaths& p_shaderPaths, Pipel
 
 bool CVulkanCore::CreateComputePipeline(const ShaderPaths& p_shaderPaths, Pipeline& p_pData, std::string p_debugName)
 {
+	CLOG("Creating Compute Pipeline - " << p_debugName << std::endl);
+
 	// load shader and get shader module
 	p_pData.computeShader = VK_NULL_HANDLE;
 	if (!LoadShader(p_shaderPaths.shaderpath_compute.string().c_str(), p_pData.computeShader))

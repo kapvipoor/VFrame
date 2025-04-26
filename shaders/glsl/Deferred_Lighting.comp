@@ -7,7 +7,10 @@
 
 #include "Common.h"
 #include "MeshCommon.h"
+
+#if RT_ENABLED
 #include "RayTracingCommon.h"
+#endif
 
 #define DISPLAY_MOUSE_POINTER
 
@@ -114,12 +117,14 @@ void main()
 				int enableShadowRTPCF = int(g_Info.enable_Shadow_RT_PCF);
 				if((enableShadowRTPCF & ENABLE_SHADOW) == ENABLE_SHADOW)
 				{
+#if RT_ENABLED
 					if((enableShadowRTPCF & ENABLE_RT_SHADOW) == ENABLE_RT_SHADOW)
 					{
 						
 						shadow = TraceRay(posInWorldSpace.xyz, lightDir.xyz);	
 					}
 					else
+#endif
 					{
 						bool enablePCF = ((enableShadowRTPCF & ENABLE_PCF) == ENABLE_PCF);
 						shadow = CalculateDirectonalShadow(posInLightSpace, N, enablePCF) ;				

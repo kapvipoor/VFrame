@@ -1,4 +1,4 @@
-#ifndef GPU
+#if defined(CPU)
 
 #pragma once
 
@@ -41,6 +41,10 @@ extern void clog_stream();
 extern std::filesystem::path g_DefaultPath;
 extern std::filesystem::path g_EnginePath;
 extern std::filesystem::path g_AssetPath;
+
+#elif defined(GPU)
+
+#define RT_ENABLED 0
 
 #endif
 
