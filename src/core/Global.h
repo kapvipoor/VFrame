@@ -44,9 +44,9 @@ extern std::filesystem::path g_AssetPath;
 
 #elif defined(GPU)
 
-#define RT_ENABLED 0
-
 #endif
+
+#define RT_ENABLED								0
 
 #define PI                                      3.14159265359
 

@@ -332,6 +332,37 @@ bool CVulkanCore::CreateInstance(const char* p_applicaitonName)
 	return true;
 }
 
+bool SelectAvailablePhysicalDevice(const std::vector<VkPhysicalDevice>& p_all, VkPhysicalDevice& p_selected)
+{
+	for(const auto& physicalDevice : p_all)
+	{
+		VkPhysicalDeviceProperties deviceProperties{};
+		vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
+		// exit immediately if a discrete gpu is found, 
+		// else pick the first integrated gpu.
+		if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+		{
+			p_selected = physicalDevice;
+			CLOG_YELLOW("Selected GPU - DISCRETE - " << deviceProperties.deviceName << std::endl);
+			return true;
+		}
+		else if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU &&
+			p_selected == VK_NULL_HANDLE)
+		{
+			p_selected = physicalDevice;
+			CLOG_YELLOW("Selected GPU - INTEGRATED - " << deviceProperties.deviceName << std::endl);
+		}
+	}
+
+	if (p_selected == VK_NULL_HANDLE)
+	{
+		std::cerr << "No Descrete or Integreated GPU found" << std::endl;
+		return false;
+	}
+
+	return true;
+}
+
 bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 {
 	// Get Active physical device - force to select the first available device
@@ -352,15 +383,7 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 			return false;
 		}
 
-		for (const auto& physicalDevice : physicalDeviceList)
-		{
-			VkPhysicalDeviceProperties deviceProperties{};
-			vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
-			if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-			{
-				m_vkPhysicalDevice = physicalDevice;
-			}
-		}		
+		RETURN_FALSE_IF_FALSE(SelectAvailablePhysicalDevice(physicalDeviceList, m_vkPhysicalDevice));
 	}
 
 	std::vector<const char*> deviceExtensionList;
@@ -413,15 +436,15 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 			{
 				if (strcmp(extension.extensionName, *requestedExtension) == 0)
 				{
-					if (extension.extensionName == VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME)
+					if (std::strcmp(extension.extensionName, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) == 0)
 					{
 						isDeferredHostOpsFound = true;
 					}
-					if (extension.extensionName == VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)
+					if (std::strcmp(extension.extensionName, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
 					{
 						isAccelerationStructureFound = true;
 					}
-					if (extension.extensionName == VK_KHR_RAY_QUERY_EXTENSION_NAME)
+					if (std::strcmp(extension.extensionName, VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0)
 					{
 						isRayQueryFound = true;
 					}
@@ -442,6 +465,22 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 		}
 
 		m_supportRayTracing = isDeferredHostOpsFound && isAccelerationStructureFound && isRayQueryFound;
+
+#if RT_ENABLED
+		m_supportRayTracing &= true;
+
+#else
+		m_supportRayTracing &= false;
+#endif
+
+		if (m_supportRayTracing)
+		{
+			CLOG_GREEN("Ray Tracing Supported and Enabled" << std::endl);
+		}	
+		else
+		{
+			CLOG_RED("Ray Tracing Not Supported" << std::endl);
+		}
 	}
 
 	// Getting compute queue details only only
@@ -2148,7 +2187,7 @@ bool CVulkanCore::ListAvailableInstanceLayers(std::vector<const char*> reqList)
 			}
 		}
 
-		//CLOG("\n");
+		CLOG("\n");
 	}
 
 	return true;
@@ -2186,7 +2225,7 @@ bool CVulkanCore::ListAvailableInstanceExtensions(std::vector<const char*> reqLi
 			}
 		}
 
-		//CLOG("\n");
+		CLOG("\n");
 	}
 
 	return true;
