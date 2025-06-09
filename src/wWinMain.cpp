@@ -11,6 +11,10 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
     std::stringstream cerrBuff;
     std::streambuf* cerrStream = std::cerr.rdbuf(cerrBuff.rdbuf());
 
+    CLOG("Default Path - " << g_DefaultPath << std::endl);
+    CLOG("Engine Path - " << g_EnginePath << std::endl);
+    CLOG("Asset Path - " << g_AssetPath << std::endl);
+
     unsigned int val = 1;
     bool exitState = true;
     switch (val)

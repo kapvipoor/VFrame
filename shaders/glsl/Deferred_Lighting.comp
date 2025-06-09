@@ -8,7 +8,7 @@
 #include "Common.h"
 #include "MeshCommon.h"
 
-#if RT_ENABLED
+#if RAY_TRACING_ENABLED
 #include "RayTracingCommon.h"
 #endif
 
@@ -117,7 +117,7 @@ void main()
 				int enableShadowRTPCF = int(g_Info.enable_Shadow_RT_PCF);
 				if((enableShadowRTPCF & ENABLE_SHADOW) == ENABLE_SHADOW)
 				{
-#if RT_ENABLED
+#if RAY_TRACING_ENABLED
 					if((enableShadowRTPCF & ENABLE_RT_SHADOW) == ENABLE_RT_SHADOW)
 					{
 						

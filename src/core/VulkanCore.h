@@ -345,10 +345,10 @@ public:
 
 	VkSwapchainKHR GetSwapChain()							{ return m_vkSwapchain; }
 	 
-	bool IsRayTracingEnabled()								{ return m_supportRayTracing; }
+	bool IsRayTracingEnabled()								{ return m_enabledRayTracing; }
 
 protected:
-	bool													m_supportRayTracing;
+	bool													m_enabledRayTracing;
 
 	uint32_t												m_renderWidth;
 	uint32_t												m_renderHeight;

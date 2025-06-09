@@ -31,6 +31,6 @@ void clog_stream()
 	g_oss.clear();
 };
 
-std::filesystem::path g_DefaultPath	= std::filesystem::current_path().string() + "\\..\\default";	// "D:/Projects/MyPersonalProjects/VFrame/default";
-std::filesystem::path g_EnginePath	= std::filesystem::current_path().string() + "\\..\\";			// "D:/Projects/MyPersonalProjects/VFrame";
-std::filesystem::path g_AssetPath	= std::filesystem::current_path().string() + "\\..\\..\\assets";	// "D:/Projects/MyPersonalProjects/assets";
+std::filesystem::path g_DefaultPath	= "C:/vkapoor/vframe/default";
+std::filesystem::path g_EnginePath	= "C:/vkapoor/vframe";
+std::filesystem::path g_AssetPath	= "C:/vkapoor/assets";

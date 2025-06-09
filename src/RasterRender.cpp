@@ -416,8 +416,18 @@ bool CRasterRender::CreatePasses()
 	VkPipelineLayout primaryAndSceneLayout;
 	std::vector<VkDescriptorSetLayout> descLayouts;
 	descLayouts.push_back(m_primaryDescriptors->GetDescriptorSetLayout(0));					// Set 0 - BindingSet::Primary
-	descLayouts.push_back(m_loadableAssets->GetScene()->GetDescriptorSetLayout());			// Set 1 - BindingSet::Mesh
-	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&meshPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), primaryAndSceneLayout, "PrimaryAndScenePipelineLayout"));
+	descLayouts.push_back(m_loadableAssets->GetScene()->GetDescriptorSetLayout());			// Set 1 - BindingSet::Mesh Raster Resources
+	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&meshPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), primaryAndSceneLayout, "PrimaryAndSceneRasterPipelineLayout"));
+
+	VkPipelineLayout primaryAndSceneRayTracingLayout;
+	if (m_rhi->IsRayTracingEnabled())
+	{
+		descLayouts.clear();
+		descLayouts.push_back(m_primaryDescriptors->GetDescriptorSetLayout(0));					// Set 0 - BindingSet::Primary
+		descLayouts.push_back(m_loadableAssets->GetScene()->GetDescriptorSetLayout(0));			// Set 1 - BindingSet::Mesh Raster Resources
+		descLayouts.push_back(m_loadableAssets->GetScene()->GetDescriptorSetLayout(1));			// Set 2 - BindingSet::Mesh RayTracing Resource
+		RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(nullptr, 0, descLayouts.data(), (uint32_t)descLayouts.size(), primaryAndSceneRayTracingLayout, "PrimaryAndSceneRayTracingPipelineLayout"));
+	}
 
 	VkPipelineLayout primaryLayout;
 	descLayouts.clear();
@@ -481,8 +491,11 @@ bool CRasterRender::CreatePasses()
 	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Initalize(pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
-	pipeline.pipeLayout						= primaryAndSceneLayout;
+	pipeline.pipeLayout						= m_rhi->IsRayTracingEnabled() ? primaryAndSceneRayTracingLayout : primaryAndSceneLayout;
 	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Initalize(pipeline));
+
+	pipeline								= CVulkanRHI::Pipeline{};
+	pipeline.pipeLayout						= primaryAndSceneLayout;
 	RETURN_FALSE_IF_FALSE(m_ssrComputePass->Initalize(pipeline));
 	RETURN_FALSE_IF_FALSE(m_ssrBlurPass->Initalize(pipeline));
 

@@ -101,7 +101,7 @@ CVulkanCore::CVulkanCore(const char* p_applicaitonName, int p_renderWidth, int p
 		, m_vkPhysicalDevice(VK_NULL_HANDLE)
 		, m_QFIndex(0)
 		, m_vkSurface(VK_NULL_HANDLE)
-		, m_supportRayTracing(false)
+		, m_enabledRayTracing(false)
 {}
 
 CVulkanCore::~CVulkanCore()
@@ -464,22 +464,29 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 			}
 		}
 
-		m_supportRayTracing = isDeferredHostOpsFound && isAccelerationStructureFound && isRayQueryFound;
+		bool supportedRayTracing = isDeferredHostOpsFound && isAccelerationStructureFound && isRayQueryFound;
+		m_enabledRayTracing = supportedRayTracing;
 
-#if RT_ENABLED
-		m_supportRayTracing &= true;
-
+#if RAY_TRACING_ENABLED
+		m_enabledRayTracing &= true;
 #else
-		m_supportRayTracing &= false;
+		m_enabledRayTracing &= false;
 #endif
 
-		if (m_supportRayTracing)
+		if (m_enabledRayTracing)
 		{
 			CLOG_GREEN("Ray Tracing Supported and Enabled" << std::endl);
 		}	
 		else
 		{
-			CLOG_RED("Ray Tracing Not Supported" << std::endl);
+			if (supportedRayTracing)
+			{
+				CLOG_GREEN("Ray Tracing Not Enabled" << std::endl);
+			}
+			else
+			{
+				CLOG_RED("Ray Tracing Not Supported" << std::endl);
+			}
 		}
 	}
 
@@ -528,7 +535,7 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
 	dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
 	dynamicRenderingFeatures.dynamicRendering							= VK_TRUE;
-	dynamicRenderingFeatures.pNext										= m_supportRayTracing ? &rayQueryFeature : nullptr; // if device does not support Ray Tracing, do not enable the feature
+	dynamicRenderingFeatures.pNext										= m_enabledRayTracing ? &rayQueryFeature : nullptr; // if device does not support Ray Tracing, do not enable the feature
 
 	VkPhysicalDeviceFeatures enabledFeatures{};
 	enabledFeatures.geometryShader										= VK_TRUE;
@@ -593,7 +600,7 @@ bool CVulkanCore::CreateDevice(VkQueueFlagBits p_queueType)
 	//}
 
 	// Get Ray Tracing function pointers
-	if(m_supportRayTracing)
+	if(m_enabledRayTracing)
 	{
 		m_pfnGetAccelerationStructureBuildSizesKHR = 
 			reinterpret_cast<PFN_vkGetAccelerationStructureBuildSizesKHR>(vkGetDeviceProcAddr(m_vkDevice, 

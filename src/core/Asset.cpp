@@ -10,6 +10,7 @@
 
 std::vector<CUIParticipant*> CUIParticipantManager::m_uiParticipants;
 
+///////////////////////////// ToDo: DEPRICATE//////////////////////////////////////////
 void CDescriptor::AddDescriptor(CVulkanRHI::DescriptorData p_dData, uint32_t p_id)
 {
 	m_descList[p_id].descDataList.push_back(p_dData);
@@ -107,6 +108,133 @@ void CDescriptor::Destroy(CVulkanRHI* p_rhi)
 	}
 	p_rhi->DestroyDescriptorPool(m_descPool);
 	m_descList.clear();
+}
+//////////////////////////////////////////////////////////////////
+
+void C2DDescriptor::AddDescriptor(CVulkanRHI::DescriptorData p_dData, uint32_t p_setID)
+{
+	m_descList2D[p_setID][0].descDataList.push_back(p_dData);
+}
+
+void C2DDescriptor::BindlessWrite(uint32_t p_setId, uint32_t p_index, const VkDescriptorImageInfo* p_imageInfo, uint32_t p_count, uint32_t p_arrayDestIndex)
+{
+	if (p_setId >= m_descList2D.size())
+	{
+		std::cerr << "CDescriptor::BindlessWrite: Attempting to Bindless Write a descriptor with a bad local set index" << std::endl;
+		return;
+	}
+
+
+	if (p_index >= m_descList2D[p_setId][0].descDataList.size())
+	{
+		std::cerr << "CDescriptor::BindlessWrite: Attempting to Bindless Write a descriptor with a bad binding index" << std::endl;
+		return;
+	}
+
+	for (int i = 0; i < m_descList2D[p_setId].size(); i++)
+	{
+		m_descList2D[p_setId][i].descDataList[p_index].count = p_count;
+		m_descList2D[p_setId][i].descDataList[p_index].arrayDestIndex = p_arrayDestIndex;
+		m_descList2D[p_setId][i].descDataList[p_index].imgDesinfo = p_imageInfo;
+	}
+}
+
+void C2DDescriptor::BindlessWrite(uint32_t p_setId, uint32_t p_index, const VkDescriptorBufferInfo* p_bufferInfo, uint32_t p_count)
+{
+	if (p_setId >= m_descList2D.size())
+	{
+		std::cerr << "Attempting to Bindless Write a descriptor with a bad local set index" << std::endl;
+		return;
+	}
+
+
+	if (p_index >= m_descList2D[p_setId][0].descDataList.size())
+	{
+		std::cerr << "Attempting to Bindless Write a descriptor with a bad binding index" << std::endl;
+		return;
+	}
+
+	for (int i = 0; i < m_descList2D[p_setId].size(); i++)
+	{
+		m_descList2D[p_setId][i].descDataList[p_index].count = p_count;
+		m_descList2D[p_setId][i].descDataList[p_index].bufDesInfo = p_bufferInfo;
+	}
+}
+
+void C2DDescriptor::BindlessWrite(uint32_t p_setId, uint32_t p_index, const VkAccelerationStructureKHR* p_accStructure, uint32_t p_count)
+{
+	if (p_setId >= m_descList2D.size())
+	{
+		std::cerr << "Attempting to Bindless Write a descriptor with a bad local set index" << std::endl;
+		return;
+	}
+
+
+	if (p_index >= m_descList2D[p_setId][0].descDataList.size())
+	{
+		std::cerr << "Attempting to Bindless Write a descriptor with a bad binding index" << std::endl;
+		return;
+	}
+
+	for (int i = 0; i < m_descList2D[p_setId].size(); i++)
+	{
+		m_descList2D[p_setId][i].descDataList[p_index].count = p_count;
+		m_descList2D[p_setId][i].descDataList[p_index].accelerationStructure = p_accStructure;
+	}
+}
+
+void C2DDescriptor::BindlessUpdate(CVulkanRHI* p_rhi, uint32_t p_setId)
+{
+	if (p_setId >= m_descList2D.size())
+	{
+		std::cerr << "Attempting to Bindless update a descriptor set with a bad local set index" << std::endl;
+		return;
+	}
+
+	for (int i = 0; i < m_descList2D[p_setId].size(); i++)
+		p_rhi->WriteUpdateDescriptors(&m_descList2D[p_setId][i].descSet, m_descList2D[p_setId][i].descDataList);
+}
+
+C2DDescriptor::C2DDescriptor(CVulkanRHI::DescriptorBindFlags p_bindFlags, uint32_t p_descSets)
+	: m_bindFlags(p_bindFlags)
+{
+	m_descList2D.resize(p_descSets);
+	for (uint32_t i = 0; i < p_descSets; i++)
+		m_descList2D[i].resize(1);
+}
+
+bool C2DDescriptor::CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_setId, uint32_t p_setcopyCount, std::string p_debugName)
+{
+	for (uint32_t i = 0; i < p_setcopyCount; i++)
+	{
+		if (i > 0)
+		{
+			C2DDescriptor::Descriptor descriptor = m_descList2D[p_setId][0];
+			m_descList2D[p_setId].push_back(descriptor);
+
+			p_debugName = p_debugName + std::to_string(i);
+		}
+
+		if (!p_rhi->CreateDescriptors(m_descList2D[p_setId][i].descDataList, m_descPool, m_descList2D[p_setId][i].descLayout, m_descList2D[p_setId][i].descSet, m_bindFlags, p_debugName))
+			return false;
+	}
+
+	return true;
+}
+
+void C2DDescriptor::Destroy(CVulkanRHI* p_rhi)
+{
+	for (auto& desc : m_descList2D)
+	{
+		for (auto& descCopy : desc)
+		{
+			p_rhi->DestroyDescriptorSetLayout(descCopy.descLayout);
+			descCopy.descDataList.clear();
+		}
+		desc.clear();
+	}
+	p_rhi->DestroyDescriptorPool(m_descPool);
+	m_descList2D.clear();
 }
 
 CRenderable::CRenderable(VkMemoryPropertyFlags p_memPropFlags, uint32_t p_BufferCount)
@@ -854,7 +982,7 @@ void CRenderableMesh::SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform,
 
 CScene::CScene(CSceneGraph* p_sceneGraph)
 	: CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_new, "Scene")
-	, CDescriptor(CVulkanRHI::DescriptorBindFlag::Variable_Count | CVulkanRHI::DescriptorBindFlag::Bindless, FRAME_BUFFER_COUNT)
+	, C2DDescriptor(CVulkanRHI::DescriptorBindFlag::Variable_Count | CVulkanRHI::DescriptorBindFlag::Bindless, 2) // requesting for 2 descriptor sets (raster and ray-tracing resource sets)
 	, m_sceneGraph(p_sceneGraph)
 {
 	m_sceneTextures = new CTextures();
@@ -914,7 +1042,7 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 
 	RETURN_FALSE_IF_FALSE(CreateMeshUniformBuffer(p_rhi));
 
-	RETURN_FALSE_IF_FALSE(CreateSceneDescriptors(p_rhi));
+	RETURN_FALSE_IF_FALSE(Create2DSceneDescriptors(p_rhi));
 
 	return true;
 }
@@ -924,7 +1052,7 @@ void CScene::Destroy(CVulkanRHI* p_rhi)
 	m_skyBox->Destroy(p_rhi);
 	delete m_skyBox;
 
-	CDescriptor::Destroy(p_rhi);
+	C2DDescriptor::Destroy(p_rhi);
 	m_sceneTextures->Destroy(p_rhi);
 
 	p_rhi->FreeMemoryDestroyBuffer(m_instanceBuffer);
@@ -1181,8 +1309,8 @@ bool CScene::LoadDefaultTextures(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerLis
 bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr, bool p_dumpBinaryToDisk)
 {
 	std::vector<std::filesystem::path>		defaultScenePaths;
-	//defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/Sponza/glTF/Sponza.gltf");
-	// defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/Suzanne/glTF/Suzanne.gltf");
+	defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/Sponza/glTF/Sponza.gltf");
+	defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/Suzanne/glTF/Suzanne.gltf");
 	defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/SciFiHelmet/glTF/SciFiHelmet.gltf");
 
 	std::vector<bool> flipYList{ false, false, false };
@@ -1471,6 +1599,72 @@ bool CScene::CreateMeshUniformBuffer(CVulkanRHI* p_rhi)
 
 bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
 {
+	//// We are allocating these descriptors from a bindless pool.
+	//// This does not need demand we create valid buffers/textures or write-update these descriptors 
+	//// at the time of their creation. All we need to ensure is that we don't access these "unbound resource"
+	//// descriptors at run-time. The strategy is to pre-allocate a large chunk of bindless-array of texture
+	//// descriptors. Load few textures and provide their IDs to the material_storage buffer and access the 
+	//// de-ref bindless array of textures to access the texture. When a new asset is added, its associated
+	//// textures are upload to device visible heap to new indices of the bindless array of textures. Their
+	//// Ids are updated to the material-storage buffer. And then write-update is called on this descriptor.
+
+	//std::vector<VkDescriptorImageInfo> imageInfoList;
+	//for (int i = TextureType::tt_scene; i < m_sceneTextures->GetTextures().size(); i++)
+	//{
+	//	imageInfoList.push_back(m_sceneTextures->GetTextures()[i].descInfo);
+	//}
+
+	//// We are creating 2 descriptors because we have 2 frames in flights. And during 
+	//// that process we need to update 1 uniform buffer while the 
+	//// other is getting updated. Not doing this leads to undefined
+	//// behavior.
+
+	//// Creating descriptor set for swap chain utility 0 and 1
+	//VkShaderStageFlags vertex_frag		= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	//VkShaderStageFlags frag				= VK_SHADER_STAGE_FRAGMENT_BIT;
+	//VkShaderStageFlags vert_frag_comp	= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+	//VkShaderStageFlags frag_comp		= VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+	//for (uint32_t i = 0; i < FRAME_BUFFER_COUNT; i++)
+	//{
+	//	// Creating Descriptors and descriptor set based on following type and count
+	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,				vertex_frag},	i);
+	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	i);
+	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	i);
+	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag_comp },	i);
+	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				frag },			i);
+	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				vert_frag_comp},i);
+	//	
+	//	//if(p_rhi->IsRayTracingEnabled())
+	//		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_TLAS,			1,						VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,	frag_comp},		i);
+
+	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag },	        i);
+	//	
+	//	RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, i, "SceneDescriptorSet_" + std::to_string(i)));
+	//}
+
+	//// Calling for Descriptor Write and Update since we are using Bindless for this descriptor
+	//for (uint32_t i = 0; i < FRAME_BUFFER_COUNT; i++)
+	//{
+	//	BindlessWrite(i, BindingDest::bd_Scene_MeshInfo_Uniform,	&m_meshInfo_uniform[0].descInfo, 1);
+	//	BindlessWrite(i, BindingDest::bd_Env_Specular,				&m_sceneTextures->GetTexture(TextureType::tt_env_specular).descInfo, 1);
+	//	BindlessWrite(i, BindingDest::bd_Env_Diffuse,				&m_sceneTextures->GetTexture(TextureType::tt_env_diffuse).descInfo, 1);
+	//	BindlessWrite(i, BindingDest::bd_Brdf_Lut,					&m_sceneTextures->GetTexture(TextureType::tt_brdfLut).descInfo, 1);
+	//	BindlessWrite(i, BindingDest::bd_Material_Storage,			&m_material_storage.descInfo, 1);
+	//	BindlessWrite(i, BindingDest::bd_Scene_Lights,				&m_light_storage.descInfo, 1);
+	//	
+	//	//if (p_rhi->IsRayTracingEnabled())
+	//		BindlessWrite(i, BindingDest::bd_Scene_TLAS, &m_TLAS, 1);
+
+	//	BindlessWrite(i, BindingDest::bd_SceneRead_TexArray, imageInfoList.data(), (uint32_t)imageInfoList.size());
+	//	
+	//	BindlessUpdate(p_rhi, i);
+	//}
+
+	return true;
+}
+
+bool CScene::Create2DSceneDescriptors(CVulkanRHI* p_rhi)
+{
 	// We are allocating these descriptors from a bindless pool.
 	// This does not need demand we create valid buffers/textures or write-update these descriptors 
 	// at the time of their creation. All we need to ensure is that we don't access these "unbound resource"
@@ -1486,60 +1680,57 @@ bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
 		imageInfoList.push_back(m_sceneTextures->GetTextures()[i].descInfo);
 	}
 
-	// We are creating 2 descriptors because we have 2 frames in flights. And during 
-	// that process we need to update 1 uniform buffer while the 
-	// other is getting updated. Not doing this leads to undefined
-	// behavior.
-
-	// Creating descriptor set for swap chain utility 0
+	// Creating descriptor set for swap chain utility 0 and 1
 	VkShaderStageFlags vertex_frag		= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	VkShaderStageFlags frag				= VK_SHADER_STAGE_FRAGMENT_BIT;
 	VkShaderStageFlags vert_frag_comp	= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
 	VkShaderStageFlags frag_comp		= VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+	
+	// Creating and Updating Scene Rasterizer Descriptors - Set 0
+	uint32_t rasterDescsetId = 0;
 	{
 		// Creating Descriptors and descriptor set based on following type and count
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,				vertex_frag},	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag_comp },	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				frag },			0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				vert_frag_comp},0);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,				vertex_frag},	rasterDescsetId);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	rasterDescsetId);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	rasterDescsetId);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag_comp },	rasterDescsetId);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				frag },			rasterDescsetId);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				vert_frag_comp},rasterDescsetId);	
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag },	        rasterDescsetId);
 		
-		if(p_rhi->IsRayTracingEnabled())
-			AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_TLAS,				1,						VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,	frag_comp},		0);
-
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag },	        0);
-		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 0, "SceneDescriptorSet_0"));
+		// We are creating 2 descriptors because we have 2 frames in flights. And during 
+		// that process we need to update 1 uniform buffer while the 
+		// other is getting updated. Not doing this leads to undefined
+		// behavior.
+		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, rasterDescsetId, FRAME_BUFFER_COUNT, "SceneRasterDescriptorSet_"));
+		
+		// Calling for Descriptor Write and Update since we are using Bindless for this descriptor
+		BindlessWrite(rasterDescsetId, BindingDest::bd_Scene_MeshInfo_Uniform,	&m_meshInfo_uniform[0].descInfo, 1);
+		BindlessWrite(rasterDescsetId, BindingDest::bd_Env_Specular,			&m_sceneTextures->GetTexture(TextureType::tt_env_specular).descInfo, 1);
+		BindlessWrite(rasterDescsetId, BindingDest::bd_Env_Diffuse,				&m_sceneTextures->GetTexture(TextureType::tt_env_diffuse).descInfo, 1);
+		BindlessWrite(rasterDescsetId, BindingDest::bd_Brdf_Lut,				&m_sceneTextures->GetTexture(TextureType::tt_brdfLut).descInfo, 1);
+		BindlessWrite(rasterDescsetId, BindingDest::bd_Material_Storage,		&m_material_storage.descInfo, 1);
+		BindlessWrite(rasterDescsetId, BindingDest::bd_Scene_Lights,			&m_light_storage.descInfo, 1);
+		BindlessWrite(rasterDescsetId, BindingDest::bd_SceneRead_TexArray,		imageInfoList.data(), (uint32_t)imageInfoList.size());
+		BindlessUpdate(p_rhi, rasterDescsetId);
 	}
 
-	// Creating descriptor set for swap chain utility 1
+	// Creating and Updating Scene Ray Tracing Descriptors - Set 1
+	uint32_t rayTracingDescsetId = 1;
+	if(p_rhi->IsRayTracingEnabled())
 	{
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,				vertex_frag},	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag_comp },	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				frag },			1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				vert_frag_comp},1);
-		
-		if (p_rhi->IsRayTracingEnabled())
-			AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_TLAS,				1,						VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,	frag_comp },	1);
-		
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag },			1);
-		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 1, "SceneDescriptorSet_1"));
-	}
+		// Creating Descriptors and descriptor set based on following type and count
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_TLAS,			1,						VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,	frag_comp }, rayTracingDescsetId);
 
-	// Calling for Descriptor Write and Update since we are using Bindless for this descriptor
-	for (uint32_t i = 0; i < FRAME_BUFFER_COUNT; i++)
-	{
-		BindlessWrite(i, BindingDest::bd_Scene_MeshInfo_Uniform, &m_meshInfo_uniform[0].descInfo, 1);
-		BindlessWrite(i, BindingDest::bd_Env_Specular, &m_sceneTextures->GetTexture(TextureType::tt_env_specular).descInfo, 1);
-		BindlessWrite(i, BindingDest::bd_Env_Diffuse, &m_sceneTextures->GetTexture(TextureType::tt_env_diffuse).descInfo, 1);
-		BindlessWrite(i, BindingDest::bd_Brdf_Lut, &m_sceneTextures->GetTexture(TextureType::tt_brdfLut).descInfo, 1);
-		BindlessWrite(i, BindingDest::bd_Material_Storage, &m_material_storage.descInfo, 1);
-		BindlessWrite(i, BindingDest::bd_Scene_Lights, &m_light_storage.descInfo, 1);
-		BindlessWrite(i, BindingDest::bd_Scene_TLAS, &m_TLAS, 1);
-		BindlessWrite(i, BindingDest::bd_SceneRead_TexArray, imageInfoList.data(), (uint32_t)imageInfoList.size());
-		BindlessUpdate(p_rhi, i);
+		// We are creating 2 descriptors because we have 2 frames in flights. And during 
+		// that process we need to update 1 uniform buffer while the 
+		// other is getting updated. Not doing this leads to undefined
+		// behavior.
+		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, rayTracingDescsetId, FRAME_BUFFER_COUNT, "SceneRayTraceDescriptorSet_"));
+
+		// Calling for Descriptor Write and Update since we are using Bindless for this descriptor
+		BindlessWrite(rayTracingDescsetId, BindingDest::bd_Scene_TLAS, &m_TLAS, 1);
+		BindlessUpdate(p_rhi, rayTracingDescsetId);
 	}
 
 	return true;

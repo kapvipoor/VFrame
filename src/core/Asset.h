@@ -64,20 +64,21 @@ enum SamplerId
 enum BindingSet
 {
 	  bs_Primary					= 0
-	, bs_Scene						= 1	, bs_UI						= 1 ,	bs_DebugDisplay = 1
+	, bs_Scene_Raster				= 1	, bs_UI						= 1 ,	bs_DebugDisplay = 1
+	, bs_Scene_RayTracing			= 2
 };
 
 enum BindingDest
-{	  // Set 0 - Primary				  // Set 1 - Scene				  // Set 1 - UI		      // Set 1 - DebugDraw
-	  bd_Gloabl_Uniform				= 0	, bd_Scene_MeshInfo_Uniform	= 0	, bd_UI_TexArray	= 0 , bd_Debug_Transforms_Uniform = 0
-	, bd_Linear_Sampler				= 1	, bd_Env_Specular			= 1	, bd_UI_max
+{	  // Set 0 - Primary				  // Set 1 - Scene	Raster		  // Set 2 - Scene RT   // Set 1 - UI		      // Set 1 - DebugDraw
+	  bd_Gloabl_Uniform				= 0	, bd_Scene_MeshInfo_Uniform	= 0	, bd_Scene_TLAS = 0 ,	bd_UI_TexArray	= 0 , bd_Debug_Transforms_Uniform = 0
+	, bd_Linear_Sampler				= 1	, bd_Env_Specular			= 1	,						bd_UI_max
 	, bd_Nearest_Sampler			= 2 , bd_Env_Diffuse			= 2
 	, bd_ObjPicker_Storage			= 3	, bd_Brdf_Lut				= 3
 	, bd_SSAOKernel_Storage			= 4 , bd_Material_Storage		= 4
 	, bd_PrimaryRead_TexArray		= 5 , bd_Scene_Lights			= 5
-	, bd_RTs_StorageImages			= 6 , bd_Scene_TLAS				= 6
-	, bd_RTs_SampledImages			= 7 , bd_SceneRead_TexArray		= 7					
-	, bd_Primary_max				= 8 , bd_Scene_max				= 8			
+	, bd_RTs_StorageImages			= 6 , bd_SceneRead_TexArray		= 6					
+	, bd_RTs_SampledImages			= 7 , bd_Scene_max				= 7			
+	, bd_Primary_max				= 8 , 
 };
 
 struct LoadedUpdateData
@@ -95,6 +96,7 @@ struct LoadedUpdateData
 
 };
 
+/////////////// ToDo: Depricate and replace with C2DDescriptor ///////////////////////////////
 class CDescriptor
 {
 public:
@@ -105,11 +107,8 @@ public:
 		VkDescriptorSet					descSet;
 	};
 
-	// by default the number of descriptor sets created is 1
-	// but there can be more than 1 descDataList and descriptor set pairs
-	// provided they are based on the same descriptor set layout and 
-	// created from the same Descriptor pool
-	CDescriptor(CVulkanRHI::DescriptorBindFlags isBindless = CVulkanRHI::DescriptorBindFlag::Traditonal, uint32_t p_descSetCount = 1);
+	CDescriptor(CVulkanRHI::DescriptorBindFlags isBindless = CVulkanRHI::DescriptorBindFlag::Traditonal, uint32_t p_descSets = 1);
+		
 	~CDescriptor() {};
 
 	void BindlessWrite(uint32_t p_swId, uint32_t p_index, const VkDescriptorImageInfo* p_imageInfo, uint32_t p_count = 1, uint32_t p_arrayDestIndex = 0);
@@ -120,12 +119,45 @@ public:
 	const VkDescriptorSet* GetDescriptorSet(uint32_t p_id = 0) const{ return &m_descList[p_id].descSet; }
 	const VkDescriptorSetLayout GetDescriptorSetLayout(uint32_t p_id = 0) const	{ return m_descList[p_id].descLayout; }
 protected:
-	std::vector<Descriptor>				m_descList;
-	VkDescriptorPool					m_descPool;
+	std::vector<Descriptor>					m_descList;
+	VkDescriptorPool						m_descPool;
 
 	bool CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_id = 0, std::string p_debugName = "");
 	void Destroy(CVulkanRHI* p_rhi);
-	void AddDescriptor(CVulkanRHI::DescriptorData p_dData, uint32_t p_id = 0);
+	void AddDescriptor(CVulkanRHI::DescriptorData p_dData, uint32_t p_setID = 0);
+
+	CVulkanRHI::DescriptorBindFlags m_bindFlags;
+};
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+class C2DDescriptor
+{
+public:
+	struct Descriptor
+	{
+		CVulkanRHI::DescDataList		descDataList;
+		VkDescriptorSetLayout			descLayout;
+		VkDescriptorSet					descSet;
+	};
+
+	C2DDescriptor(CVulkanRHI::DescriptorBindFlags isBindless = CVulkanRHI::DescriptorBindFlag::Traditonal, uint32_t p_descSets = 1);
+
+	~C2DDescriptor() {};
+
+	void BindlessWrite(uint32_t p_setId, uint32_t p_index, const VkDescriptorImageInfo* p_imageInfo, uint32_t p_count = 1, uint32_t p_arrayDestIndex = 0);
+	void BindlessWrite(uint32_t p_setId, uint32_t p_index, const VkDescriptorBufferInfo* p_bufferInfo, uint32_t p_count = 1);
+	void BindlessWrite(uint32_t p_setId, uint32_t p_index, const VkAccelerationStructureKHR* p_accStructure, uint32_t p_count = 1);
+	void BindlessUpdate(CVulkanRHI* p_rhi, uint32_t p_setId);
+
+	const VkDescriptorSet* GetDescriptorSet(uint32_t p_setId = 0, uint32_t p_copyId = 0) const { return &m_descList2D[p_setId][p_copyId].descSet; }
+	const VkDescriptorSetLayout GetDescriptorSetLayout(uint32_t p_setId = 0) const { return m_descList2D[p_setId][0].descLayout; }
+protected:
+	std::vector<std::vector<Descriptor>>	m_descList2D;
+	VkDescriptorPool						m_descPool;
+
+	bool CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_setId = 0, uint32_t p_setcopyCount = 1, std::string p_debugName = "");
+	void Destroy(CVulkanRHI* p_rhi);
+	void AddDescriptor(CVulkanRHI::DescriptorData p_dData, uint32_t p_setID = 0);
 
 	CVulkanRHI::DescriptorBindFlags m_bindFlags;
 };
@@ -508,7 +540,7 @@ private:
 	bool CreateBoxSphereBuffers(CVulkanRHI*, CVulkanRHI::BufferList&, CVulkanRHI::CommandBuffer&);
 };
 
-class CScene : public CDescriptor, public CUIParticipant, public CSelectionListener
+class CScene : public C2DDescriptor, public CUIParticipant, public CSelectionListener
 {
 public:
 	enum TextureType
@@ -605,6 +637,7 @@ private:
 
 	bool CreateMeshUniformBuffer(CVulkanRHI* p_rhi);
 	bool CreateSceneDescriptors(CVulkanRHI* p_rhi);
+	bool Create2DSceneDescriptors(CVulkanRHI* p_rhi);
 
 	bool AddEntity(CVulkanRHI* p_rhi, std::string p_path);
 	bool DeleteEntity();

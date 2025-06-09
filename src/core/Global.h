@@ -46,7 +46,7 @@ extern std::filesystem::path g_AssetPath;
 
 #endif
 
-#define RT_ENABLED								0
+#define RAY_TRACING_ENABLED						1
 
 #define PI                                      3.14159265359
 
