@@ -419,7 +419,7 @@ bool CRasterRender::CreatePasses()
 	descLayouts.push_back(m_loadableAssets->GetScene()->GetDescriptorSetLayout());			// Set 1 - BindingSet::Mesh Raster Resources
 	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&meshPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), primaryAndSceneLayout, "PrimaryAndSceneRasterPipelineLayout"));
 
-	VkPipelineLayout primaryAndSceneRayTracingLayout;
+	VkPipelineLayout primaryAndSceneRayTracingLayout = VK_NULL_HANDLE;
 	if (m_rhi->IsRayTracingEnabled())
 	{
 		descLayouts.clear();
