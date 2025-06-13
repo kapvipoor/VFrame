@@ -706,6 +706,10 @@ bool LoadNode(const tinygltf::Node node, tinygltf::Model input, MeshRaw& objMesh
 					const tinygltf::Accessor& accessor = input.accessors[glTFPrimitive.attributes.find("TANGENT")->second];
 					const tinygltf::BufferView& view = input.bufferViews[accessor.bufferView];
 					tangentsBuffer = reinterpret_cast<const float*>(&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
+
+					if (!tangentsBuffer)
+						CLOG_RED("Tangents not found in the Asset. Must add support for creation." << std::endl);
+
 				}
 
 				for (size_t v = 0; v < vertexCount; v++) {

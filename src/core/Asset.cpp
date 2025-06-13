@@ -1312,6 +1312,7 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/Sponza/glTF/Sponza.gltf");
 	//defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/SciFiHelmet/glTF/SciFiHelmet.gltf");
 	//defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/Suzanne/glTF/Suzanne.gltf");
+	//defaultScenePaths.push_back(g_AssetPath / "intel_sponza/NewSponza_Main_glTF_003.gltf");
 	
 	std::vector<bool> flipYList{ false, false, false };
 
