@@ -557,23 +557,31 @@ bool LoadMaterials(tinygltf::Model p_gltfInput, SceneRaw& p_objScene, uint32_t p
 		Material mat;
 		if (gltf_mat.values.find("baseColorTexture") != gltf_mat.values.end())
 		{
-			mat.color_id = p_texOffset + gltf_mat.values["baseColorTexture"].TextureIndex();
+			mat.color_id = p_texOffset + p_gltfInput.textures[gltf_mat.values["baseColorTexture"].TextureIndex()].source;
 		}
 
 		if (gltf_mat.additionalValues.find("normalTexture") != gltf_mat.additionalValues.end())
 		{
-			mat.normal_id = p_texOffset + gltf_mat.additionalValues["normalTexture"].TextureIndex();
+			mat.normal_id = p_texOffset + p_gltfInput.textures[gltf_mat.additionalValues["normalTexture"].TextureIndex()].source;
 		}
 
-		if (gltf_mat.additionalValues.find("emissiveTexture") != gltf_mat.additionalValues.end())
+		if (gltf_mat.values.find("metallicRoughnessTexture") != gltf_mat.values.end())
 		{
-			mat.emissive_id = p_texOffset + gltf_mat.additionalValues["emissiveTexture"].TextureIndex();
+			mat.roughMetal_id = p_texOffset + p_gltfInput.textures[gltf_mat.values["metallicRoughnessTexture"].TextureIndex()].source;
+		}
+
+		if (gltf_mat.values.find("emissiveTexture") != gltf_mat.values.end())
+		{
+			mat.emissive_id = p_texOffset + p_gltfInput.textures[gltf_mat.values["emissiveTexture"].TextureIndex()].source;
+		}
+		else if(gltf_mat.additionalValues.find("emissiveTexture") != gltf_mat.additionalValues.end())
+		{ 
+			mat.emissive_id = p_texOffset + p_gltfInput.textures[gltf_mat.additionalValues["emissiveTexture"].TextureIndex()].source;
 		}
 				
 		mat.pbr_color = nm::float3((float)gltf_mat.pbrMetallicRoughness.baseColorFactor[0], (float)gltf_mat.pbrMetallicRoughness.baseColorFactor[1], (float)gltf_mat.pbrMetallicRoughness.baseColorFactor[2]);
 		mat.metallic = (float)gltf_mat.pbrMetallicRoughness.metallicFactor;
 		mat.roughness = (float)gltf_mat.pbrMetallicRoughness.roughnessFactor;
-		mat.roughMetal_id = p_texOffset + ((gltf_mat.pbrMetallicRoughness.metallicRoughnessTexture.index < 0) ? MAX_SUPPORTED_TEXTURES : gltf_mat.pbrMetallicRoughness.metallicRoughnessTexture.index);
 		mat.emissive = nm::float3((float)gltf_mat.emissiveFactor[0], (float)gltf_mat.emissiveFactor[1], (float)gltf_mat.emissiveFactor[2]);
 
 		p_objScene.materialsList.push_back(mat);
@@ -656,6 +664,7 @@ bool LoadNode(const tinygltf::Node node, tinygltf::Model input, MeshRaw& objMesh
 			uint32_t indexCount = 0;
 			nm::float3 bbMin{ 0, 0, 0 };
 			nm::float3 bbMax{ 0, 0, 0 };
+			bool flipUV = false;
 
 			//Vertices
 			{
@@ -684,6 +693,13 @@ bool LoadNode(const tinygltf::Node node, tinygltf::Model input, MeshRaw& objMesh
 					const tinygltf::Accessor& accessor = input.accessors[glTFPrimitive.attributes.find("TEXCOORD_0")->second];
 					const tinygltf::BufferView& view = input.bufferViews[accessor.bufferView];
 					texCoordsBuffer = reinterpret_cast<const float*>(&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
+
+					// UV.y is over 1, must current this.
+					if ((accessor.minValues.size() == 2 && accessor.minValues[1] > 1.0) || 
+						(accessor.maxValues.size() == 2 && accessor.maxValues[1] > 1.0))
+					{
+						flipUV = true;
+					}
 				}
 				// POI: This sample uses normal mapping, so we also need to load the tangents from the glTF file
 				if (glTFPrimitive.attributes.find("TANGENT") != glTFPrimitive.attributes.end()) {
@@ -712,7 +728,7 @@ bool LoadNode(const tinygltf::Node node, tinygltf::Model input, MeshRaw& objMesh
 							nm::float4(tangentsBuffer[(v * 4) + 0], tangentsBuffer[(v * 4) + 1], tangentsBuffer[(v * 4) + 2], tangentsBuffer[(v * 4) + 3]) : 
 							nm::float4(0.0))[0]);
 
-					if (p_loadData.flipUV == true)
+					if (flipUV == true)
 					{
 						float* uv = vert.GetAttribute(Vertex::AttributeFlag::uv);
 						uv[1] = 1.0f - uv[1];
