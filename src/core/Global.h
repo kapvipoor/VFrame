@@ -6,13 +6,45 @@
 #include <filesystem>
 #include <array>
 
+#include <iostream>
+#include <sstream>
+
+extern std::ostringstream g_oss;
+
+#define CLOG_GREEN(x)											\
+g_oss << x;														\
+clog_stream(0x0002)												
+
+#define CLOG_RED(x)												\
+g_oss << x;														\
+clog_stream(0x0004)											
+
+#define CLOG_BLUE(x)											\
+g_oss << x;														\
+clog_stream(0x0001)											
+
+#define CLOG_YELLOW(x)											\
+g_oss << x;														\
+clog_stream(0x0006)											
+
+#define CLOG(x)													\
+g_oss << x;														\
+clog_stream()												
+
+extern void init_console();
+extern void clog_stream(int pMsgColor);
+extern void clog_stream();
+
 #define RETURN_FALSE_IF_FALSE(v)	\
 	{ if (!v) {	return false; } }	\
 
-inline std::filesystem::path g_DefaultPath = "D:/Projects/MyPersonalProjects/VFrame/default";
-inline std::filesystem::path g_EnginePath = "D:/Projects/MyPersonalProjects/VFrame";
-inline std::filesystem::path g_AssetPath = "D:/Projects/MyPersonalProjects/assets";
+extern std::filesystem::path g_DefaultPath;
+extern std::filesystem::path g_EnginePath;
+extern std::filesystem::path g_AssetPath;
+
 #endif
+
+#define RAY_TRACING_ENABLED						1
 
 #define PI                                      3.14159265359
 

@@ -81,7 +81,7 @@ public:
 			if (depthAttached == true)
 			{
 				// depth already attached
-				std::cout << "Warning: Depth already attached" << std::endl;
+				CLOG_YELLOW("Warning: Depth already attached" << std::endl);
 				assert(!depthAttached);
 			}
 
@@ -334,7 +334,7 @@ public:
 	VkPhysicalDevice GetPhysicalDevice()					{ return m_vkPhysicalDevice;}
 	VkDevice GetDevice()									{ return m_vkDevice;}
 
-	VkQueue GetQueue(uint32_t p_scIdx)						{ return m_vkQueue[p_scIdx]; }
+	VkQueue GetQueue()										{ return m_vkQueue; }
 	VkQueue GetSecondaryQueue()								{ return m_secondaryQueue;}
 	uint32_t GetQueueFamiliyIndex() const					{ return m_QFIndex; }
 	VkImageView GetSCImageView(uint32_t p_scIdx)			{ return m_swapchainImageViewList[p_scIdx]; }
@@ -344,8 +344,12 @@ public:
 	uint32_t GetScreenHeight()								{ return m_screenHeight; }
 
 	VkSwapchainKHR GetSwapChain()							{ return m_vkSwapchain; }
+	 
+	bool IsRayTracingEnabled()								{ return m_enabledRayTracing; }
 
 protected:
+	bool													m_enabledRayTracing;
+
 	uint32_t												m_renderWidth;
 	uint32_t												m_renderHeight;
 	uint32_t												m_screenWidth;
@@ -356,7 +360,7 @@ protected:
 	VkDevice												m_vkDevice;
 	VkPhysicalDevice										m_vkPhysicalDevice;
 	uint32_t												m_QFIndex;
-	VkQueue													m_vkQueue[FRAME_BUFFER_COUNT];
+	VkQueue													m_vkQueue;
 	VkQueue													m_secondaryQueue;
 	VkSurfaceKHR											m_vkSurface;
 	VkSwapchainKHR											m_vkSwapchain;

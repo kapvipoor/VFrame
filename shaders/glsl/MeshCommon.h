@@ -47,10 +47,7 @@ layout(set = 1, binding = 5) buffer Light_Storage
 	Light lights[];
 } g_lights;
 
-//Defined in RayTracingCommon.h
-//layout(set = 1, binding = 6) uniform accelerationStructureEXT g_TLAS;
-
-layout(set = 1, binding = 7) uniform texture2D g_textures[];
+layout(set = 1, binding = 6) uniform texture2D g_textures[];
 
 vec4 GetColor(uint color_id, vec2 uv)
 {

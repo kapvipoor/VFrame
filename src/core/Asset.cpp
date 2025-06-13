@@ -10,6 +10,7 @@
 
 std::vector<CUIParticipant*> CUIParticipantManager::m_uiParticipants;
 
+///////////////////////////// ToDo: DEPRICATE//////////////////////////////////////////
 void CDescriptor::AddDescriptor(CVulkanRHI::DescriptorData p_dData, uint32_t p_id)
 {
 	m_descList[p_id].descDataList.push_back(p_dData);
@@ -98,7 +99,7 @@ bool CDescriptor::CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_id, std::strin
 	return true;
 }
 
-void CDescriptor::DestroyDescriptors(CVulkanRHI* p_rhi)
+void CDescriptor::Destroy(CVulkanRHI* p_rhi)
 {
 	for (auto& desc : m_descList)
 	{
@@ -107,6 +108,133 @@ void CDescriptor::DestroyDescriptors(CVulkanRHI* p_rhi)
 	}
 	p_rhi->DestroyDescriptorPool(m_descPool);
 	m_descList.clear();
+}
+//////////////////////////////////////////////////////////////////
+
+void C2DDescriptor::AddDescriptor(CVulkanRHI::DescriptorData p_dData, uint32_t p_setID)
+{
+	m_descList2D[p_setID][0].descDataList.push_back(p_dData);
+}
+
+void C2DDescriptor::BindlessWrite(uint32_t p_setId, uint32_t p_index, const VkDescriptorImageInfo* p_imageInfo, uint32_t p_count, uint32_t p_arrayDestIndex)
+{
+	if (p_setId >= m_descList2D.size())
+	{
+		std::cerr << "CDescriptor::BindlessWrite: Attempting to Bindless Write a descriptor with a bad local set index" << std::endl;
+		return;
+	}
+
+
+	if (p_index >= m_descList2D[p_setId][0].descDataList.size())
+	{
+		std::cerr << "CDescriptor::BindlessWrite: Attempting to Bindless Write a descriptor with a bad binding index" << std::endl;
+		return;
+	}
+
+	for (int i = 0; i < m_descList2D[p_setId].size(); i++)
+	{
+		m_descList2D[p_setId][i].descDataList[p_index].count = p_count;
+		m_descList2D[p_setId][i].descDataList[p_index].arrayDestIndex = p_arrayDestIndex;
+		m_descList2D[p_setId][i].descDataList[p_index].imgDesinfo = p_imageInfo;
+	}
+}
+
+void C2DDescriptor::BindlessWrite(uint32_t p_setId, uint32_t p_index, const VkDescriptorBufferInfo* p_bufferInfo, uint32_t p_count)
+{
+	if (p_setId >= m_descList2D.size())
+	{
+		std::cerr << "Attempting to Bindless Write a descriptor with a bad local set index" << std::endl;
+		return;
+	}
+
+
+	if (p_index >= m_descList2D[p_setId][0].descDataList.size())
+	{
+		std::cerr << "Attempting to Bindless Write a descriptor with a bad binding index" << std::endl;
+		return;
+	}
+
+	for (int i = 0; i < m_descList2D[p_setId].size(); i++)
+	{
+		m_descList2D[p_setId][i].descDataList[p_index].count = p_count;
+		m_descList2D[p_setId][i].descDataList[p_index].bufDesInfo = p_bufferInfo;
+	}
+}
+
+void C2DDescriptor::BindlessWrite(uint32_t p_setId, uint32_t p_index, const VkAccelerationStructureKHR* p_accStructure, uint32_t p_count)
+{
+	if (p_setId >= m_descList2D.size())
+	{
+		std::cerr << "Attempting to Bindless Write a descriptor with a bad local set index" << std::endl;
+		return;
+	}
+
+
+	if (p_index >= m_descList2D[p_setId][0].descDataList.size())
+	{
+		std::cerr << "Attempting to Bindless Write a descriptor with a bad binding index" << std::endl;
+		return;
+	}
+
+	for (int i = 0; i < m_descList2D[p_setId].size(); i++)
+	{
+		m_descList2D[p_setId][i].descDataList[p_index].count = p_count;
+		m_descList2D[p_setId][i].descDataList[p_index].accelerationStructure = p_accStructure;
+	}
+}
+
+void C2DDescriptor::BindlessUpdate(CVulkanRHI* p_rhi, uint32_t p_setId)
+{
+	if (p_setId >= m_descList2D.size())
+	{
+		std::cerr << "Attempting to Bindless update a descriptor set with a bad local set index" << std::endl;
+		return;
+	}
+
+	for (int i = 0; i < m_descList2D[p_setId].size(); i++)
+		p_rhi->WriteUpdateDescriptors(&m_descList2D[p_setId][i].descSet, m_descList2D[p_setId][i].descDataList);
+}
+
+C2DDescriptor::C2DDescriptor(CVulkanRHI::DescriptorBindFlags p_bindFlags, uint32_t p_descSets)
+	: m_bindFlags(p_bindFlags)
+{
+	m_descList2D.resize(p_descSets);
+	for (uint32_t i = 0; i < p_descSets; i++)
+		m_descList2D[i].resize(1);
+}
+
+bool C2DDescriptor::CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_setId, uint32_t p_setcopyCount, std::string p_debugName)
+{
+	for (uint32_t i = 0; i < p_setcopyCount; i++)
+	{
+		if (i > 0)
+		{
+			C2DDescriptor::Descriptor descriptor = m_descList2D[p_setId][0];
+			m_descList2D[p_setId].push_back(descriptor);
+
+			p_debugName = p_debugName + std::to_string(i);
+		}
+
+		if (!p_rhi->CreateDescriptors(m_descList2D[p_setId][i].descDataList, m_descPool, m_descList2D[p_setId][i].descLayout, m_descList2D[p_setId][i].descSet, m_bindFlags, p_debugName))
+			return false;
+	}
+
+	return true;
+}
+
+void C2DDescriptor::Destroy(CVulkanRHI* p_rhi)
+{
+	for (auto& desc : m_descList2D)
+	{
+		for (auto& descCopy : desc)
+		{
+			p_rhi->DestroyDescriptorSetLayout(descCopy.descLayout);
+			descCopy.descDataList.clear();
+		}
+		desc.clear();
+	}
+	p_rhi->DestroyDescriptorPool(m_descPool);
+	m_descList2D.clear();
 }
 
 CRenderable::CRenderable(VkMemoryPropertyFlags p_memPropFlags, uint32_t p_BufferCount)
@@ -129,10 +257,10 @@ void CRenderable::Clear(CVulkanRHI* p_rhi, uint32_t p_idx)
 	m_indexBuffers.DestroyBuffer(p_rhi, p_idx);
 }
 
-void CRenderable::DestroyRenderable(CVulkanRHI* p_rhi)
+void CRenderable::Destroy(CVulkanRHI* p_rhi)
 {
-	m_vertexBuffers.DestroyBuffers(p_rhi);
-	m_indexBuffers.DestroyBuffers(p_rhi);
+	m_vertexBuffers.Destroy(p_rhi);
+	m_indexBuffers.Destroy(p_rhi);
 }
 
 bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index)
@@ -302,7 +430,7 @@ void CBuffers::DestroyBuffer(CVulkanRHI* p_rhi, uint32_t p_idx)
 	//m_buffers.erase(m_buffers.begin() + p_idx);
 }
 
-void CBuffers::DestroyBuffers(CVulkanRHI* p_rhi)
+void CBuffers::Destroy(CVulkanRHI* p_rhi)
 {
 	for (auto& buffer : m_buffers)
 	{
@@ -458,7 +586,7 @@ void CTextures::PushBackPreLoadedTexture(uint32_t p_texIndex)
 	m_textures.push_back(m_textures[p_texIndex]);
 }
 
-void CTextures::DestroyTextures(CVulkanRHI* p_rhi)
+void CTextures::Destroy(CVulkanRHI* p_rhi)
 {
 	for (auto& tex : m_textures)
 	{
@@ -578,9 +706,10 @@ bool CRenderableUI::Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_c
 	return true;
 }
 
-void CRenderableUI::DestroyRenderable(CVulkanRHI* p_rhi)
+void CRenderableUI::Destroy(CVulkanRHI* p_rhi)
 {
-	DestroyTextures(p_rhi);
+	CTextures::Destroy(p_rhi);
+	CRenderable::Destroy(p_rhi);
 }
 
 bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
@@ -783,9 +912,9 @@ bool CRenderableUI::PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx)
 	return true;
 }
 
-CRenderableMesh::CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat, VkAccelerationStructureInstanceKHR* p_accStructInstance)
-	: CRayTracingRenderable(p_accStructInstance)
-	, CEntity(p_name)
+CRenderableMesh::CRenderableMesh(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat, VkBufferUsageFlags p_usage)
+	: CEntity(p_name)
+	, CRenderable(p_usage | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0)
 	, m_mesh_id(p_meshId)
 	, m_selectedSubMeshId(-1)
 {
@@ -796,6 +925,13 @@ CRenderableMesh::~CRenderableMesh()
 {
 	if (m_boundingVolume)
 		delete m_boundingVolume;
+}
+
+void CRenderableMesh::Destroy(CVulkanRHI* p_rhi)
+{
+	m_submeshes.clear();
+	m_subBoundingBoxes.clear();
+	CRenderable::Destroy(p_rhi);
 }
 
 void CRenderableMesh::Show(CVulkanRHI* p_rhi)
@@ -848,9 +984,6 @@ void CRenderableMesh::SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform,
 	m_dirty						= true;
 	m_transform					= p_transform;
 
-	// Update the BVH with the new transform
-	UpdateBLASInstance(p_rhi, m_transform);
-
 	// Let scene graph know that there is a need for an update
 	if(p_bRecomputeSceneBBox)
 		CSceneGraph::RequestSceneBBoxUpdate();
@@ -858,7 +991,7 @@ void CRenderableMesh::SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform,
 
 CScene::CScene(CSceneGraph* p_sceneGraph)
 	: CUIParticipant(CUIParticipant::ParticipationType::pt_everyFrame, CUIParticipant::UIDPanelType::uipt_new, "Scene")
-	, CDescriptor(CVulkanRHI::DescriptorBindFlag::Variable_Count | CVulkanRHI::DescriptorBindFlag::Bindless, FRAME_BUFFER_COUNT)
+	, C2DDescriptor(CVulkanRHI::DescriptorBindFlag::Variable_Count | CVulkanRHI::DescriptorBindFlag::Bindless, 2) // requesting for 2 descriptor sets (raster and ray-tracing resource sets)
 	, m_sceneGraph(p_sceneGraph)
 {
 	m_sceneTextures = new CTextures();
@@ -904,38 +1037,41 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 
 		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true/*wait for finish*/));
 	}
-	debugMarker = "TLAS Creation";
+	if (p_rhi->IsRayTracingEnabled())
 	{
-		RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
-		RETURN_FALSE_IF_FALSE(LoadTLAS(p_rhi, stgList, cmdBfr));
-		RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true/*wait for finish*/));
+		debugMarker = "TLAS Creation";
+		{
+			RETURN_FALSE_IF_FALSE(p_rhi->CreateCommandBuffer(p_cmdPool, &cmdBfr, debugMarker));
+			RETURN_FALSE_IF_FALSE(LoadTLAS(p_rhi, stgList, cmdBfr));
+			RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true/*wait for finish*/));
+		}
 	}
 
 	DestroyStaging(p_rhi, stgList);
 
 	RETURN_FALSE_IF_FALSE(CreateMeshUniformBuffer(p_rhi));
 
-	RETURN_FALSE_IF_FALSE(CreateSceneDescriptors(p_rhi));
+	RETURN_FALSE_IF_FALSE(Create2DSceneDescriptors(p_rhi));
 
 	return true;
 }
 
 void CScene::Destroy(CVulkanRHI* p_rhi)
 {
-	m_skyBox->DestroyRenderable(p_rhi);
+	m_skyBox->Destroy(p_rhi);
 	delete m_skyBox;
 
-	DestroyDescriptors(p_rhi);
-	m_sceneTextures->DestroyTextures(p_rhi);
+	C2DDescriptor::Destroy(p_rhi);
+	m_sceneTextures->Destroy(p_rhi);
 
 	p_rhi->FreeMemoryDestroyBuffer(m_instanceBuffer);
 	p_rhi->FreeMemoryDestroyBuffer(m_TLASscratchBuffer);
-	m_tlasBuffers->DestroyBuffers(p_rhi);
+	m_tlasBuffers->Destroy(p_rhi);
 	p_rhi->DestroyAccelerationStrucutre(m_TLAS);
 
 	for (auto& mesh : m_meshes)
 	{
-		mesh->DestroyRenderable(p_rhi);
+		mesh->Destroy(p_rhi);
 		delete mesh;
 	}
 	m_meshes.clear();
@@ -950,6 +1086,9 @@ void CScene::Destroy(CVulkanRHI* p_rhi)
 
 bool CScene::UpdateTLAS(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool, uint32_t p_scId)
 {
+	if (!p_rhi->IsRayTracingEnabled())
+		return true;
+
 	std::string debugMarker = "TLAS Building";
 	{
 		CVulkanRHI::CommandBuffer cmdBfr;
@@ -1177,27 +1316,11 @@ bool CScene::LoadDefaultTextures(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerLis
 bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, CVulkanRHI::CommandBuffer& p_cmdBfr, bool p_dumpBinaryToDisk)
 {
 	std::vector<std::filesystem::path>		defaultScenePaths;
-	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels / 2.0 / DragonAttenuation / glTF / DragonAttenuation.gltf");				//0
-	//m_scenePaths.push_back(g_AssetPath/"shadow_test_3.gltf");																		//1
-	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/TransmissionTest/glTF/TransmissionTest.gltf");					//2
-	//m_scenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf");			//3
-	//defaultScenePaths.push_back(g_AssetPath / "glTFSampleModels/2.0/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf");
-	defaultScenePaths.push_back(g_AssetPath / "Sponza/glTF/Sponza.gltf");
-	//defaultScenePaths.push_back(g_AssetPath / "glTFSampleModels/2.0/Sponza/glTF/Sponza.gltf");
-	defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/Suzanne/glTF/Suzanne.gltf");									//4
-	defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf");
-	//defaultScenePaths.push_back(g_AssetPath/"glTFSampleModels/2.0/DamagedHelmet/glTF/DamagedHelmet_withTangents.gltf");				//6
-	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/cube/cube.obj");											//7
-	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/icosphere.gltf");											//8
-	//m_scenePaths.push_back(g_AssetPath/"dragon/dragon.obj");															f			//9
-	//m_scenePaths.push_back(g_AssetPath/"stanford_dragon_pbr/scene.gltf");															//10
-	//m_scenePaths.push_back(g_AssetPath/"mitsuba/mitsuba.obj");																	//11
-	//m_scenePaths.push_back(g_AssetPath/"wall_and_floor/wall_and_floor.gltf");														//12
-	//m_scenePaths.push_back(g_AssetPath / "main_sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");								//13
-	//m_scenePaths.push_back(g_AssetPath/"main_sponza/PKG_A_Curtains/NewSponza_Curtains_glTF.gltf");								//14
-	//m_scenePaths.push_back(g_AssetPath/"an_afternoon_in_a_persian_garden/scene.obj");												//15
-	//defaultScenePaths.push_back("D:/Projects/MyPersonalProjects/assets/glTFSampleModels/2.0/SpecGlossVsMetalRough/glTF/SpecGlossVsMetalRough.gltf");
-
+	defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/Sponza/glTF/Sponza.gltf");
+	//defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/SciFiHelmet/glTF/SciFiHelmet.gltf");
+	//defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/Suzanne/glTF/Suzanne.gltf");
+	//defaultScenePaths.push_back(g_AssetPath / "intel_sponza/NewSponza_Main_glTF_003.gltf");
+	
 	std::vector<bool> flipYList{ false, false, false };
 
 	SceneRaw sceneraw;
@@ -1242,7 +1365,13 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	for (auto& meshraw : sceneraw.meshList)
 	{
 		std::clog << "CScene::LoadDefaultScene: Loading Asset to GPU - " << meshraw.name << std::endl;
-		CRenderableMesh* mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform, &m_accStructInstances[m_meshes.size()]);
+		CRenderableMesh* mesh = nullptr;
+		
+		if (p_rhi->IsRayTracingEnabled())
+			mesh = new CRayTracingRenderable(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform, &m_accStructInstances[m_meshes.size()]);
+		else
+			mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform);
+		
 		mesh->m_submeshes = meshraw.submeshes;
 
 		BVolume* bVol = new BBox(meshraw.bbox);
@@ -1256,8 +1385,8 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 		RETURN_FALSE_IF_FALSE(mesh->CreateVertexIndexBuffer(p_rhi, p_stgList, &meshraw, p_cmdBfr, meshraw.name));
 
 		// TODO: Insert a memory barrier here
-
-		RETURN_FALSE_IF_FALSE(mesh->CreateBuildBLAS(p_rhi, p_stgList, p_cmdBfr, meshraw.name + " BLAS"));
+		if(p_rhi->IsRayTracingEnabled())
+			RETURN_FALSE_IF_FALSE(dynamic_cast<CRayTracingRenderable*>(mesh)->CreateBuildBLAS(p_rhi, p_stgList, p_cmdBfr, meshraw.name + " BLAS"));
 
 		m_meshes.push_back(mesh);
 	}
@@ -1479,6 +1608,72 @@ bool CScene::CreateMeshUniformBuffer(CVulkanRHI* p_rhi)
 
 bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
 {
+	//// We are allocating these descriptors from a bindless pool.
+	//// This does not need demand we create valid buffers/textures or write-update these descriptors 
+	//// at the time of their creation. All we need to ensure is that we don't access these "unbound resource"
+	//// descriptors at run-time. The strategy is to pre-allocate a large chunk of bindless-array of texture
+	//// descriptors. Load few textures and provide their IDs to the material_storage buffer and access the 
+	//// de-ref bindless array of textures to access the texture. When a new asset is added, its associated
+	//// textures are upload to device visible heap to new indices of the bindless array of textures. Their
+	//// Ids are updated to the material-storage buffer. And then write-update is called on this descriptor.
+
+	//std::vector<VkDescriptorImageInfo> imageInfoList;
+	//for (int i = TextureType::tt_scene; i < m_sceneTextures->GetTextures().size(); i++)
+	//{
+	//	imageInfoList.push_back(m_sceneTextures->GetTextures()[i].descInfo);
+	//}
+
+	//// We are creating 2 descriptors because we have 2 frames in flights. And during 
+	//// that process we need to update 1 uniform buffer while the 
+	//// other is getting updated. Not doing this leads to undefined
+	//// behavior.
+
+	//// Creating descriptor set for swap chain utility 0 and 1
+	//VkShaderStageFlags vertex_frag		= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	//VkShaderStageFlags frag				= VK_SHADER_STAGE_FRAGMENT_BIT;
+	//VkShaderStageFlags vert_frag_comp	= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+	//VkShaderStageFlags frag_comp		= VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+	//for (uint32_t i = 0; i < FRAME_BUFFER_COUNT; i++)
+	//{
+	//	// Creating Descriptors and descriptor set based on following type and count
+	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,				vertex_frag},	i);
+	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	i);
+	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	i);
+	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag_comp },	i);
+	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				frag },			i);
+	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				vert_frag_comp},i);
+	//	
+	//	//if(p_rhi->IsRayTracingEnabled())
+	//		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_TLAS,			1,						VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,	frag_comp},		i);
+
+	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag },	        i);
+	//	
+	//	RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, i, "SceneDescriptorSet_" + std::to_string(i)));
+	//}
+
+	//// Calling for Descriptor Write and Update since we are using Bindless for this descriptor
+	//for (uint32_t i = 0; i < FRAME_BUFFER_COUNT; i++)
+	//{
+	//	BindlessWrite(i, BindingDest::bd_Scene_MeshInfo_Uniform,	&m_meshInfo_uniform[0].descInfo, 1);
+	//	BindlessWrite(i, BindingDest::bd_Env_Specular,				&m_sceneTextures->GetTexture(TextureType::tt_env_specular).descInfo, 1);
+	//	BindlessWrite(i, BindingDest::bd_Env_Diffuse,				&m_sceneTextures->GetTexture(TextureType::tt_env_diffuse).descInfo, 1);
+	//	BindlessWrite(i, BindingDest::bd_Brdf_Lut,					&m_sceneTextures->GetTexture(TextureType::tt_brdfLut).descInfo, 1);
+	//	BindlessWrite(i, BindingDest::bd_Material_Storage,			&m_material_storage.descInfo, 1);
+	//	BindlessWrite(i, BindingDest::bd_Scene_Lights,				&m_light_storage.descInfo, 1);
+	//	
+	//	//if (p_rhi->IsRayTracingEnabled())
+	//		BindlessWrite(i, BindingDest::bd_Scene_TLAS, &m_TLAS, 1);
+
+	//	BindlessWrite(i, BindingDest::bd_SceneRead_TexArray, imageInfoList.data(), (uint32_t)imageInfoList.size());
+	//	
+	//	BindlessUpdate(p_rhi, i);
+	//}
+
+	return true;
+}
+
+bool CScene::Create2DSceneDescriptors(CVulkanRHI* p_rhi)
+{
 	// We are allocating these descriptors from a bindless pool.
 	// This does not need demand we create valid buffers/textures or write-update these descriptors 
 	// at the time of their creation. All we need to ensure is that we don't access these "unbound resource"
@@ -1494,54 +1689,57 @@ bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
 		imageInfoList.push_back(m_sceneTextures->GetTextures()[i].descInfo);
 	}
 
-	// We are creating 2 descriptors because we have 2 frames in flights. And during 
-	// that process we need to update 1 uniform buffer while the 
-	// other is getting updated. Not doing this leads to undefined
-	// behavior.
-
-	// Creating descriptor set for swap chain utility 0
+	// Creating descriptor set for swap chain utility 0 and 1
 	VkShaderStageFlags vertex_frag		= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	VkShaderStageFlags frag				= VK_SHADER_STAGE_FRAGMENT_BIT;
 	VkShaderStageFlags vert_frag_comp	= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
 	VkShaderStageFlags frag_comp		= VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+	
+	// Creating and Updating Scene Rasterizer Descriptors - Set 0
+	uint32_t rasterDescsetId = 0;
 	{
 		// Creating Descriptors and descriptor set based on following type and count
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,				vertex_frag},	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag_comp },	0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				frag },			0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				vert_frag_comp},0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_TLAS,				1,						VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,	frag_comp},		0);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag },	        0);
-		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 0, "SceneDescriptorSet_0"));
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,				vertex_frag},	rasterDescsetId);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	rasterDescsetId);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	rasterDescsetId);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag_comp },	rasterDescsetId);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				frag },			rasterDescsetId);
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				vert_frag_comp},rasterDescsetId);	
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag },	        rasterDescsetId);
+		
+		// We are creating 2 descriptors because we have 2 frames in flights. And during 
+		// that process we need to update 1 uniform buffer while the 
+		// other is getting updated. Not doing this leads to undefined
+		// behavior.
+		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, rasterDescsetId, FRAME_BUFFER_COUNT, "SceneRasterDescriptorSet_"));
+		
+		// Calling for Descriptor Write and Update since we are using Bindless for this descriptor
+		BindlessWrite(rasterDescsetId, BindingDest::bd_Scene_MeshInfo_Uniform,	&m_meshInfo_uniform[0].descInfo, 1);
+		BindlessWrite(rasterDescsetId, BindingDest::bd_Env_Specular,			&m_sceneTextures->GetTexture(TextureType::tt_env_specular).descInfo, 1);
+		BindlessWrite(rasterDescsetId, BindingDest::bd_Env_Diffuse,				&m_sceneTextures->GetTexture(TextureType::tt_env_diffuse).descInfo, 1);
+		BindlessWrite(rasterDescsetId, BindingDest::bd_Brdf_Lut,				&m_sceneTextures->GetTexture(TextureType::tt_brdfLut).descInfo, 1);
+		BindlessWrite(rasterDescsetId, BindingDest::bd_Material_Storage,		&m_material_storage.descInfo, 1);
+		BindlessWrite(rasterDescsetId, BindingDest::bd_Scene_Lights,			&m_light_storage.descInfo, 1);
+		BindlessWrite(rasterDescsetId, BindingDest::bd_SceneRead_TexArray,		imageInfoList.data(), (uint32_t)imageInfoList.size());
+		BindlessUpdate(p_rhi, rasterDescsetId);
 	}
 
-	// Creating descriptor set for swap chain utility 1
+	// Creating and Updating Scene Ray Tracing Descriptors - Set 1
+	uint32_t rayTracingDescsetId = 1;
+	if(p_rhi->IsRayTracingEnabled())
 	{
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,				vertex_frag},	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag_comp },	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				frag },			1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				vert_frag_comp},1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_TLAS,				1,						VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,	frag_comp },	1);
-		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag },			1);
-		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, 1, "SceneDescriptorSet_1"));
-	}
+		// Creating Descriptors and descriptor set based on following type and count
+		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_TLAS,			1,						VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,	frag_comp }, rayTracingDescsetId);
 
-	// Calling for Descriptor Write and Update since we are using Bindless for this descriptor
-	for (uint32_t i = 0; i < FRAME_BUFFER_COUNT; i++)
-	{
-		BindlessWrite(i, BindingDest::bd_Scene_MeshInfo_Uniform, &m_meshInfo_uniform[0].descInfo, 1);
-		BindlessWrite(i, BindingDest::bd_Env_Specular, &m_sceneTextures->GetTexture(TextureType::tt_env_specular).descInfo, 1);
-		BindlessWrite(i, BindingDest::bd_Env_Diffuse, &m_sceneTextures->GetTexture(TextureType::tt_env_diffuse).descInfo, 1);
-		BindlessWrite(i, BindingDest::bd_Brdf_Lut, &m_sceneTextures->GetTexture(TextureType::tt_brdfLut).descInfo, 1);
-		BindlessWrite(i, BindingDest::bd_Material_Storage, &m_material_storage.descInfo, 1);
-		BindlessWrite(i, BindingDest::bd_Scene_Lights, &m_light_storage.descInfo, 1);
-		BindlessWrite(i, BindingDest::bd_Scene_TLAS, &m_TLAS, 1);
-		BindlessWrite(i, BindingDest::bd_SceneRead_TexArray, imageInfoList.data(), (uint32_t)imageInfoList.size());
-		BindlessUpdate(p_rhi, i);
+		// We are creating 2 descriptors because we have 2 frames in flights. And during 
+		// that process we need to update 1 uniform buffer while the 
+		// other is getting updated. Not doing this leads to undefined
+		// behavior.
+		RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, rayTracingDescsetId, FRAME_BUFFER_COUNT, "SceneRayTraceDescriptorSet_"));
+
+		// Calling for Descriptor Write and Update since we are using Bindless for this descriptor
+		BindlessWrite(rayTracingDescsetId, BindingDest::bd_Scene_TLAS, &m_TLAS, 1);
+		BindlessUpdate(p_rhi, rayTracingDescsetId);
 	}
 
 	return true;
@@ -1656,7 +1854,12 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 						// Load vertex and index buffers
 						for (auto& meshraw : sceneraw.meshList)
 						{
-							CRenderableMesh* mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform, &m_accStructInstances[m_meshes.size()]);
+							CRenderableMesh* mesh = nullptr;
+							if (p_rhi->IsRayTracingEnabled())
+								mesh = new CRayTracingRenderable(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform, &m_accStructInstances[m_meshes.size()]);
+							else
+								mesh = new CRenderableMesh(meshraw.name, (uint32_t)m_meshes.size(), meshraw.transform);
+
 							mesh->m_submeshes = meshraw.submeshes;
 
 							std::clog << "Setting Bounding Volume" << std::endl;
@@ -1737,7 +1940,7 @@ bool CScene::AddEntity(CVulkanRHI* p_rhi, std::string p_path)
 					}
 
 					std::clog << "Submitting command buffer" << std::endl;
-					RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true /*wait for finish*/, CVulkanRHI::QueueType::qt_Secondary));
+					RETURN_FALSE_IF_FALSE(p_rhi->SubmitCommandBuffer(cmdBfr, true /*wait for finish*/, CVulkanRHI::QueueType::qt_Primary));
 					m_assetLoadingTracker.progress = 0.8f;
 
 					// Destroy local staging resources
@@ -1843,7 +2046,7 @@ bool CReadOnlyTextures::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers,
 
 void CReadOnlyTextures::Destroy(CVulkanRHI* p_rhi)
 {
-	DestroyTextures(p_rhi);
+	CTextures::Destroy(p_rhi);
 }
 
 bool CReadOnlyTextures::CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, PrimaryUniformData* p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
@@ -1908,7 +2111,7 @@ bool CReadOnlyBuffers::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers, 
 
 void CReadOnlyBuffers::Destroy(CVulkanRHI* p_rhi)
 {
-	DestroyBuffers(p_rhi);
+	CBuffers::Destroy(p_rhi);
 }
 
 bool CReadOnlyBuffers::CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, PrimaryUniformData* p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
@@ -1970,8 +2173,7 @@ bool CLoadableAssets::Create(CVulkanRHI* p_rhi, const CFixedAssets& p_fixedAsset
 void CLoadableAssets::Destroy(CVulkanRHI* p_rhi)
 {
 	m_scene.Destroy(p_rhi);
-	m_ui.DestroyRenderable(p_rhi);
-	m_ui.DestroyTextures(p_rhi);
+	m_ui.Destroy(p_rhi);
 	m_readOnlyBuffers.Destroy(p_rhi);
 	m_readOnlyTextures.Destroy(p_rhi);
 }
@@ -2033,7 +2235,7 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 
 void CRenderTargets::Destroy(CVulkanRHI* p_rhi)
 {
-	DestroyTextures(p_rhi);
+	CTextures::Destroy(p_rhi);
 }
 
 void CRenderTargets::Show(CVulkanRHI* p_rhi)
@@ -2223,7 +2425,7 @@ void CFixedBuffers::Show(CVulkanRHI* p_rhi)
 
 void CFixedBuffers::Destroy(CVulkanRHI* p_rhi)
 {
-	DestroyBuffers(p_rhi);
+	CBuffers::Destroy(p_rhi);
 }
 
 bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
@@ -2408,7 +2610,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 
 void CPrimaryDescriptors::Destroy(CVulkanRHI* p_rhi)
 {
-	DestroyDescriptors(p_rhi);
+	CDescriptor::Destroy(p_rhi);
 }
 
 CRenderableDebug::CRenderableDebug()
@@ -2578,6 +2780,8 @@ bool CRenderableDebug::PreDrawInstanced(CVulkanRHI* p_rhi, uint32_t p_scIdx, con
 
 void CRenderableDebug::Destroy(CVulkanRHI* p_rhi)
 {
+	CDescriptor::Destroy(p_rhi);
+	CRenderable::Destroy(p_rhi);
 }
 
 bool CRenderableDebug::CreateDebugDescriptors(CVulkanRHI* p_rhi, const CFixedBuffers* p_fixedBuffers)
@@ -2655,26 +2859,34 @@ bool CRenderableDebug::CreateBoxSphereBuffers(CVulkanRHI* p_rhi, CVulkanRHI::Buf
 	return true;
 }
 
-CRayTracingRenderable::CRayTracingRenderable(VkAccelerationStructureInstanceKHR* p_accStructInstance)
-	: CRenderable(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0)
+CRayTracingRenderable::CRayTracingRenderable(std::string p_name, uint32_t p_meshId, nm::Transform p_modelMat, VkAccelerationStructureInstanceKHR* p_accStructInstance)
+	: CRenderableMesh(p_name, p_meshId, p_modelMat, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR)
 	, m_accStructInstance(p_accStructInstance)
 	, m_blasBuffer(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0)
 	, m_BLAS(VK_NULL_HANDLE)
 {
 }
 
-void CRayTracingRenderable::DestroyRenderable(CVulkanRHI* p_rhi)
+void CRayTracingRenderable::Destroy(CVulkanRHI* p_rhi)
 {
-	m_blasBuffer.DestroyBuffers(p_rhi);
-	p_rhi->DestroyAccelerationStrucutre(m_BLAS);
+	m_blasBuffer.Destroy(p_rhi);
+	p_rhi->DestroyAccelerationStrucutre(m_BLAS);	
+	CRenderableMesh::Destroy(p_rhi);
 }
 
-bool CRayTracingRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index)
+void CRayTracingRenderable::SetTransform(CVulkanRHI* p_rhi, nm::Transform p_transform, bool p_bRecomputeSceneBBox)
 {
-	RETURN_FALSE_IF_FALSE(CRenderable::CreateVertexIndexBuffer(p_rhi, p_stgList, p_meshRaw, p_cmdBfr, p_debugStr, index));
-
-	return true;
+	// Update the BVH with the new transform
+	UpdateBLASInstance(p_rhi, m_transform);
+	CRenderableMesh::SetTransform(p_rhi, p_transform, p_bRecomputeSceneBBox);
 }
+
+//bool CRayTracingRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index)
+//{
+//	RETURN_FALSE_IF_FALSE(CRenderable::CreateVertexIndexBuffer(p_rhi, p_stgList, p_meshRaw, p_cmdBfr, p_debugStr, index));
+//
+//	return true;
+//}
 
 bool CRayTracingRenderable::CreateBuildBLAS(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgbufferList, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr)
 {

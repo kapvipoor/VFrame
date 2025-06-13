@@ -7,7 +7,10 @@
 
 #include "Common.h"
 #include "MeshCommon.h"
-#include "ReprojectionHelper.h"
+
+#if RAY_TRACING_ENABLED
+#include "RayTracingCommon.h"
+#endif
 
 #define DISPLAY_MOUSE_POINTER
 
@@ -74,11 +77,13 @@ void main()
 				int enableShadowRTPCF 	= int(g_Info.data.enable_Shadow_RT_PCF);
 				if((enableShadowRTPCF & ENABLE_SHADOW) == ENABLE_SHADOW && castShadow == 1)
 				{
+#if RAY_TRACING_ENABLED
 					if((enableShadowRTPCF & ENABLE_RT_SHADOW) == ENABLE_RT_SHADOW)
 					{		
 						directionalShadow = 1.0 - sampleShadow[i];
 					}
 					else
+#endif
 					{
 						// calculating current position in world space to Light's view space
 			 			vec4 v0 				= vec4(light.viewProj[0], light.viewProj[1], light.viewProj[2], light.viewProj[3]);

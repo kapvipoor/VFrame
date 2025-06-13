@@ -15,6 +15,7 @@ CRasterRender::CRasterRender(const char* name, int screen_width_, int screen_hei
 {			
 	m_rhi					= new CVulkanRHI(name, RENDER_RESOLUTION_X, RENDER_RESOLUTION_Y);
 	m_primaryCamera			= new CPerspectiveCamera();
+
 	m_sceneGraph			= new CSceneGraph(m_primaryCamera);
 
 	m_fixedAssets			= new CFixedAssets();
@@ -324,7 +325,7 @@ bool CRasterRender::on_update(float delta)
 void CRasterRender::on_present()
 {
 	CVulkanRHI::SwapChain swapchain				= m_rhi->GetSwapChain();
-	CVulkanRHI::Queue queue						= m_rhi->GetQueue(0);
+	CVulkanRHI::Queue queue						= m_rhi->GetQueue();
 
 	VkPresentInfoKHR presentInfo{};
 	VkResult presentResult						= VkResult::VK_RESULT_MAX_ENUM;
@@ -452,8 +453,18 @@ bool CRasterRender::CreatePasses()
 	VkPipelineLayout primaryAndSceneLayout;
 	std::vector<VkDescriptorSetLayout> descLayouts;
 	descLayouts.push_back(m_primaryDescriptors->GetDescriptorSetLayout(0));					// Set 0 - BindingSet::Primary
-	descLayouts.push_back(m_loadableAssets->GetScene()->GetDescriptorSetLayout());			// Set 1 - BindingSet::Mesh
-	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&meshPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), primaryAndSceneLayout, "PrimaryAndScenePipelineLayout"));
+	descLayouts.push_back(m_loadableAssets->GetScene()->GetDescriptorSetLayout());			// Set 1 - BindingSet::Mesh Raster Resources
+	RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(&meshPushrange, 1, descLayouts.data(), (uint32_t)descLayouts.size(), primaryAndSceneLayout, "PrimaryAndSceneRasterPipelineLayout"));
+
+	VkPipelineLayout primaryAndSceneRayTracingLayout = VK_NULL_HANDLE;
+	if (m_rhi->IsRayTracingEnabled())
+	{
+		descLayouts.clear();
+		descLayouts.push_back(m_primaryDescriptors->GetDescriptorSetLayout(0));					// Set 0 - BindingSet::Primary
+		descLayouts.push_back(m_loadableAssets->GetScene()->GetDescriptorSetLayout(0));			// Set 1 - BindingSet::Mesh Raster Resources
+		descLayouts.push_back(m_loadableAssets->GetScene()->GetDescriptorSetLayout(1));			// Set 2 - BindingSet::Mesh RayTracing Resource
+		RETURN_FALSE_IF_FALSE(m_rhi->CreatePipelineLayout(nullptr, 0, descLayouts.data(), (uint32_t)descLayouts.size(), primaryAndSceneRayTracingLayout, "PrimaryAndSceneRayTracingPipelineLayout"));
+	}
 
 	VkPipelineLayout primaryLayout;
 	descLayouts.clear();
@@ -517,12 +528,14 @@ bool CRasterRender::CreatePasses()
 	RETURN_FALSE_IF_FALSE(m_ssaoBlurPass->Initalize(pipeline));
 
 	pipeline								= CVulkanRHI::Pipeline{};
-	pipeline.pipeLayout						= primaryAndSceneLayout;
+	pipeline.pipeLayout						= m_rhi->IsRayTracingEnabled() ? primaryAndSceneRayTracingLayout : primaryAndSceneLayout;
 	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Initalize(pipeline));
-	RETURN_FALSE_IF_FALSE(m_ssrComputePass->Initalize(pipeline));
-	RETURN_FALSE_IF_FALSE(m_ssrBlurPass->Initalize(pipeline));
 	RETURN_FALSE_IF_FALSE(m_shadowPass->GetRayTraceShadowPass()->Initalize(pipeline));
 
+	pipeline								= CVulkanRHI::Pipeline{};
+	pipeline.pipeLayout						= primaryAndSceneLayout;
+	RETURN_FALSE_IF_FALSE(m_ssrComputePass->Initalize(pipeline));
+	RETURN_FALSE_IF_FALSE(m_ssrBlurPass->Initalize(pipeline));
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= debugLayout;
 	RETURN_FALSE_IF_FALSE(m_debugDrawPass->Initalize(&renderData, pipeline));
