@@ -530,7 +530,10 @@ bool CRasterRender::CreatePasses()
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= m_rhi->IsRayTracingEnabled() ? primaryAndSceneRayTracingLayout : primaryAndSceneLayout;
 	RETURN_FALSE_IF_FALSE(m_deferredLightPass->Initalize(pipeline));
-	RETURN_FALSE_IF_FALSE(m_shadowPass->GetRayTraceShadowPass()->Initalize(pipeline));
+	if (m_rhi->IsRayTracingEnabled())
+	{
+		RETURN_FALSE_IF_FALSE(m_shadowPass->GetRayTraceShadowPass()->Initalize(pipeline));
+	}
 
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= primaryAndSceneLayout;
@@ -543,7 +546,10 @@ bool CRasterRender::CreatePasses()
 	pipeline								= CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout						= primaryLayout;
 	RETURN_FALSE_IF_FALSE(m_toneMapPass->Initalize(&renderData, pipeline));
-	RETURN_FALSE_IF_FALSE(m_shadowPass->GetShadowDenoisePass()->Initalize(pipeline));	
+	if (m_rhi->IsRayTracingEnabled())
+	{
+		RETURN_FALSE_IF_FALSE(m_shadowPass->GetShadowDenoisePass()->Initalize(pipeline));
+	}
 
 	pipeline = CVulkanRHI::Pipeline{};
 	pipeline.pipeLayout = primaryLayout;
@@ -667,7 +673,8 @@ bool CRasterRender::RenderFrame(CVulkanRHI::RendererType p_renderType)
 	renderData.scIdx = m_swapchainIndex;
 	renderData.sceneGraph = m_sceneGraph;
 
-	if (m_shadowPass->GetStaticShadowPrePass()->IsEnabled() && !m_shadowPass->GetStaticShadowPrePass()->IsRTShadowEnabled())
+	if (m_shadowPass->GetStaticShadowPrePass()->IsEnabled() && 
+		!m_shadowPass->GetStaticShadowPrePass()->IsRTShadowEnabled())
 	{
 		//if (!m_staticShadowPass->ReuseShadowMap())
 		{
