@@ -108,26 +108,11 @@
     <ClInclude Include="..\src\core\Asset.h">
       <Filter>core</Filter>
     </ClInclude>
-    <ClInclude Include="..\shaders\glsl\Common.h">
-      <Filter>shaders</Filter>
-    </ClInclude>
-    <ClInclude Include="..\shaders\glsl\MeshCommon.h">
-      <Filter>shaders</Filter>
-    </ClInclude>
-    <ClInclude Include="..\shaders\glsl\UICommon.h">
-      <Filter>shaders</Filter>
-    </ClInclude>
-    <ClInclude Include="..\shaders\glsl\DebugCommon.h">
-      <Filter>shaders</Filter>
-    </ClInclude>
     <ClInclude Include="..\src\core\SceneGraph.h">
       <Filter>core</Filter>
     </ClInclude>
     <ClInclude Include="..\Src\core\WinCore.h">
       <Filter>core</Filter>
-    </ClInclude>
-    <ClInclude Include="..\shaders\glsl\PBRHelper.h">
-      <Filter>shaders</Filter>
     </ClInclude>
     <ClInclude Include="..\src\core\AssetLoader.h">
       <Filter>core</Filter>
@@ -146,6 +131,27 @@
     </ClInclude>
     <ClInclude Include="..\external\imgui\backends\imgui_impl_win32.h">
       <Filter>external\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shaders\glsl\UICommon.h">
+      <Filter>shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shaders\glsl\common.h">
+      <Filter>shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shaders\glsl\DebugCommon.h">
+      <Filter>shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shaders\glsl\MeshCommon.h">
+      <Filter>shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shaders\glsl\RayTracingHelper.h">
+      <Filter>shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shaders\glsl\ReprojectionHelper.h">
+      <Filter>shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shaders\glsl\SpatialHelper.h">
+      <Filter>shaders</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -221,6 +227,9 @@
     <ClCompile Include="..\src\Pass.cpp">
       <Filter>frontend\Passes</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\core\Global.cpp">
+      <Filter>core</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\Src\VFrame.rc">
@@ -228,6 +237,18 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\shaders\glsl\Copy.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\DebugDisplay.frag">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\DebugDisplay.vert">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\DebugDisplay_Instanced.vert">
+      <Filter>shaders</Filter>
+    </None>
     <None Include="..\shaders\glsl\Deferred_Gbuffer.frag">
       <Filter>shaders</Filter>
     </None>
@@ -243,10 +264,19 @@
     <None Include="..\shaders\glsl\Forward.vert">
       <Filter>shaders</Filter>
     </None>
+    <None Include="..\shaders\glsl\FulllScreenQuad.vert">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\glsl_to_spirv.py">
+      <Filter>shaders</Filter>
+    </None>
     <None Include="..\shaders\glsl\LightDepthPrepass.vert">
       <Filter>shaders</Filter>
     </None>
-    <None Include="..\shaders\glsl\RayTracer.comp">
+    <None Include="..\shaders\glsl\RayTraceShadows.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\ShadowDenoise.comp">
       <Filter>shaders</Filter>
     </None>
     <None Include="..\shaders\glsl\Skybox.frag">
@@ -261,22 +291,25 @@
     <None Include="..\shaders\glsl\SSAOBlur.comp">
       <Filter>shaders</Filter>
     </None>
+    <None Include="..\shaders\glsl\SSR.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\SSR_2.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\SSRBlur.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\TAA.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\glsl\ToneMap.frag">
+      <Filter>shaders</Filter>
+    </None>
     <None Include="..\shaders\glsl\UI.frag">
       <Filter>shaders</Filter>
     </None>
     <None Include="..\shaders\glsl\UI.vert">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="..\shaders\glsl\DebugDisplay.frag">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="..\shaders\glsl\DebugDisplay.vert">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="..\shaders\glsl\FulllScreenQuad.vert">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="..\shaders\glsl\SSR.comp">
       <Filter>shaders</Filter>
     </None>
   </ItemGroup>

@@ -219,7 +219,7 @@ public:
 	// at this index that is referenced by the mesh
 	void PushBackPreLoadedTexture(uint32_t p_texIndex);
 
-	void Destroy(CVulkanRHI* p_rhi);
+	void DestroyTextures(CVulkanRHI* p_rhi);
 
 	void IssueLayoutBarrier(CVulkanRHI* p_rhi, CVulkanRHI::ImageLayout p_imageLayout, const CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id, int p_mipLevel = -1);
 	void IssueMemoryBarrier(CVulkanRHI* p_rhi, VkAccessFlags p_srcAcc, VkAccessFlags p_dstAcc, VkPipelineStageFlags p_scrStg, VkPipelineStageFlags p_destStg, const CVulkanRHI::CommandBuffer& p_cmdBfr, uint32_t p_id);
@@ -371,7 +371,7 @@ public:
 	void virtual Show(CVulkanRHI* p_rhi) override;
 
 	bool Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_cmdPool);
-	virtual void DestroyRenderable(CVulkanRHI* p_rhi) override;
+	void Destroy(CVulkanRHI* p_rhi);
 
 	bool Update(CVulkanRHI* p_rhi, const LoadedUpdateData&);
 	bool PreDraw(CVulkanRHI* p_rhi, uint32_t p_scIdx);
@@ -584,7 +584,6 @@ private:
 	bool UpdateTLAS(CVulkanRHI* p_rhi, CVulkanRHI::CommandBuffer&);
 
 	bool CreateMeshUniformBuffer(CVulkanRHI* p_rhi);
-	bool CreateSceneDescriptors(CVulkanRHI* p_rhi);
 	bool Create2DSceneDescriptors(CVulkanRHI* p_rhi);
 
 	bool AddEntity(CVulkanRHI* p_rhi, std::string p_path);

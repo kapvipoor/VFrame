@@ -99,7 +99,7 @@ bool CDescriptor::CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_id, std::strin
 	return true;
 }
 
-void CDescriptor::Destroy(CVulkanRHI* p_rhi)
+void CDescriptor::DestroyDescriptors(CVulkanRHI* p_rhi)
 {
 	for (auto& desc : m_descList)
 	{
@@ -222,7 +222,7 @@ bool C2DDescriptor::CreateDescriptors(CVulkanRHI* p_rhi, uint32_t p_setId, uint3
 	return true;
 }
 
-void C2DDescriptor::Destroy(CVulkanRHI* p_rhi)
+void C2DDescriptor::DestroyDescriptors(CVulkanRHI* p_rhi)
 {
 	for (auto& desc : m_descList2D)
 	{
@@ -257,10 +257,10 @@ void CRenderable::Clear(CVulkanRHI* p_rhi, uint32_t p_idx)
 	m_indexBuffers.DestroyBuffer(p_rhi, p_idx);
 }
 
-void CRenderable::Destroy(CVulkanRHI* p_rhi)
+void CRenderable::DestroyRenderable(CVulkanRHI* p_rhi)
 {
-	m_vertexBuffers.Destroy(p_rhi);
-	m_indexBuffers.Destroy(p_rhi);
+	m_vertexBuffers.DestroyBuffers(p_rhi);
+	m_indexBuffers.DestroyBuffers(p_rhi);
 }
 
 bool CRenderable::CreateVertexIndexBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stg, const MeshRaw* p_meshRaw, CVulkanRHI::CommandBuffer& p_cmdBfr, std::string p_debugStr, int32_t index)
@@ -430,7 +430,7 @@ void CBuffers::DestroyBuffer(CVulkanRHI* p_rhi, uint32_t p_idx)
 	//m_buffers.erase(m_buffers.begin() + p_idx);
 }
 
-void CBuffers::Destroy(CVulkanRHI* p_rhi)
+void CBuffers::DestroyBuffers(CVulkanRHI* p_rhi)
 {
 	for (auto& buffer : m_buffers)
 	{
@@ -586,7 +586,7 @@ void CTextures::PushBackPreLoadedTexture(uint32_t p_texIndex)
 	m_textures.push_back(m_textures[p_texIndex]);
 }
 
-void CTextures::Destroy(CVulkanRHI* p_rhi)
+void CTextures::DestroyTextures(CVulkanRHI* p_rhi)
 {
 	for (auto& tex : m_textures)
 	{
@@ -708,8 +708,8 @@ bool CRenderableUI::Create(CVulkanRHI* p_rhi, const CVulkanRHI::CommandPool& p_c
 
 void CRenderableUI::Destroy(CVulkanRHI* p_rhi)
 {
-	CTextures::Destroy(p_rhi);
-	CRenderable::Destroy(p_rhi);
+	CTextures::DestroyTextures(p_rhi);
+	CRenderable::DestroyRenderable(p_rhi);
 }
 
 bool CRenderableUI::Update(CVulkanRHI* p_rhi, const LoadedUpdateData& p_loadedUpdate)
@@ -931,7 +931,7 @@ void CRenderableMesh::Destroy(CVulkanRHI* p_rhi)
 {
 	m_submeshes.clear();
 	m_subBoundingBoxes.clear();
-	CRenderable::Destroy(p_rhi);
+	CRenderable::DestroyRenderable(p_rhi);
 }
 
 void CRenderableMesh::Show(CVulkanRHI* p_rhi)
@@ -1058,15 +1058,15 @@ bool CScene::Create(CVulkanRHI* p_rhi, const CVulkanRHI::SamplerList* p_samplerL
 
 void CScene::Destroy(CVulkanRHI* p_rhi)
 {
-	m_skyBox->Destroy(p_rhi);
+	m_skyBox->DestroyRenderable(p_rhi);
 	delete m_skyBox;
 
-	C2DDescriptor::Destroy(p_rhi);
-	m_sceneTextures->Destroy(p_rhi);
+	C2DDescriptor::DestroyDescriptors(p_rhi);
+	m_sceneTextures->DestroyTextures(p_rhi);
 
 	p_rhi->FreeMemoryDestroyBuffer(m_instanceBuffer);
 	p_rhi->FreeMemoryDestroyBuffer(m_TLASscratchBuffer);
-	m_tlasBuffers->Destroy(p_rhi);
+	m_tlasBuffers->DestroyBuffers(p_rhi);
 	p_rhi->DestroyAccelerationStrucutre(m_TLAS);
 
 	for (auto& mesh : m_meshes)
@@ -1318,7 +1318,7 @@ bool CScene::LoadDefaultScene(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgLi
 	std::vector<std::filesystem::path>		defaultScenePaths;
 	defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/Sponza/glTF/Sponza.gltf");
 	//defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/SciFiHelmet/glTF/SciFiHelmet.gltf");
-	//defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/Suzanne/glTF/Suzanne.gltf");
+	defaultScenePaths.push_back(g_AssetPath / "glTF-Sample-Assets/Models/Suzanne/glTF/Suzanne.gltf");
 	//defaultScenePaths.push_back(g_AssetPath / "intel_sponza/NewSponza_Main_glTF_003.gltf");
 	
 	std::vector<bool> flipYList{ false, false, false };
@@ -1602,72 +1602,6 @@ bool CScene::CreateMeshUniformBuffer(CVulkanRHI* p_rhi)
 		RETURN_FALSE_IF_FALSE(p_rhi->CreateAllocateBindBuffer(uniBufize, m_meshInfo_uniform[i], 
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, "mesh_uniform"));
 	}
-
-	return true;
-}
-
-bool CScene::CreateSceneDescriptors(CVulkanRHI* p_rhi)
-{
-	//// We are allocating these descriptors from a bindless pool.
-	//// This does not need demand we create valid buffers/textures or write-update these descriptors 
-	//// at the time of their creation. All we need to ensure is that we don't access these "unbound resource"
-	//// descriptors at run-time. The strategy is to pre-allocate a large chunk of bindless-array of texture
-	//// descriptors. Load few textures and provide their IDs to the material_storage buffer and access the 
-	//// de-ref bindless array of textures to access the texture. When a new asset is added, its associated
-	//// textures are upload to device visible heap to new indices of the bindless array of textures. Their
-	//// Ids are updated to the material-storage buffer. And then write-update is called on this descriptor.
-
-	//std::vector<VkDescriptorImageInfo> imageInfoList;
-	//for (int i = TextureType::tt_scene; i < m_sceneTextures->GetTextures().size(); i++)
-	//{
-	//	imageInfoList.push_back(m_sceneTextures->GetTextures()[i].descInfo);
-	//}
-
-	//// We are creating 2 descriptors because we have 2 frames in flights. And during 
-	//// that process we need to update 1 uniform buffer while the 
-	//// other is getting updated. Not doing this leads to undefined
-	//// behavior.
-
-	//// Creating descriptor set for swap chain utility 0 and 1
-	//VkShaderStageFlags vertex_frag		= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-	//VkShaderStageFlags frag				= VK_SHADER_STAGE_FRAGMENT_BIT;
-	//VkShaderStageFlags vert_frag_comp	= VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-	//VkShaderStageFlags frag_comp		= VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-	//for (uint32_t i = 0; i < FRAME_BUFFER_COUNT; i++)
-	//{
-	//	// Creating Descriptors and descriptor set based on following type and count
-	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_MeshInfo_Uniform,	1,						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,				vertex_frag},	i);
-	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Specular,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	i);
-	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Env_Diffuse,				1,						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		frag_comp },	i);
-	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Brdf_Lut,					1,						VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag_comp },	i);
-	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Material_Storage,			1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				frag },			i);
-	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_Lights,				1,						VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				vert_frag_comp},i);
-	//	
-	//	//if(p_rhi->IsRayTracingEnabled())
-	//		AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_Scene_TLAS,			1,						VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,	frag_comp},		i);
-
-	//	AddDescriptor(CVulkanRHI::DescriptorData{ 0, BindingDest::bd_SceneRead_TexArray,		MAX_SUPPORTED_TEXTURES,	VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				frag },	        i);
-	//	
-	//	RETURN_FALSE_IF_FALSE(CreateDescriptors(p_rhi, i, "SceneDescriptorSet_" + std::to_string(i)));
-	//}
-
-	//// Calling for Descriptor Write and Update since we are using Bindless for this descriptor
-	//for (uint32_t i = 0; i < FRAME_BUFFER_COUNT; i++)
-	//{
-	//	BindlessWrite(i, BindingDest::bd_Scene_MeshInfo_Uniform,	&m_meshInfo_uniform[0].descInfo, 1);
-	//	BindlessWrite(i, BindingDest::bd_Env_Specular,				&m_sceneTextures->GetTexture(TextureType::tt_env_specular).descInfo, 1);
-	//	BindlessWrite(i, BindingDest::bd_Env_Diffuse,				&m_sceneTextures->GetTexture(TextureType::tt_env_diffuse).descInfo, 1);
-	//	BindlessWrite(i, BindingDest::bd_Brdf_Lut,					&m_sceneTextures->GetTexture(TextureType::tt_brdfLut).descInfo, 1);
-	//	BindlessWrite(i, BindingDest::bd_Material_Storage,			&m_material_storage.descInfo, 1);
-	//	BindlessWrite(i, BindingDest::bd_Scene_Lights,				&m_light_storage.descInfo, 1);
-	//	
-	//	//if (p_rhi->IsRayTracingEnabled())
-	//		BindlessWrite(i, BindingDest::bd_Scene_TLAS, &m_TLAS, 1);
-
-	//	BindlessWrite(i, BindingDest::bd_SceneRead_TexArray, imageInfoList.data(), (uint32_t)imageInfoList.size());
-	//	
-	//	BindlessUpdate(p_rhi, i);
-	//}
 
 	return true;
 }
@@ -2046,7 +1980,7 @@ bool CReadOnlyTextures::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers,
 
 void CReadOnlyTextures::Destroy(CVulkanRHI* p_rhi)
 {
-	CTextures::Destroy(p_rhi);
+	CTextures::DestroyTextures(p_rhi);
 }
 
 bool CReadOnlyTextures::CreateSSAOKernelTexture(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, PrimaryUniformData* p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
@@ -2111,7 +2045,7 @@ bool CReadOnlyBuffers::Create(CVulkanRHI* p_rhi, CFixedBuffers& p_fixedBuffers, 
 
 void CReadOnlyBuffers::Destroy(CVulkanRHI* p_rhi)
 {
-	CBuffers::Destroy(p_rhi);
+	CBuffers::DestroyBuffers(p_rhi);
 }
 
 bool CReadOnlyBuffers::CreateSSAONoiseBuffer(CVulkanRHI* p_rhi, CVulkanRHI::BufferList& p_stgList, PrimaryUniformData* p_primaryUniformData, CVulkanRHI::CommandBuffer& p_cmdBfr)
@@ -2235,7 +2169,7 @@ bool CRenderTargets::Create(CVulkanRHI* p_rhi)
 
 void CRenderTargets::Destroy(CVulkanRHI* p_rhi)
 {
-	CTextures::Destroy(p_rhi);
+	CTextures::DestroyTextures(p_rhi);
 }
 
 void CRenderTargets::Show(CVulkanRHI* p_rhi)
@@ -2425,7 +2359,7 @@ void CFixedBuffers::Show(CVulkanRHI* p_rhi)
 
 void CFixedBuffers::Destroy(CVulkanRHI* p_rhi)
 {
-	CBuffers::Destroy(p_rhi);
+	CBuffers::DestroyBuffers(p_rhi);
 }
 
 bool CFixedBuffers::Update(CVulkanRHI* p_rhi, uint32_t p_scId)
@@ -2610,7 +2544,7 @@ bool CPrimaryDescriptors::Create(CVulkanRHI* p_rhi, CFixedAssets& p_fixedAssets,
 
 void CPrimaryDescriptors::Destroy(CVulkanRHI* p_rhi)
 {
-	CDescriptor::Destroy(p_rhi);
+	CDescriptor::DestroyDescriptors(p_rhi);
 }
 
 CRenderableDebug::CRenderableDebug()
@@ -2780,8 +2714,8 @@ bool CRenderableDebug::PreDrawInstanced(CVulkanRHI* p_rhi, uint32_t p_scIdx, con
 
 void CRenderableDebug::Destroy(CVulkanRHI* p_rhi)
 {
-	CDescriptor::Destroy(p_rhi);
-	CRenderable::Destroy(p_rhi);
+	CDescriptor::DestroyDescriptors(p_rhi);
+	CRenderable::DestroyRenderable(p_rhi);
 }
 
 bool CRenderableDebug::CreateDebugDescriptors(CVulkanRHI* p_rhi, const CFixedBuffers* p_fixedBuffers)
@@ -2869,7 +2803,7 @@ CRayTracingRenderable::CRayTracingRenderable(std::string p_name, uint32_t p_mesh
 
 void CRayTracingRenderable::Destroy(CVulkanRHI* p_rhi)
 {
-	m_blasBuffer.Destroy(p_rhi);
+	m_blasBuffer.DestroyBuffers(p_rhi);
 	p_rhi->DestroyAccelerationStrucutre(m_BLAS);	
 	CRenderableMesh::Destroy(p_rhi);
 }

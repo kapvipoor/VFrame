@@ -5,7 +5,7 @@
 // part of another descriptor set. This will keep the Ray Tracing 
 // feature modular. Also not force #version 460 to other non-ray tracing
 // shader that might* indirectly include RayTracingCommon.h
-layout(set = 1, binding = 6) uniform accelerationStructureEXT g_TLAS;
+layout(set = 2, binding = 0) uniform accelerationStructureEXT g_TLAS;
 
 int TraceRay(vec3 origin, vec3 direction, float rayLength)
 {

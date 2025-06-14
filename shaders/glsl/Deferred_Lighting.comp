@@ -7,9 +7,10 @@
 
 #include "Common.h"
 #include "MeshCommon.h"
+#include "ReprojectionHelper.h"
 
 #if RAY_TRACING_ENABLED
-#include "RayTracingCommon.h"
+#include "RayTracingHelper.h"
 #endif
 
 #define DISPLAY_MOUSE_POINTER

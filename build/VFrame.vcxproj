@@ -304,10 +304,12 @@
     <ClInclude Include="..\external\tinygltf\stb_image_write.h" />
     <ClInclude Include="..\external\tinygltf\tiny_gltf.h" />
     <ClInclude Include="..\external\tiny_obj_loader.h" />
-    <ClInclude Include="..\shaders\glsl\Common.h" />
+    <ClInclude Include="..\shaders\glsl\common.h" />
     <ClInclude Include="..\shaders\glsl\DebugCommon.h" />
     <ClInclude Include="..\shaders\glsl\MeshCommon.h" />
-    <ClInclude Include="..\shaders\glsl\PBRHelper.h" />
+    <ClInclude Include="..\shaders\glsl\RayTracingHelper.h" />
+    <ClInclude Include="..\shaders\glsl\ReprojectionHelper.h" />
+    <ClInclude Include="..\shaders\glsl\SpatialHelper.h" />
     <ClInclude Include="..\shaders\glsl\UICommon.h" />
     <ClInclude Include="..\src\core\Asset.h" />
     <ClInclude Include="..\src\core\AssetLoader.h" />
@@ -338,6 +340,7 @@
     <ClCompile Include="..\external\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\src\core\Asset.cpp" />
     <ClCompile Include="..\src\core\Camera.cpp" />
+    <ClCompile Include="..\src\core\Global.cpp" />
     <ClCompile Include="..\src\core\Light.cpp" />
     <ClCompile Include="..\src\core\SceneGraph.cpp" />
     <ClCompile Include="..\Src\core\AssetLoader.cpp" />
@@ -357,21 +360,29 @@
     <ResourceCompile Include="..\Src\VFrame.rc" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\shaders\glsl\Copy.comp" />
     <None Include="..\shaders\glsl\DebugDisplay.frag" />
     <None Include="..\shaders\glsl\DebugDisplay.vert" />
+    <None Include="..\shaders\glsl\DebugDisplay_Instanced.vert" />
     <None Include="..\shaders\glsl\Deferred_Gbuffer.frag" />
     <None Include="..\shaders\glsl\Deferred_Gbuffer.vert" />
     <None Include="..\shaders\glsl\Deferred_Lighting.comp" />
     <None Include="..\shaders\glsl\Forward.frag" />
     <None Include="..\shaders\glsl\Forward.vert" />
     <None Include="..\shaders\glsl\FulllScreenQuad.vert" />
+    <None Include="..\shaders\glsl\glsl_to_spirv.py" />
     <None Include="..\shaders\glsl\LightDepthPrepass.vert" />
-    <None Include="..\shaders\glsl\RayTracer.comp" />
+    <None Include="..\shaders\glsl\RayTraceShadows.comp" />
+    <None Include="..\shaders\glsl\ShadowDenoise.comp" />
     <None Include="..\shaders\glsl\Skybox.frag" />
     <None Include="..\shaders\glsl\SkyBox.vert" />
     <None Include="..\shaders\glsl\SSAO.comp" />
     <None Include="..\shaders\glsl\SSAOBlur.comp" />
     <None Include="..\shaders\glsl\SSR.comp" />
+    <None Include="..\shaders\glsl\SSRBlur.comp" />
+    <None Include="..\shaders\glsl\SSR_2.comp" />
+    <None Include="..\shaders\glsl\TAA.comp" />
+    <None Include="..\shaders\glsl\ToneMap.frag" />
     <None Include="..\shaders\glsl\UI.frag" />
     <None Include="..\shaders\glsl\UI.vert" />
   </ItemGroup>

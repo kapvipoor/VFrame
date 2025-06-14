@@ -135,7 +135,7 @@ public:
 		virtual void GetVertexBindingInUse(CVulkanCore::VertexBinding&)override;
 
 		bool ReuseShadowMap() { return m_bReuseShadowMap; }
-		bool IsRTShadowEnabled() { return m_enableRayTracedShadow; }
+		bool IsRTShadowEnabled() { return m_enableRayTracedShadow && m_rhi->IsRayTracingEnabled(); }
 		void EnableRTShadow(bool p_enable) { m_enableRayTracedShadow = p_enable; }
 
 	private:
