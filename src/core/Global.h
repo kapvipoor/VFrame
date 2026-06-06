@@ -5,7 +5,6 @@
 #include <string>
 #include <queue>
 #include <filesystem>
-
 #include <iostream>
 #include <sstream>
 
@@ -31,6 +30,7 @@ clog_stream(0x0006)
 g_oss << x;														\
 clog_stream()												
 
+extern void init_global();
 extern void init_console();
 extern void clog_stream(int pMsgColor);
 extern void clog_stream();

@@ -6,14 +6,12 @@
 int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     init_console();
-
+    
     // refer https://stackoverflow.com/questions/5419356/is-there-a-way-to-redirect-stdout-stderr-to-a-string
     std::stringstream cerrBuff;
     std::streambuf* cerrStream = std::cerr.rdbuf(cerrBuff.rdbuf());
 
-    CLOG("Default Path - " << g_DefaultPath << std::endl);
-    CLOG("Engine Path - " << g_EnginePath << std::endl);
-    CLOG("Asset Path - " << g_AssetPath << std::endl);
+    init_global();
 
     unsigned int val = 1;
     bool exitState = true;

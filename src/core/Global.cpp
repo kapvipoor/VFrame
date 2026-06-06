@@ -4,6 +4,21 @@
 std::ostringstream g_oss = std::ostringstream();
 HANDLE g_hConsole;
 
+std::filesystem::path g_DefaultPath = "";
+std::filesystem::path g_EnginePath = "";
+std::filesystem::path g_AssetPath = "";
+
+void init_global()
+{
+	g_EnginePath = std::filesystem::current_path().parent_path();
+	g_DefaultPath = g_EnginePath / "default";
+	g_AssetPath = g_EnginePath.parent_path() / "assets";
+
+	CLOG("Default Path - " << g_DefaultPath << std::endl);
+	CLOG("Engine Path - " << g_EnginePath << std::endl);
+	CLOG("Asset Path - " << g_AssetPath << std::endl);
+}
+
 void init_console()
 {
 	// display console
@@ -30,7 +45,3 @@ void clog_stream()
 	g_oss.str("");
 	g_oss.clear();
 };
-
-std::filesystem::path g_DefaultPath	= "C:/vkapoor/vframe/default";
-std::filesystem::path g_EnginePath	= "C:/vkapoor/vframe";
-std::filesystem::path g_AssetPath	= "C:/vkapoor/assets";
